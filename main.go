@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -12,19 +12,11 @@ type TimeTest struct {
 }
 
 func main() {
-	timeTest := TimeTest{
-		Time: time.Now(),
-		Name: "John",
+	err1 := errors.New("hello")
+	err2 := errors.New("hello")
+	if err1.Error() == err2.Error() {
+		fmt.Println("equal")
+	} else {
+		fmt.Println("not equal")
 	}
-	fmt.Println(timeTest)
-	timeStr := toJSONString(timeTest)
-	timeStr2 := toJSONString(timeStr)
-	fmt.Println("1: " + timeStr)
-	fmt.Println("2: " + timeStr2)
-	var timeObj TimeTest
-	err := json.Unmarshal([]byte(timeStr2), &timeObj)
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(timeObj)
 }

@@ -28,7 +28,7 @@ func (m *MemoryDatabase) serveGet(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	key := vars["key"]
 	if value, ok := m.records[key]; ok {
-		fmt.Fprintf(w, value)
+		fmt.Fprint(w, value)
 	} else {
 		// response with 404
 		w.Header().Set("Content-Type", "text/plain")

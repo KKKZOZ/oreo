@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"encoding/json"
 	"errors"
-	"log"
 	"slices"
 	"time"
 )
@@ -59,7 +58,6 @@ func (m *MemoryDatastore) read(key string, value any) error {
 
 	// else get if from data
 	err := m.conn.get(key, &item)
-	log.Printf("After get: %v\n", item)
 	if err != nil {
 		return err
 	}

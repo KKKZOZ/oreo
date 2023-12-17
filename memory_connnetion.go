@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 )
 
 type MemoryConnection struct {
@@ -45,18 +47,22 @@ func (m *MemoryConnection) get(key string, value any) error {
 }
 
 func (m *MemoryConnection) put(key string, value any) error {
-	httpClient := &http.Client{}
-	jsonByte, err := json.Marshal(value)
+	jsonStr := toJSONString(value)
+	path := fmt.Sprintf("%s/put/%s", m.baseURL, key)
+	baseURL, err := url.Parse(path)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	jsonStr := string(jsonByte)
-	url := fmt.Sprintf("%s/put/%s?value=%s", m.baseURL, key, jsonStr)
 
-	req, err := http.NewRequest("POST", url, nil)
+	params := url.Values{}
+	params.Add("value", jsonStr)
+	baseURL.RawQuery = params.Encode()
+
+	req, err := http.NewRequest("POST", baseURL.String(), nil)
 	if err != nil {
 		return err
 	}
+	httpClient := &http.Client{}
 	response, _ := httpClient.Do(req)
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("put failed")
