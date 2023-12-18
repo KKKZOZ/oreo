@@ -2,17 +2,24 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 )
 
 func TestConnectionGetNormal(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
+
 	memConn := NewMemoryConnection("localhost", 8321)
-	memConn.connect()
+	memConn.Connect()
 
 	key := "1"
 	value := Person{
@@ -23,7 +30,7 @@ func TestConnectionGetNormal(t *testing.T) {
 	memoryDatabase.records[key] = string(jsonByte)
 
 	var expected Person
-	err := memConn.get(key, &expected)
+	err := memConn.Get(key, &expected)
 	if err != nil {
 		t.Error(err)
 	}
@@ -34,53 +41,71 @@ func TestConnectionGetNormal(t *testing.T) {
 }
 
 func TestConnectionGetNotFound(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8322)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8322)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
 	var expected Person
-	err := memConn.get(key, &expected)
+	err := memConn.Get(key, &expected)
 	if err == nil {
 		t.Errorf("got %v want %v", nil, err)
 	}
 }
 
 func TestConnectionGetBrokenJSON(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8322)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8322)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
 	memoryDatabase.records[key] = "broken json"
 
 	var expected Person
-	err := memConn.get(key, &expected)
+	err := memConn.Get(key, &expected)
 	if err == nil {
 		t.Errorf("got %v want %v", nil, err)
 	}
 }
 
 func TestConnectionPutNormal(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8323)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8323)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
 	value := Person{
 		Name: "John",
 		Age:  30,
 	}
-	err := memConn.put(key, value)
+	err := memConn.Put(key, value)
 	if err != nil {
 		t.Error(err)
 	}
@@ -97,25 +122,31 @@ func TestConnectionPutNormal(t *testing.T) {
 }
 
 func TestConnectionPutAndGet(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8324)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8324)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
 	value := Person{
 		Name: "John",
 		Age:  30,
 	}
-	err := memConn.put(key, value)
+	err := memConn.Put(key, value)
 	if err != nil {
 		t.Error(err)
 	}
 
 	var expected Person
-	err = memConn.get(key, &expected)
+	err = memConn.Get(key, &expected)
 	if err != nil {
 		t.Error(err)
 	}
@@ -126,19 +157,25 @@ func TestConnectionPutAndGet(t *testing.T) {
 }
 
 func TestConnectionReplaceAndGet(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8325)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8325)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
 	value := Person{
 		Name: "John",
 		Age:  30,
 	}
-	err := memConn.put(key, value)
+	err := memConn.Put(key, value)
 	if err != nil {
 		t.Error(err)
 	}
@@ -147,13 +184,13 @@ func TestConnectionReplaceAndGet(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	err = memConn.put(key, value)
+	err = memConn.Put(key, value)
 	if err != nil {
 		t.Error(err)
 	}
 
 	var expected Person
-	err = memConn.get(key, &expected)
+	err = memConn.Get(key, &expected)
 	if err != nil {
 		t.Error(err)
 	}
@@ -164,74 +201,92 @@ func TestConnectionReplaceAndGet(t *testing.T) {
 }
 
 func TestConnectionPutAndDelete(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8326)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8326)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
 	value := Person{
 		Name: "John",
 		Age:  30,
 	}
-	err := memConn.put(key, value)
+	err := memConn.Put(key, value)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = memConn.delete(key)
+	err = memConn.Delete(key)
 	if err != nil {
 		t.Error(err)
 	}
 
 	var expected Person
-	err = memConn.get(key, &expected)
+	err = memConn.Get(key, &expected)
 	if err == nil {
 		t.Errorf("got %v want %v", nil, err)
 	}
 }
 
 func TestConnectionDeleteNotFound(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8327)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8327)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
-	err := memConn.delete(key)
+	err := memConn.Delete(key)
 	if err == nil {
 		t.Errorf("got %v want %v", nil, err)
 	}
 }
 
 func TestConnectionDeleteTwice(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8328)
-	go memoryDatabase.start()
-
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go func() {
+		err := memoryDatabase.start()
+		if err != nil && err != http.ErrServerClosed {
+			t.Errorf("Memory database Start failed: %v\n", err)
+		}
+	}()
+	defer memoryDatabase.stop()
 	time.Sleep(100 * time.Millisecond)
-	memConn := NewMemoryConnection("localhost", 8328)
-	memConn.connect()
+
+	memConn := NewMemoryConnection("localhost", 8321)
+	memConn.Connect()
 
 	key := "1"
 	value := Person{
 		Name: "John",
 		Age:  30,
 	}
-	err := memConn.put(key, value)
+	err := memConn.Put(key, value)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = memConn.delete(key)
+	err = memConn.Delete(key)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = memConn.delete(key)
+	err = memConn.Delete(key)
 	if err == nil {
 		t.Errorf("got %v want %v", nil, err)
 	}

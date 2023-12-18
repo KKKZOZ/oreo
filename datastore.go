@@ -1,24 +1,24 @@
 package main
 
 type Datastore interface {
-	// start a transaction, including initializing the connection
-	start() error
-	read(key string, value any) error
-	write(key string, value any) error
-	prev(key string, record string)
-	delete(key string)
-	prepare() error
-	commit() error
+	// Start a transaction, including initializing the connection
+	Start() error
+	Read(key string, value any) error
+	Write(key string, value any) error
+	Prev(key string, record string)
+	Delete(key string) error
+	Prepare() error
+	Commit() error
 	// abort the transaction
-	abort()
-	recover(key string)
+	Abort() error
+	Recover(key string)
 
-	getType() DataStoreType
-	setTxn(txn *Transaction)
+	GetName() string
+	SetTxn(txn *Transaction)
 }
 
 type dataStore struct {
-	Type DataStoreType
+	Name string
 	Txn  *Transaction
 }
 

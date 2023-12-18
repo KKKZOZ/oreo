@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -72,7 +72,7 @@ func (m *MemoryDatabase) serveDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *MemoryDatabase) start() {
+func (m *MemoryDatabase) start() error {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/get/{key}", m.serveGet).Methods("GET")
@@ -83,12 +83,10 @@ func (m *MemoryDatabase) start() {
 		Addr:    fmt.Sprintf("%s:%d", m.Address, m.Port),
 		Handler: router,
 	}
-
-	log.Fatal(m.server.ListenAndServe())
+	return m.server.ListenAndServe()
 }
 
 func (m *MemoryDatabase) stop() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5)
-	defer cancel()
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	m.server.Shutdown(ctx)
 }

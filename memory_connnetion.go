@@ -22,11 +22,11 @@ func NewMemoryConnection(address string, port int) *MemoryConnection {
 	}
 }
 
-func (m *MemoryConnection) connect() error {
+func (m *MemoryConnection) Connect() error {
 	return nil
 }
 
-func (m *MemoryConnection) get(key string, value any) error {
+func (m *MemoryConnection) Get(key string, value any) error {
 	httpClient := &http.Client{}
 	url := fmt.Sprintf("%s/get/%s", m.baseURL, key)
 	req, err := http.NewRequest("GET", url, nil)
@@ -46,7 +46,7 @@ func (m *MemoryConnection) get(key string, value any) error {
 	return err
 }
 
-func (m *MemoryConnection) put(key string, value any) error {
+func (m *MemoryConnection) Put(key string, value any) error {
 	jsonStr := toJSONString(value)
 	path := fmt.Sprintf("%s/put/%s", m.baseURL, key)
 	baseURL, err := url.Parse(path)
@@ -70,7 +70,7 @@ func (m *MemoryConnection) put(key string, value any) error {
 	return nil
 }
 
-func (m *MemoryConnection) delete(key string) error {
+func (m *MemoryConnection) Delete(key string) error {
 	httpClient := &http.Client{}
 	url := fmt.Sprintf("%s/delete/%s", m.baseURL, key)
 	req, err := http.NewRequest("DELETE", url, nil)
