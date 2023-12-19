@@ -95,3 +95,4 @@ delete 操作在论文中的描述是 "will only happen in the data store after 
 
 + 完善 Transaction 的逻辑和代码，把单个事务的流程全部测试一遍
 + 寻找工具，研究一下测试覆盖率
++ TSR 写入的问题

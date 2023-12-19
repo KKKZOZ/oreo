@@ -30,8 +30,15 @@ func TestTwoTxnWriteThenRead(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
-	txn1.Write("memory", "John", expected)
-	txn1.Commit()
+	err=txn1.Write("memory", "John", expected)
+	if err != nil {
+		t.Errorf("Error writing record: %s", err)
+	}
+	err=txn1.Commit()
+	if err != nil {
+		t.Errorf("Error committing transaction: %s", err)
+	}
+
 
 	txn2 := NewTransaction()
 	txn2.AddDatastore(mds)
@@ -47,7 +54,10 @@ func TestTwoTxnWriteThenRead(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
-	txn2.Commit()
+	err=txn2.Commit()
+	if err != nil {
+		t.Errorf("Error committing transaction: %s", err)
+	}
 
 	// compare
 	if actual != expected {

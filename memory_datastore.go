@@ -172,39 +172,53 @@ func (m *MemoryDatastore) Delete(key string) error {
 
 func (m *MemoryDatastore) conditionalUpdate(item MemoryItem) bool {
 
+	var oldItem MemoryItem
+	err := m.conn.Get(item.Key, &oldItem)
+	if err != nil {
+		// this is a new record
+		newItem := m.updateMetadata(item, MemoryItem{})
+		// Write the new item to the data store
+		if err = m.conn.Put(newItem.Key, newItem); err != nil {
+			return false
+		} else {
+			return true
+		}
+	}
+
 	// TODO: 需不需要根据情况 roll forward ?
-	if item.TxnState == PREPARED {
+	if oldItem.TxnState == PREPARED {
 		return false
 	}
 
 	// the old item is in COMMITTED state
-	var oldItem MemoryItem
-	err := m.conn.Get(item.Key, &oldItem)
-	if err != nil {
-		return false
-	}
 	if oldItem.Version == item.Version {
 		// we can do nothing when the record is deleted
-		// if item.isDeleted {
-		// 	m.conn.Delete(item.Key)
-		// 	return true
-		// }
 
-		// clear the Prev field of the old item
-		oldItem.Prev = ""
 		// update record's metadata
-		item.Prev = toJSONString(oldItem)
-		item.Version++
-		item.TxnState = PREPARED
-		item.TValid = m.Txn.TxnCommitTime
-		item.TLease = m.Txn.TxnCommitTime.Add(leastTime * time.Millisecond)
-
+		newItem := m.updateMetadata(item, oldItem)
 		// Write the new item to the data store
-		m.conn.Put(item.Key, item)
-		return true
+		if err = m.conn.Put(newItem.Key, newItem); err != nil {
+			return false
+		} else {
+			return true
+		}
 	} else {
 		return false
 	}
+}
+
+func (m *MemoryDatastore) updateMetadata(newItem MemoryItem, oldItem MemoryItem) MemoryItem {
+	// clear the Prev field of the old item
+	oldItem.Prev = ""
+	// update record's metadata
+	newItem.Prev = toJSONString(oldItem)
+	newItem.Version++
+	newItem.TxnState = PREPARED
+	newItem.TValid = m.Txn.TxnCommitTime
+	newItem.TLease = m.Txn.TxnCommitTime.Add(leastTime * time.Millisecond)
+
+	return newItem
+
 }
 
 func (m *MemoryDatastore) Prepare() error {
@@ -222,7 +236,7 @@ func (m *MemoryDatastore) Prepare() error {
 	for _, v := range records {
 		ok := m.conditionalUpdate(v)
 		if !ok {
-			return errors.New("Write conflicted")
+			return errors.New("Write conflicted, record key: " + v.Key)
 		}
 	}
 	return nil

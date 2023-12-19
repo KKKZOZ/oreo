@@ -81,10 +81,12 @@ func (t *Transaction) Commit() error {
 	t.TxnCommitTime = time.Now()
 
 	success := true
+	var cause error
 	for _, ds := range t.dataStoreMap {
 		err := ds.Prepare()
 		if err != nil {
 			success = false
+			cause = err
 			break
 		}
 	}
@@ -92,7 +94,7 @@ func (t *Transaction) Commit() error {
 		for _, ds := range t.dataStoreMap {
 			ds.Abort()
 		}
-		return errors.New("prepare phase failed")
+		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
 	// Commit phase
