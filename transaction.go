@@ -9,6 +9,7 @@ import (
 
 type Transaction struct {
 	TxnId           string
+	TxnState        State
 	TxnStartTime    time.Time
 	TxnCommitTime   time.Time
 	globalDataStore Datastore
@@ -18,11 +19,17 @@ type Transaction struct {
 func NewTransaction() *Transaction {
 	return &Transaction{
 		TxnId:        "",
+		TxnState:     EMPTY,
 		dataStoreMap: make(map[string]Datastore),
 	}
 }
 
 func (t *Transaction) Start() error {
+	if t.TxnState != EMPTY {
+		return errors.New("transaction is already started")
+	}
+	t.TxnState = STARTED
+
 	// check nessary datastores are added
 	if t.globalDataStore == nil {
 		return errors.New("global datastore not set")
@@ -56,6 +63,10 @@ func (t *Transaction) SetGlobalDatastore(ds Datastore) {
 }
 
 func (t *Transaction) Read(dsName string, key string, value any) error {
+	if t.TxnState != STARTED {
+		return errors.New("transaction is not in STARTED state")
+	}
+
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Read(key, value)
 	}
@@ -63,6 +74,10 @@ func (t *Transaction) Read(dsName string, key string, value any) error {
 }
 
 func (t *Transaction) Write(dsName string, key string, value any) error {
+	if t.TxnState != STARTED {
+		return errors.New("transaction is not in STARTED state")
+	}
+
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Write(key, value)
 	}
@@ -70,6 +85,10 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 }
 
 func (t *Transaction) Delete(dsName string, key string) error {
+	if t.TxnState != STARTED {
+		return errors.New("transaction is not in STARTED state")
+	}
+
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Delete(key)
 	}
@@ -77,6 +96,17 @@ func (t *Transaction) Delete(dsName string, key string) error {
 }
 
 func (t *Transaction) Commit() error {
+	if t.TxnState == COMMITTED {
+		return errors.New("transaction is already being committed")
+	}
+	if t.TxnState == ABORTED {
+		return errors.New("transaction is already aborted")
+	}
+	if t.TxnState == EMPTY {
+		return errors.New("transaction is not started")
+	}
+	t.TxnState = COMMITTED
+
 	// Prepare phase
 	t.TxnCommitTime = time.Now()
 
@@ -92,14 +122,14 @@ func (t *Transaction) Commit() error {
 	}
 	if !success {
 		for _, ds := range t.dataStoreMap {
-			ds.Abort()
+			ds.Abort(true)
 		}
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
 	// Commit phase
 	// The sync point
-	t.globalDataStore.Write(t.TxnId, COMMITTED)
+	t.globalDataStore.WriteTSR(t.TxnId)
 
 	for _, ds := range t.dataStoreMap {
 		// TODO: do not allow abort after Commit
@@ -107,5 +137,25 @@ func (t *Transaction) Commit() error {
 		ds.Commit()
 	}
 
+	t.globalDataStore.DeleteTSR(t.TxnId)
+
+	return nil
+}
+
+func (t *Transaction) Abort() error {
+	if t.TxnState == COMMITTED {
+		return errors.New("transaction is already committed")
+	}
+	if t.TxnState == ABORTED {
+		return errors.New("transaction is already aborted")
+	}
+	if t.TxnState == EMPTY {
+		return errors.New("transaction is not started")
+	}
+
+	t.TxnState = ABORTED
+	for _, ds := range t.dataStoreMap {
+		ds.Abort(false)
+	}
 	return nil
 }

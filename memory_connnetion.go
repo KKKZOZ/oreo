@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 )
@@ -27,12 +26,10 @@ func (m *MemoryConnection) Connect() error {
 }
 
 func (m *MemoryConnection) Get(key string, value any) error {
-	httpClient := &http.Client{}
 	url := fmt.Sprintf("%s/get/%s", m.baseURL, key)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
+	req, _ := http.NewRequest("GET", url, nil)
+
+	httpClient := &http.Client{}
 	response, err := httpClient.Do(req)
 	if err != nil {
 		return err
@@ -51,17 +48,15 @@ func (m *MemoryConnection) Put(key string, value any) error {
 	path := fmt.Sprintf("%s/put/%s", m.baseURL, key)
 	baseURL, err := url.Parse(path)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	params := url.Values{}
 	params.Add("value", jsonStr)
 	baseURL.RawQuery = params.Encode()
 
-	req, err := http.NewRequest("POST", baseURL.String(), nil)
-	if err != nil {
-		return err
-	}
+	req, _ := http.NewRequest("POST", baseURL.String(), nil)
+
 	httpClient := &http.Client{}
 	response, _ := httpClient.Do(req)
 	if response.StatusCode != http.StatusOK {
@@ -73,10 +68,7 @@ func (m *MemoryConnection) Put(key string, value any) error {
 func (m *MemoryConnection) Delete(key string) error {
 	httpClient := &http.Client{}
 	url := fmt.Sprintf("%s/delete/%s", m.baseURL, key)
-	req, err := http.NewRequest("DELETE", url, nil)
-	if err != nil {
-		return err
-	}
+	req, _ := http.NewRequest("DELETE", url, nil)
 	response, _ := httpClient.Do(req)
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("delete failed")

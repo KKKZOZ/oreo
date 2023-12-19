@@ -10,28 +10,21 @@ import (
 
 func TestServerStartAndStop(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go func() {
-		err := memoryDatabase.start()
-		if err != nil && err != http.ErrServerClosed {
-			t.Errorf("Memory database Start failed: %v\n", err)
-		}
-	}()
-	defer memoryDatabase.stop()
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
+
 }
 
 func TestGetNormal(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	memoryDatabase.records["1"] = "hello"
-	go func() {
-		err := memoryDatabase.start()
-		if err != nil && err != http.ErrServerClosed {
-			t.Errorf("Memory database Start failed: %v\n", err)
-		}
-	}()
-	defer memoryDatabase.stop()
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
+	memoryDatabase.records["1"] = "hello"
 	req, _ := http.NewRequest("GET", "http://localhost:8321/get/1", nil)
 	client := &http.Client{}
 	response, _ := client.Do(req)
@@ -55,13 +48,9 @@ func TestGetNormal(t *testing.T) {
 
 func TestGetNotFound(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go func() {
-		err := memoryDatabase.start()
-		if err != nil && err != http.ErrServerClosed {
-			t.Errorf("Memory database Start failed: %v\n", err)
-		}
-	}()
-	defer memoryDatabase.stop()
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	req, _ := http.NewRequest("GET", "http://localhost:8321/get/1", nil)
@@ -87,13 +76,9 @@ func TestGetNotFound(t *testing.T) {
 
 func TestPutNormal(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go func() {
-		err := memoryDatabase.start()
-		if err != nil && err != http.ErrServerClosed {
-			t.Errorf("Memory database Start failed: %v\n", err)
-		}
-	}()
-	defer memoryDatabase.stop()
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	baseURL, err := url.Parse("http://localhost:8321/put/1")
@@ -132,15 +117,46 @@ func TestPutNormal(t *testing.T) {
 	}
 }
 
+func TestPutInvalidForm(t *testing.T) {
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	baseURL, err := url.Parse("http://localhost:8321/put/1")
+	if err != nil {
+		log.Fatal(err)
+	}
+	baseURL.RawQuery = "invalid;;;"
+
+	req, _ := http.NewRequest("POST", baseURL.String(), nil)
+
+	client := &http.Client{}
+	response, _ := client.Do(req)
+
+	if response.StatusCode != http.StatusBadRequest {
+		t.Errorf(
+			"Handler returned wrong status code: got %v want %v",
+			response.StatusCode, http.StatusBadRequest,
+		)
+	}
+	body := getBodyString(response)
+
+	expected := "Bad request"
+	if body != expected {
+		t.Errorf(
+			"Handler returned unexpected body: got %v want %v",
+			body, expected,
+		)
+	}
+}
+
 func TestPutEmpty(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go func() {
-		err := memoryDatabase.start()
-		if err != nil && err != http.ErrServerClosed {
-			t.Errorf("Memory database Start failed: %v\n", err)
-		}
-	}()
-	defer memoryDatabase.stop()
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	baseURL, err := url.Parse("http://localhost:8321/put/1")
@@ -175,13 +191,9 @@ func TestPutEmpty(t *testing.T) {
 
 func TestPutAndGet(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go func() {
-		err := memoryDatabase.start()
-		if err != nil && err != http.ErrServerClosed {
-			t.Errorf("Memory database Start failed: %v\n", err)
-		}
-	}()
-	defer memoryDatabase.stop()
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	baseURL, err := url.Parse("http://localhost:8321/put/1")
@@ -236,8 +248,10 @@ func TestPutAndGet(t *testing.T) {
 func TestReplaceAndGet(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
-
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
+
 	baseURL, err := url.Parse("http://localhost:8321/put/1")
 	if err != nil {
 		log.Fatal(err)
@@ -318,8 +332,10 @@ func TestReplaceAndGet(t *testing.T) {
 func TestGetAndDelete(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
-
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
+
 	baseURL, err := url.Parse("http://localhost:8321/put/1")
 	if err != nil {
 		log.Fatal(err)
@@ -391,7 +407,8 @@ func TestGetAndDelete(t *testing.T) {
 func TestDeleteNotFound(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
-
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	req, _ := http.NewRequest("DELETE", "http://localhost:8321/delete/1", nil)
@@ -418,8 +435,10 @@ func TestDeleteNotFound(t *testing.T) {
 func TestDeleteTwice(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
-
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
+
 	baseURL, err := url.Parse("http://localhost:8321/put/1")
 	if err != nil {
 		log.Fatal(err)

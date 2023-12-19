@@ -10,6 +10,8 @@ func TestSimpleReadInCache(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -78,6 +80,8 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -131,6 +135,8 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -197,8 +203,9 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
-
 	// Create a new transaction
 	txn := NewTransaction()
 
@@ -258,6 +265,8 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -315,6 +324,8 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -369,6 +380,8 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -419,6 +432,8 @@ func TestSimpleWriteAndRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -464,6 +479,8 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -532,6 +549,8 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -599,6 +618,8 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -652,6 +673,8 @@ func TestSimpleDeleteTwice(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -698,10 +721,39 @@ func TestSimpleDeleteTwice(t *testing.T) {
 	}
 }
 
+func TestDeleteWithoutRead(t *testing.T) {
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	preTxn := NewTransactionWithSetup()
+	dataPerson := NewDefaultPerson()
+	preTxn.Start()
+	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Commit()
+
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	err := txn.Delete("memory", "John")
+	if err != nil {
+		t.Errorf("Error deleting from memory datastore: %s", err)
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		t.Errorf("Error committing transaction: %s", err)
+	}
+
+}
+
 func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
@@ -770,6 +822,8 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction

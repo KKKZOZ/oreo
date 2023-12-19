@@ -14,6 +14,7 @@ type MemoryDatabase struct {
 	Port    int
 	records map[string]string
 	server  http.Server
+	msgChan chan string
 }
 
 func NewMemoryDatabase(address string, port int) *MemoryDatabase {
@@ -21,6 +22,7 @@ func NewMemoryDatabase(address string, port int) *MemoryDatabase {
 		Address: address,
 		Port:    port,
 		records: make(map[string]string),
+		msgChan: make(chan string),
 	}
 }
 
@@ -87,6 +89,7 @@ func (m *MemoryDatabase) start() error {
 }
 
 func (m *MemoryDatabase) stop() {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	m.server.Shutdown(ctx)
+	m.msgChan <- "Memory database stopped"
 }

@@ -4,3 +4,20 @@ type Person struct {
 	Name string
 	Age  int
 }
+
+type TestItem struct {
+	Value string
+}
+
+func NewDefaultPerson() Person {
+	return Person{
+		Name: "John",
+		Age:  30,
+	}
+}
+
+func NewTestItem(value string) TestItem {
+	return TestItem{
+		Value: value,
+	}
+}

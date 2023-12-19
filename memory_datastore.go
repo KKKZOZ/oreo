@@ -13,7 +13,6 @@ type MemoryDatastore struct {
 	conn       *MemoryConnection
 	cache      map[string]MemoryItem
 	versionMap map[string]int
-	TStart     time.Time
 }
 
 type MemoryItem struct {
@@ -42,7 +41,6 @@ func (m *MemoryDatastore) Start() error {
 	if err != nil {
 		return err
 	}
-	m.TStart = time.Now()
 	return nil
 }
 
@@ -60,7 +58,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		return err
 	}
 
-	// else Get if from data
+	// else get if from data
 	err := m.conn.Get(key, &item)
 	if err != nil {
 		return err
@@ -79,7 +77,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		}
 		// if TSR does not exist
 		// if t_lease has expired
-		if item.TLease.Before(m.TStart) {
+		if item.TLease.Before(m.Txn.TxnStartTime) {
 			err := m.rollForward(item)
 			if err != nil {
 				return err
@@ -93,7 +91,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 }
 
 func (m *MemoryDatastore) readAsCommitted(item MemoryItem, value any) error {
-	if item.TValid.Before(m.TStart) {
+	if item.TValid.Before(m.Txn.TxnStartTime) {
 		// if the record has been deleted
 		if item.isDeleted {
 			return errors.New("key not found")
@@ -108,7 +106,7 @@ func (m *MemoryDatastore) readAsCommitted(item MemoryItem, value any) error {
 		// The transaction needs to be aborted
 		return err
 	}
-	if preItem.TValid.Before(m.TStart) {
+	if preItem.TValid.Before(m.Txn.TxnStartTime) {
 		// if the record has been deleted
 		if preItem.isDeleted {
 			return errors.New("key not found")
@@ -261,7 +259,11 @@ func (m *MemoryDatastore) Commit() error {
 	return nil
 }
 
-func (m *MemoryDatastore) Abort() error {
+func (m *MemoryDatastore) Abort(hasCommitted bool) error {
+	if !hasCommitted {
+		m.cache = make(map[string]MemoryItem)
+		return nil
+	}
 
 	for _, v := range m.cache {
 		var item MemoryItem
@@ -275,7 +277,6 @@ func (m *MemoryDatastore) Abort() error {
 			m.rollback(item)
 		}
 	}
-	// TODO: clear the cache?
 	m.cache = make(map[string]MemoryItem)
 	return nil
 }
@@ -311,4 +312,12 @@ func (m *MemoryDatastore) GetName() string {
 
 func (m *MemoryDatastore) SetTxn(txn *Transaction) {
 	m.Txn = txn
+}
+
+func (m *MemoryDatastore) WriteTSR(key string) error {
+	return m.conn.Put(key, COMMITTED)
+}
+
+func (m *MemoryDatastore) DeleteTSR(key string) error {
+	return m.conn.Delete(key)
 }
