@@ -1,27 +1,22 @@
 
 ### version tag
 
-如果 DataStore 对上层返回的只是应用层数据的话，那么版本号如何维护？
-
-很多情况下都是 read-modify-write 的模式，我们暂且采用以下规则：
-
-在 DataStore 中维护一个 map，versionMap:
-
-+ key: record's key
-+ value: record's version
+很多情况下都是 read-modify-write 的模式，对于版本号的维护，我们暂且采用以下规则：
 
 在执行 write 操作时：
 
-+ 如果 cache 中没有该数据，说明是第一次写入，从 versionMap 中获取：
-  + 如果 versionMap 中没有对应的 key，说明这个数据是新创建的，把 version 设为 1
-  + 如果 versionMap 中有对应的 key，则 `item.Version = versionMap[key] + 1`
-+ 如果 cache 中已经有数据了，直接替换 value 即可
++ 如果 writeCache 中没有该数据，说明是第一次写入，从 readCache 中获取：
+  + 如果 readCache 中没有对应的 key，说明这个数据是新创建的，把 version 设为 1
+  + 如果 readCache 中有对应的 key，则 `item.Version = readCache[key].Version`
++ 如果 writeCache 中已经有数据了，直接替换 value 即可
 
 
 在执行 delete 操作时：
 
-+ 如果 cache 中没有该数据，说明是根据业务逻辑直接删除，需要执行一次 txn read 来确定版本号，否则会在 conditionalUpdate 时出错(没有正确的版本)
-+ 如果 cache 中有这项数据，直接修改 `isDeleted` 即可
++ 如果 writeCache 中有这项数据，说明版本号有对应，直接修改 `isDeleted` 即可
++ 如果 readCache 中有这项数据，说明版本号也有对应并且该数据还未修改过，直接修改 `isDeleted` 即可
++ 如果 writeCache 和 readCache 中都没有这个数据，说明是根据业务逻辑直接删除，需要执行一次 txn read 来确定版本号，否则会在 conditionalUpdate 时出错(没有正确的版本): TestDeleteWithoutRead
+
 
 
 ### Transaction
@@ -42,7 +37,23 @@
 
 注意读过的数据也必须先保存在 cache 中：
 
-+ 最好是把读集和写集分离
++ 把读集和写集分离
+
+Transaction Read:
+
++ if the record is in writeCache, use the cached record
++ if the record is in readCache, use the cached record
++ read from connectoin:
+  + if the record is in COMMITTED:
+    + if $T_valid < T_start$: OK
+    + else go to previous one(by unmarshal the `Prev` field)
+    + **abort** if it can not find a corresponding one
+  + if the record is in PREPARED:
+    + if TSR (Transaction Status Record) exists (indicates that the transaction did commit): the record is considerer COMMITTED(*roll forward*)
+    + if there is no TSR:
+      + if the record's $T_{lease\_time}$ has **not** expired (indicates that the transaction is running, for example, is executing another datastore's `conditionalUpdate`): read fails
+      + if the record's $T_{lease\_time}$ has expired: rollback the record
+
 
 #### Transaction Commit
 
@@ -55,7 +66,21 @@ Prepare：
 + 对于那个引起失败的 datastore，其整个写集可以被分为两部分
   + updated：已经写入了 datastore 的 newItem，TxnId 等于当前事务的 id
   + to be updated: 还未写入，所以不用管
-+ 所以：以 cache 中的 key 为列表，挨个去检查是否已经更改，更改了的话就rollback
++ 所以：以 cache 中的 key 为列表，挨个去检查是否已经更改，更改了的话就 rollback
+
+假设一个慢事务 Prepare 阶段执行得非常慢（比如说有一个 datastore 由于网络情况，其 `conditionalUpdate` 执行得非常慢），导致前面的 record 的 $T_{lease\_time}$ 过期了，这时如果有一个快事务访问这个 record， 就会执行 `rollback` 流程，即把 `Prev` 中的记录提出来。
+
++ 如果快事务提前修改了慢事务后续要修改的值，慢事务需要 abort:
+  + 总共 1，2，3，4，5个记录
+  + slowTxn 读 12345
+  + fastTxn 读 345
+  + slowTxn 从 1 开始修改，修改到 4 时卡住
+  + fastTxn 从 3 开始修改，发现记录的 lease time 已经过期，所以 rollback 后继续修改
+  + fastTxn 能够正常提交
+  + slowTxn 在修改 4 时出现异常，abort
+  + postTxn 需要检查 1，2 处于原状态，3，4，5 处于 fastTxn 修改后的状态
+
+如果慢事务此时进入 commit 阶段，打算提交，就会进入数据不一致的情况: TestSlowTransactionRecordExpiredConsistency
 
 
 ### Abstraction
@@ -155,11 +180,18 @@ Abort 情况分为两种：
 + 如果有对应的 TSR
   + 当作为 COMMITTED，检测到写写冲突，事务终止
 + 如果没有对应的 TSR
-  + $T_{least\_time}$ has **not** expired: 无法确定对方事务状态，事务终止
-  +  $T_{least\_time}$ has expired: 无法确定对方事务状态，事务终止
+  + $T_{least\_time}$ has **not** expired: 无法确定对方事务状态(可能还在进行中)，事务终止
+  + $T_{least\_time}$ has expired: 无法确定对方事务状态，事务终止
 
 
 
 ### TODO
 
 Transaction: State 可以用 StateMachine 来管理状态
+
+
+读写集分离
+
++ 在读一个数据时，应该先从写集里面查找，再从读集里面查找
+
++ 在写一个数据时，先查找 writeCache 中是否已经有记录。

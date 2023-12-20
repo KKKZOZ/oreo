@@ -129,7 +129,17 @@ func (t *Transaction) Commit() error {
 
 	// Commit phase
 	// The sync point
-	t.globalDataStore.WriteTSR(t.TxnId)
+
+	txnState, err := t.GetTSRState()
+	if err == nil && txnState == ABORTED {
+		t.Abort()
+		return errors.New("transaction is aborted by other transaction")
+	}
+
+	err = t.WriteTSR(COMMITTED)
+	if err != nil {
+		return err
+	}
 
 	for _, ds := range t.dataStoreMap {
 		// TODO: do not allow abort after Commit
@@ -137,7 +147,7 @@ func (t *Transaction) Commit() error {
 		ds.Commit()
 	}
 
-	t.globalDataStore.DeleteTSR(t.TxnId)
+	t.DeleteTSR()
 
 	return nil
 }
@@ -158,4 +168,18 @@ func (t *Transaction) Abort() error {
 		ds.Abort(false)
 	}
 	return nil
+}
+
+func (t *Transaction) WriteTSR(txnState State) error {
+	return t.globalDataStore.WriteTSR(t.TxnId, txnState)
+}
+
+func (t *Transaction) DeleteTSR() error {
+	return t.globalDataStore.DeleteTSR(t.TxnId)
+}
+
+func (t *Transaction) GetTSRState() (State, error) {
+	var state State
+	err := t.globalDataStore.Read(t.TxnId, &state)
+	return state, err
 }

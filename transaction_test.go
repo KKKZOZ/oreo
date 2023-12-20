@@ -244,6 +244,7 @@ func TestMultileKeyWriteConflict(t *testing.T) {
 
 		err := txn1.Commit()
 		if err != nil {
+			t.Logf("txn1 commit err: %s", err)
 			resChan <- false
 		} else {
 			resChan <- true
@@ -264,6 +265,7 @@ func TestMultileKeyWriteConflict(t *testing.T) {
 
 		err := txn2.Commit()
 		if err != nil {
+			t.Logf("txn2 commit err: %s", err)
 			resChan <- false
 		} else {
 			resChan <- true
@@ -544,20 +546,13 @@ func TestTxnAbort(t *testing.T) {
 	}
 }
 
-var inputItemList = []TestItem{
-	NewTestItem("item1"),
-	NewTestItem("item2"),
-	NewTestItem("item3"),
-	NewTestItem("item4"),
-	NewTestItem("item5"),
-}
-
+// TODO: WTF why this test failed when using CLI
 func TestTxnAbortCausedByWriteConflict(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
 	defer func() { <-memoryDatabase.msgChan }()
 	defer func() { go memoryDatabase.stop() }()
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
 	preTxn.Start()

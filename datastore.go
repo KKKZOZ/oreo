@@ -1,5 +1,6 @@
 package main
 
+//go:generate mockery --name Datastore
 type Datastore interface {
 	// Start a transaction, including initializing the connection
 	Start() error
@@ -17,8 +18,10 @@ type Datastore interface {
 
 	GetName() string
 	SetTxn(txn *Transaction)
-	WriteTSR(key string) error
-	DeleteTSR(key string) error
+
+	WriteTSR(txnId string, txnState State) error
+	DeleteTSR(txnId string) error
+	conditionalUpdate(item Item) bool
 }
 
 type dataStore struct {
@@ -35,3 +38,7 @@ const (
 	COMMITTED State = 3
 	ABORTED   State = 4
 )
+
+type Item interface {
+	GetKey() string
+}

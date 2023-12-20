@@ -2,8 +2,11 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSimpleReadInCache(t *testing.T) {
@@ -55,7 +58,7 @@ func TestSimpleReadInCache(t *testing.T) {
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  2,
 	}
-	mds.cache[key] = cacheMemoryItem
+	mds.writeCache[key] = cacheMemoryItem
 
 	// Start the transaction
 	err := txn.Start()
@@ -349,14 +352,32 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Key:      "John",
 		Value:    toJSONString(expected),
 		TxnId:    "100",
-		TxnState: PREPARED,
+		TxnState: COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
 	}
 
+	expectedStr := toJSONString(expectedMemoryItem)
+
+	curPerson := Person{
+		Name: "John",
+		Age:  31,
+	}
+
+	curMemoryItem := MemoryItem{
+		Key:      "John",
+		Value:    toJSONString(curPerson),
+		TxnId:    "101",
+		TxnState: PREPARED,
+		TValid:   time.Now().Add(-3 * time.Second),
+		TLease:   time.Now().Add(-1 * time.Second),
+		Version:  3,
+		Prev:     expectedStr,
+	}
+
 	key := "John"
-	conn.Put(key, expectedMemoryItem)
+	conn.Put(key, curMemoryItem)
 
 	// Start the transaction
 	err := txn.Start()
@@ -721,6 +742,30 @@ func TestSimpleDeleteTwice(t *testing.T) {
 	}
 }
 
+func TestDeleteWithRead(t *testing.T) {
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.start()
+	defer func() { <-memoryDatabase.msgChan }()
+	defer func() { go memoryDatabase.stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	preTxn := NewTransactionWithSetup()
+	dataPerson := NewDefaultPerson()
+	preTxn.Start()
+	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Commit()
+
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	var person Person
+	txn.Read("memory", "John", &person)
+	err := txn.Delete("memory", "John")
+	assert.NoError(t, err)
+
+	err = txn.Commit()
+	assert.NoError(t, err)
+}
+
 func TestDeleteWithoutRead(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.start()
@@ -893,4 +938,179 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 	if result != person {
 		t.Errorf("got %v want %v", result, person)
 	}
+
 }
+
+func TestMockConnectionInTxn(t *testing.T) {
+	t.Run("less than limit", func(t *testing.T) {
+		// every record needs two `conn.Put()` call
+		// Write TSR needs one `conn.Put()` call
+		// So write X records needs 2X+1 `conn.Put()` call
+		memoryDatabase := NewMemoryDatabase("localhost", 8321)
+		go memoryDatabase.start()
+		defer func() { <-memoryDatabase.msgChan }()
+		defer func() { go memoryDatabase.stop() }()
+		time.Sleep(100 * time.Millisecond)
+
+		preTxn := NewTransactionWithSetup()
+		preTxn.Start()
+		for _, item := range inputItemList {
+			preTxn.Write("memory", item.Value, item)
+		}
+		preTxn.Commit()
+
+		txn := NewTransaction()
+		conn := NewMockMemoryConnection("localhost", 8321, 11, true,
+			func() error { return errors.New("debug error") })
+		mds := NewMemoryDatastore("memory", conn)
+		txn.AddDatastore(mds)
+		txn.SetGlobalDatastore(mds)
+
+		txn.Start()
+		for _, item := range inputItemList {
+			var res TestItem
+			txn.Read("memory", item.Value, &res)
+			res.Value = item.Value + "-new"
+			txn.Write("memory", item.Value, res)
+		}
+
+		err := txn.Commit()
+		assert.NoError(t, err)
+
+		// fmt.Printf("Call Times: %d\n", conn.callTimes)
+	})
+
+	t.Run("more than limit", func(t *testing.T) {
+		// every record needs two `conn.Put()` call
+		// Write TSR needs one `conn.Put()` call
+		// So write X records needs 2X+1 `conn.Put()` call
+		memoryDatabase := NewMemoryDatabase("localhost", 8321)
+		go memoryDatabase.start()
+		defer func() { <-memoryDatabase.msgChan }()
+		defer func() { go memoryDatabase.stop() }()
+		time.Sleep(100 * time.Millisecond)
+
+		preTxn := NewTransactionWithSetup()
+		preTxn.Start()
+		for _, item := range inputItemList {
+			preTxn.Write("memory", item.Value, item)
+		}
+		preTxn.Commit()
+
+		txn := NewTransaction()
+		conn := NewMockMemoryConnection("localhost", 8321, 3, true,
+			func() error { return errors.New("debug error") })
+		mds := NewMemoryDatastore("memory", conn)
+		txn.AddDatastore(mds)
+		txn.SetGlobalDatastore(mds)
+
+		txn.Start()
+		for _, item := range inputItemList {
+			var res TestItem
+			txn.Read("memory", item.Value, &res)
+			res.Value = item.Value + "-new"
+			txn.Write("memory", item.Value, res)
+		}
+
+		err := txn.Commit()
+		assert.EqualError(t, err, "prepare phase failed: write conflicted")
+
+		// addtionally, we can check data consistency
+		postTxn := NewTransactionWithSetup()
+		postTxn.Start()
+		for _, item := range inputItemList {
+			var res TestItem
+			postTxn.Read("memory", item.Value, &res)
+			assert.Equal(t, item.Value, res.Value)
+		}
+		postTxn.Commit()
+		fmt.Printf("Call Times: %d\n", conn.callTimes)
+
+	})
+}
+
+// Error Test
+// func TestSlowTransactionRecordExpiredConsistency(t *testing.T) {
+// 	// run a memory database
+// 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+// 	go memoryDatabase.start()
+// 	defer func() { <-memoryDatabase.msgChan }()
+// 	defer func() { go memoryDatabase.stop() }()
+// 	time.Sleep(100 * time.Millisecond)
+
+// 	preTxn := NewTransactionWithSetup()
+// 	preTxn.Start()
+// 	for _, item := range inputItemList {
+// 		preTxn.Write("memory", item.Value, item)
+// 	}
+// 	preTxn.Commit()
+
+// 	go func() {
+// 		slowTxn := NewTransaction()
+// 		conn := NewMockMemoryConnection("localhost", 8321, 4, false,
+// 			func() error { time.Sleep(3 * time.Second); return nil })
+// 		mds := NewMemoryDatastore("memory", conn)
+// 		slowTxn.AddDatastore(mds)
+// 		slowTxn.SetGlobalDatastore(mds)
+
+// 		slowTxn.Start()
+// 		for _, item := range inputItemList {
+// 			var result TestItem
+// 			slowTxn.Read("memory", item.Value, &result)
+// 			result.Value = item.Value + "-slow"
+// 			slowTxn.Write("memory", item.Value, result)
+// 		}
+// 		err := slowTxn.Commit()
+// 		assert.EqualError(t, err, "prepare phase failed: write conflicted")
+// 	}()
+// 	time.Sleep(2 * time.Second)
+
+// 	testConn := NewMemoryConnection("localhost", 8321)
+// 	testConn.Connect()
+// 	var memItem1 MemoryItem
+// 	testConn.Get("item1", &memItem1)
+// 	assert.Equal(t, toJSONString(NewTestItem("item1-slow")), memItem1.Value)
+// 	assert.Equal(t, memItem1.TxnState, PREPARED)
+
+// 	var memItem2 MemoryItem
+// 	testConn.Get("item2", &memItem2)
+// 	assert.Equal(t, toJSONString(NewTestItem("item2-slow")), memItem2.Value)
+// 	assert.Equal(t, memItem2.TxnState, PREPARED)
+
+// 	var memItem3 MemoryItem
+// 	testConn.Get("item3", &memItem3)
+// 	assert.Equal(t, toJSONString(NewTestItem("item3")), memItem3.Value)
+// 	assert.Equal(t, memItem3.TxnState, COMMITTED)
+
+// 	fastTxn := NewTransactionWithSetup()
+// 	fastTxn.Start()
+// 	for i := 2; i <= 4; i++ {
+// 		var result TestItem
+// 		fastTxn.Read("memory", inputItemList[i].Value, &result)
+// 		result.Value = inputItemList[i].Value + "-fast"
+// 		fastTxn.Write("memory", inputItemList[i].Value, result)
+// 	}
+// 	err := fastTxn.Commit()
+// 	assert.NoError(t, err)
+
+// 	postTxn := NewTransactionWithSetup()
+// 	postTxn.Start()
+
+// 	var res1 TestItem
+// 	postTxn.Read("memory", inputItemList[0].Value, &res1)
+// 	assert.Equal(t, inputItemList[0], res1)
+
+// 	var res2 TestItem
+// 	postTxn.Read("memory", inputItemList[1].Value, &res2)
+// 	assert.Equal(t, inputItemList[1], res2)
+
+// 	for i := 2; i <= 4; i++ {
+// 		var res TestItem
+// 		postTxn.Read("memory", inputItemList[i].Value, &res)
+// 		assert.Equal(t, inputItemList[i].Value+"-fast", res.Value)
+// 	}
+
+// 	err = postTxn.Commit()
+// 	assert.NoError(t, err)
+
+// }

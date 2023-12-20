@@ -21,3 +21,11 @@ func NewTestItem(value string) TestItem {
 		Value: value,
 	}
 }
+
+var inputItemList = []TestItem{
+	NewTestItem("item1"),
+	NewTestItem("item2"),
+	NewTestItem("item3"),
+	NewTestItem("item4"),
+	NewTestItem("item5"),
+}
