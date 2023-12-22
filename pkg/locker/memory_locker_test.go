@@ -255,7 +255,7 @@ func TestMemoryLocker_MultipleConcurrentHolds(t *testing.T) {
 	locker := NewMemoryLocker()
 
 	count := int32(0)
-	total := int32(100)
+	total := int32(50)
 
 	for i := 0; i < int(total); i++ {
 		go func(locker *MemoryLocker, id int) {

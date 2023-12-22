@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/kkkzoz/oreo/util"
+	"github.com/kkkzoz/oreo/internal/util"
 )
 
 // MockMemoryConnection is a mock of MemoryConnection

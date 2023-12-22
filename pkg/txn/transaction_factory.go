@@ -1,9 +1,11 @@
 package txn
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
 
-	"github.com/kkkzoz/oreo/locker"
+	"github.com/kkkzoz/oreo/pkg/locker"
 )
 
 // TransactionFactory represents a factory for creating transactions.
@@ -17,6 +19,9 @@ type TransactionFactory struct {
 	TimeOracleSource SourceType
 	// LockerSource is the source type for the locker.
 	LockerSource SourceType
+
+	dateStoreList   []Datastore
+	globalDatastore Datastore
 }
 
 type TransactionConfig struct {
@@ -32,12 +37,17 @@ type TransactionConfig struct {
 	// Options is a map of additional options.
 	Options map[string]string
 
+	// DatastoreList is a list of datastores to be added to the transaction.
+	DatastoreList []Datastore
+
+	// GlobalDatastore is the global datastore to be added to the transaction.
+	GlobalDatastore Datastore
+
 	// LocalLocker is the local locker instance.
 	LocalLocker locker.Locker
 }
 
 // NewTransactionFactory creates a new TransactionFactory object.
-// It initializes the TransactionFactory with default values and returns a pointer to the newly created object.
 func NewTransactionFactory(config *TransactionConfig) (*TransactionFactory, error) {
 	if config == nil {
 		config = &TransactionConfig{
@@ -50,6 +60,14 @@ func NewTransactionFactory(config *TransactionConfig) (*TransactionFactory, erro
 	}
 	if config.LockerSource == "" {
 		config.LockerSource = LOCAL
+	}
+
+	if len(config.DatastoreList) == 0 {
+		return nil, errors.New("DatastoreList is empty")
+	}
+
+	if config.GlobalDatastore == nil {
+		return nil, errors.New("GlobalDatastore is empty")
 	}
 
 	if config.TimeOracleSource == GLOBAL {
@@ -74,6 +92,8 @@ func NewTransactionFactory(config *TransactionConfig) (*TransactionFactory, erro
 		LockerSource:     config.LockerSource,
 		oracleURL:        config.OracleURL,
 		locker:           config.LocalLocker,
+		dateStoreList:    config.DatastoreList,
+		globalDatastore:  config.GlobalDatastore,
 	}, nil
 
 }
@@ -89,5 +109,29 @@ func (t *TransactionFactory) NewTransaction() *Transaction {
 		txn.locker = locker.NewHttpLocker(t.oracleURL)
 	}
 
+	if t.LockerSource == GLOBAL {
+		txn.locker = locker.NewHttpLocker(t.oracleURL)
+	}
+
+	for _, ds := range t.dateStoreList {
+		// var tar Datastore
+		// deepcopy(&ds, &tar)
+		txn.AddDatastore(ds)
+		if ds == t.globalDatastore {
+			txn.SetGlobalDatastore(ds)
+		}
+	}
+
 	return txn
+}
+
+func deepcopy(src, dest *Datastore) error {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	dec := gob.NewDecoder(&buf)
+	err := enc.Encode(src)
+	if err != nil {
+		return err
+	}
+	return dec.Decode(dest)
 }

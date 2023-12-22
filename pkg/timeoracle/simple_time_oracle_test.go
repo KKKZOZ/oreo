@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/kkkzoz/oreo/locker"
+	"github.com/kkkzoz/oreo/pkg/locker"
 )
 
 // TestSimpleTimeOracle_GetTime ensures that the GetTime function behaves correctly

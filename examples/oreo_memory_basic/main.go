@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kkkzoz/oreo/datastore/memory"
-	"github.com/kkkzoz/oreo/txn"
+	"github.com/kkkzoz/oreo/pkg/datastore/memory"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 type User struct {
