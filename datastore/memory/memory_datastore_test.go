@@ -1,24 +1,40 @@
-package main
+package memory
 
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
+	"github.com/kkkzoz/vanilla-icecream/config"
+	"github.com/kkkzoz/vanilla-icecream/locker"
+	"github.com/kkkzoz/vanilla-icecream/testutil"
+	"github.com/kkkzoz/vanilla-icecream/timeoracle"
+	"github.com/kkkzoz/vanilla-icecream/txn"
+	"github.com/kkkzoz/vanilla-icecream/util"
 	"github.com/stretchr/testify/assert"
 )
+
+func NewTransactionWithSetup() *txn.Transaction {
+	txn := txn.NewTransaction()
+	conn := NewMemoryConnection("localhost", 8321)
+	mds := NewMemoryDatastore("memory", conn)
+	txn.AddDatastore(mds)
+	txn.SetGlobalDatastore(mds)
+	return txn
+}
 
 func TestSimpleReadInCache(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -27,15 +43,15 @@ func TestSimpleReadInCache(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	memoryPerson := Person{
+	memoryPerson := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(memoryPerson),
+		Value:    util.ToJSONString(memoryPerson),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -45,15 +61,15 @@ func TestSimpleReadInCache(t *testing.T) {
 	conn.Put(key, expectedMemoryItem)
 
 	// Put a item in cache
-	cachePerson := Person{
+	cachePerson := testutil.Person{
 		Name: "John",
 		Age:  31,
 	}
 	cacheMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(cachePerson),
+		Value:    util.ToJSONString(cachePerson),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(10 * time.Second),
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  2,
@@ -67,7 +83,7 @@ func TestSimpleReadInCache(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -82,13 +98,13 @@ func TestSimpleReadInCache(t *testing.T) {
 func TestSimpleReadWhenCommitted(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -97,16 +113,16 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
-	expectedStr := toJSONString(expected)
+	expectedStr := util.ToJSONString(expected)
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
 		Value:    expectedStr,
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -122,7 +138,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -137,13 +153,13 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -152,32 +168,32 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
-	curPerson := Person{
+	curPerson := testutil.Person{
 		Name: "John",
 		Age:  31,
 	}
 	preMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  1,
 	}
 	curMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(curPerson),
+		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(10 * time.Second),
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  2,
-		Prev:     toJSONString(preMemoryItem),
+		Prev:     util.ToJSONString(preMemoryItem),
 	}
 
 	key := "John"
@@ -190,7 +206,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -205,12 +221,12 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -219,32 +235,32 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
-	curPerson := Person{
+	curPerson := testutil.Person{
 		Name: "John",
 		Age:  31,
 	}
 	preMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(10 * time.Second),
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  1,
 	}
 	curMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(curPerson),
+		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(20 * time.Second),
 		TLease:   time.Now().Add(15 * time.Second),
 		Version:  2,
-		Prev:     toJSONString(preMemoryItem),
+		Prev:     util.ToJSONString(preMemoryItem),
 	}
 
 	key := "John"
@@ -257,7 +273,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err.Error() != errors.New("key not found").Error() {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -267,13 +283,13 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a connection to the memory database
 	conn := NewMemoryConnection("localhost", 8321)
@@ -285,15 +301,15 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
-		TxnState: PREPARED,
+		TxnState: config.PREPARED,
 		TValid:   time.Now(),
 		TLease:   time.Now(),
 		Version:  2,
@@ -303,7 +319,7 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 	conn.Put(key, expectedMemoryItem)
 
 	// Write the TSR
-	txn.globalDataStore.Write("100", COMMITTED)
+	txn.WriteTSR(config.COMMITTED)
 
 	// Start the transaction
 	err := txn.Start()
@@ -312,7 +328,7 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -326,13 +342,13 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a connection to the memory database
 	conn := NewMemoryConnection("localhost", 8321)
@@ -344,32 +360,32 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
 	}
 
-	expectedStr := toJSONString(expectedMemoryItem)
+	expectedStr := util.ToJSONString(expectedMemoryItem)
 
-	curPerson := Person{
+	curPerson := testutil.Person{
 		Name: "John",
 		Age:  31,
 	}
 
 	curMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(curPerson),
+		Value:    util.ToJSONString(curPerson),
 		TxnId:    "101",
-		TxnState: PREPARED,
+		TxnState: config.PREPARED,
 		TValid:   time.Now().Add(-3 * time.Second),
 		TLease:   time.Now().Add(-1 * time.Second),
 		Version:  3,
@@ -386,7 +402,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -400,13 +416,13 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a connection to the memory database
 	conn := NewMemoryConnection("localhost", 8321)
@@ -418,15 +434,15 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
-		TxnState: PREPARED,
+		TxnState: config.PREPARED,
 		TValid:   time.Now().Add(10 * time.Second),
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  2,
@@ -442,7 +458,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err.Error() != errors.New("dirty Read").Error() {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -452,13 +468,13 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 func TestSimpleWriteAndRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -474,7 +490,7 @@ func TestSimpleWriteAndRead(t *testing.T) {
 
 	// Write the value
 	key := "John"
-	person := Person{
+	person := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
@@ -484,7 +500,7 @@ func TestSimpleWriteAndRead(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -499,13 +515,13 @@ func TestSimpleWriteAndRead(t *testing.T) {
 func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -514,15 +530,15 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -538,7 +554,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -554,7 +570,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 	}
 
 	// Read the value
-	var result2 Person
+	var result2 testutil.Person
 	err = txn.Read("memory", key, &result2)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -569,13 +585,13 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 func TestSimpleOverwriteAndRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -584,15 +600,15 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -608,7 +624,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 	}
 
 	// Write the value
-	person := Person{
+	person := testutil.Person{
 		Name: "John",
 		Age:  31,
 	}
@@ -623,7 +639,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -638,13 +654,13 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 func TestSimpleDeleteAndRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -653,15 +669,15 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -683,7 +699,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err.Error() != errors.New("key not found").Error() {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -693,13 +709,13 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 func TestSimpleDeleteTwice(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -708,15 +724,15 @@ func TestSimpleDeleteTwice(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -744,20 +760,20 @@ func TestSimpleDeleteTwice(t *testing.T) {
 
 func TestDeleteWithRead(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
 
 	txn := NewTransactionWithSetup()
 	txn.Start()
-	var person Person
+	var person testutil.Person
 	txn.Read("memory", "John", &person)
 	err := txn.Delete("memory", "John")
 	assert.NoError(t, err)
@@ -768,13 +784,13 @@ func TestDeleteWithRead(t *testing.T) {
 
 func TestDeleteWithoutRead(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
@@ -796,13 +812,13 @@ func TestDeleteWithoutRead(t *testing.T) {
 func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -811,15 +827,15 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -835,7 +851,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 	}
 
 	// Read the value
-	var person Person
+	var person testutil.Person
 	err = txn.Read("memory", key, &person)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -856,7 +872,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err.Error() != errors.New("key not found").Error() {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -866,13 +882,13 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	// Create a new transaction
-	txn := NewTransaction()
+	txn := txn.NewTransaction()
 
 	// Create a new memory datastore
 	conn := NewMemoryConnection("localhost", 8321)
@@ -881,15 +897,15 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 	txn.SetGlobalDatastore(mds)
 
 	// initialize the memory database
-	expected := Person{
+	expected := testutil.Person{
 		Name: "John",
 		Age:  30,
 	}
 	expectedMemoryItem := MemoryItem{
 		Key:      "John",
-		Value:    toJSONString(expected),
+		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
-		TxnState: COMMITTED,
+		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  2,
@@ -905,7 +921,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 	}
 
 	// Write the value
-	person := Person{
+	person := testutil.Person{
 		Name: "John",
 		Age:  31,
 	}
@@ -928,7 +944,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 	}
 
 	// Read the value
-	var result Person
+	var result testutil.Person
 	err = txn.Read("memory", key, &result)
 	if err != nil {
 		t.Errorf("Error reading from memory datastore: %s", err)
@@ -947,19 +963,19 @@ func TestMockConnectionInTxn(t *testing.T) {
 		// Write TSR needs one `conn.Put()` call
 		// So write X records needs 2X+1 `conn.Put()` call
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
-		go memoryDatabase.start()
-		defer func() { <-memoryDatabase.msgChan }()
-		defer func() { go memoryDatabase.stop() }()
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
 		time.Sleep(100 * time.Millisecond)
 
 		preTxn := NewTransactionWithSetup()
 		preTxn.Start()
-		for _, item := range inputItemList {
+		for _, item := range testutil.InputItemList {
 			preTxn.Write("memory", item.Value, item)
 		}
 		preTxn.Commit()
 
-		txn := NewTransaction()
+		txn := txn.NewTransaction()
 		conn := NewMockMemoryConnection("localhost", 8321, 11, true,
 			func() error { return errors.New("debug error") })
 		mds := NewMemoryDatastore("memory", conn)
@@ -967,8 +983,8 @@ func TestMockConnectionInTxn(t *testing.T) {
 		txn.SetGlobalDatastore(mds)
 
 		txn.Start()
-		for _, item := range inputItemList {
-			var res TestItem
+		for _, item := range testutil.InputItemList {
+			var res testutil.TestItem
 			txn.Read("memory", item.Value, &res)
 			res.Value = item.Value + "-new"
 			txn.Write("memory", item.Value, res)
@@ -985,19 +1001,19 @@ func TestMockConnectionInTxn(t *testing.T) {
 		// Write TSR needs one `conn.Put()` call
 		// So write X records needs 2X+1 `conn.Put()` call
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
-		go memoryDatabase.start()
-		defer func() { <-memoryDatabase.msgChan }()
-		defer func() { go memoryDatabase.stop() }()
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
 		time.Sleep(100 * time.Millisecond)
 
 		preTxn := NewTransactionWithSetup()
 		preTxn.Start()
-		for _, item := range inputItemList {
+		for _, item := range testutil.InputItemList {
 			preTxn.Write("memory", item.Value, item)
 		}
 		preTxn.Commit()
 
-		txn := NewTransaction()
+		txn := txn.NewTransaction()
 		conn := NewMockMemoryConnection("localhost", 8321, 3, true,
 			func() error { return errors.New("debug error") })
 		mds := NewMemoryDatastore("memory", conn)
@@ -1005,8 +1021,8 @@ func TestMockConnectionInTxn(t *testing.T) {
 		txn.SetGlobalDatastore(mds)
 
 		txn.Start()
-		for _, item := range inputItemList {
-			var res TestItem
+		for _, item := range testutil.InputItemList {
+			var res testutil.TestItem
 			txn.Read("memory", item.Value, &res)
 			res.Value = item.Value + "-new"
 			txn.Write("memory", item.Value, res)
@@ -1018,8 +1034,8 @@ func TestMockConnectionInTxn(t *testing.T) {
 		// addtionally, we can check data consistency
 		postTxn := NewTransactionWithSetup()
 		postTxn.Start()
-		for _, item := range inputItemList {
-			var res TestItem
+		for _, item := range testutil.InputItemList {
+			var res testutil.TestItem
 			postTxn.Read("memory", item.Value, &res)
 			assert.Equal(t, item.Value, res.Value)
 		}
@@ -1029,24 +1045,130 @@ func TestMockConnectionInTxn(t *testing.T) {
 	})
 }
 
+func TestMemoryDatastore_ConcurrentWriteConflicts(t *testing.T) {
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+	timeOracle := timeoracle.NewSimpleTimeOracle("localhost", 8300, locker.NewMemoryLocker())
+	timeOracle.WaitForStartUp(100 * time.Millisecond)
+	defer func() { <-timeOracle.MsgChan }()
+	defer func() { go timeOracle.Stop() }()
+
+	preTxn := NewTransactionWithSetup()
+	preTxn.Start()
+	for _, item := range testutil.InputItemList {
+		preTxn.Write("memory", item.Value, item)
+	}
+	preTxn.Commit()
+
+	resChan := make(chan bool)
+	successId := 0
+
+	for i := 1; i <= 3; i++ {
+		go func(id int) {
+			txn := NewTransactionWithSetup()
+			txn.SetGlobalTimeSource("localhost", 8300)
+			txn.Start()
+			time.Sleep(100 * time.Millisecond)
+			for _, item := range testutil.InputItemList {
+				var res testutil.TestItem
+				txn.Read("memory", item.Value, &res)
+				res.Value = item.Value + "-new-" + strconv.Itoa(id)
+				txn.Write("memory", item.Value, res)
+			}
+
+			err := txn.Commit()
+			if err != nil {
+				resChan <- false
+			} else {
+				resChan <- true
+				successId = id
+			}
+		}(i)
+	}
+	commitCount := 0
+
+	for i := 1; i <= 100; i++ {
+		res := <-resChan
+		if res {
+			commitCount++
+		}
+	}
+
+	assert.Equal(t, 1, commitCount)
+
+	postTxn := NewTransactionWithSetup()
+	postTxn.Start()
+	for _, item := range testutil.InputItemList {
+		var res testutil.TestItem
+		postTxn.Read("memory", item.Value, &res)
+		assert.Equal(t, item.Value+"-new-"+strconv.Itoa(successId), res.Value)
+	}
+	err := postTxn.Commit()
+	assert.NoError(t, err)
+
+}
+
+func TestTxnWriteMultiRecord(t *testing.T) {
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+	assert.Nil(t, err)
+
+	preTxn := NewTransactionWithSetup()
+	preTxn.Start()
+	preTxn.Write("memory", "item1", testutil.NewTestItem("item1"))
+	preTxn.Write("memory", "item2", testutil.NewTestItem("item2"))
+	err = preTxn.Commit()
+	assert.Nil(t, err)
+
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	var item testutil.TestItem
+	txn.Read("memory", "item1", &item)
+	item.Value = "item1_new"
+	txn.Write("memory", "item1", item)
+
+	txn.Read("memory", "item2", &item)
+	item.Value = "item2_new"
+	txn.Write("memory", "item2", item)
+
+	err = txn.Commit()
+
+	assert.Nil(t, err)
+
+	postTxn := NewTransactionWithSetup()
+	postTxn.Start()
+	var resItem testutil.TestItem
+	postTxn.Read("memory", "item1", &resItem)
+	assert.Equal(t, "item1_new", resItem.Value)
+	postTxn.Read("memory", "item2", &resItem)
+	assert.Equal(t, "item2_new", resItem.Value)
+
+}
+
 // Error Test
 // func TestSlowTransactionRecordExpiredConsistency(t *testing.T) {
 // 	// run a memory database
 // 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-// 	go memoryDatabase.start()
-// 	defer func() { <-memoryDatabase.msgChan }()
-// 	defer func() { go memoryDatabase.stop() }()
+// 	go memoryDatabase.Start()
+// 	defer func() { <-memoryDatabase.MsgChan }()
+// 	defer func() { go memoryDatabase.Stop() }()
 // 	time.Sleep(100 * time.Millisecond)
 
 // 	preTxn := NewTransactionWithSetup()
 // 	preTxn.Start()
-// 	for _, item := range inputItemList {
+// 	for _, item := range testutil.InputItemList {
 // 		preTxn.Write("memory", item.Value, item)
 // 	}
 // 	preTxn.Commit()
 
 // 	go func() {
-// 		slowTxn := NewTransaction()
+// 		slowTxn := txn.NewTransaction()
 // 		conn := NewMockMemoryConnection("localhost", 8321, 4, false,
 // 			func() error { time.Sleep(3 * time.Second); return nil })
 // 		mds := NewMemoryDatastore("memory", conn)
@@ -1054,8 +1176,8 @@ func TestMockConnectionInTxn(t *testing.T) {
 // 		slowTxn.SetGlobalDatastore(mds)
 
 // 		slowTxn.Start()
-// 		for _, item := range inputItemList {
-// 			var result TestItem
+// 		for _, item := range testutil.InputItemList {
+// 			var result testutil.TestItem
 // 			slowTxn.Read("memory", item.Value, &result)
 // 			result.Value = item.Value + "-slow"
 // 			slowTxn.Write("memory", item.Value, result)
@@ -1069,26 +1191,26 @@ func TestMockConnectionInTxn(t *testing.T) {
 // 	testConn.Connect()
 // 	var memItem1 MemoryItem
 // 	testConn.Get("item1", &memItem1)
-// 	assert.Equal(t, toJSONString(NewTestItem("item1-slow")), memItem1.Value)
+// 	assert.Equal(t, util.ToJSONString(NewTestItem("item1-slow")), memItem1.Value)
 // 	assert.Equal(t, memItem1.TxnState, PREPARED)
 
 // 	var memItem2 MemoryItem
 // 	testConn.Get("item2", &memItem2)
-// 	assert.Equal(t, toJSONString(NewTestItem("item2-slow")), memItem2.Value)
+// 	assert.Equal(t, util.ToJSONString(NewTestItem("item2-slow")), memItem2.Value)
 // 	assert.Equal(t, memItem2.TxnState, PREPARED)
 
 // 	var memItem3 MemoryItem
 // 	testConn.Get("item3", &memItem3)
-// 	assert.Equal(t, toJSONString(NewTestItem("item3")), memItem3.Value)
+// 	assert.Equal(t, util.ToJSONString(NewTestItem("item3")), memItem3.Value)
 // 	assert.Equal(t, memItem3.TxnState, COMMITTED)
 
 // 	fastTxn := NewTransactionWithSetup()
 // 	fastTxn.Start()
 // 	for i := 2; i <= 4; i++ {
-// 		var result TestItem
-// 		fastTxn.Read("memory", inputItemList[i].Value, &result)
-// 		result.Value = inputItemList[i].Value + "-fast"
-// 		fastTxn.Write("memory", inputItemList[i].Value, result)
+// 		var result testutil.TestItem
+// 		fastTxn.Read("memory", testutil.InputItemList[i].Value, &result)
+// 		result.Value = testutil.InputItemList[i].Value + "-fast"
+// 		fastTxn.Write("memory", testutil.InputItemList[i].Value, result)
 // 	}
 // 	err := fastTxn.Commit()
 // 	assert.NoError(t, err)
@@ -1096,18 +1218,18 @@ func TestMockConnectionInTxn(t *testing.T) {
 // 	postTxn := NewTransactionWithSetup()
 // 	postTxn.Start()
 
-// 	var res1 TestItem
-// 	postTxn.Read("memory", inputItemList[0].Value, &res1)
-// 	assert.Equal(t, inputItemList[0], res1)
+// 	var res1 testutil.TestItem
+// 	postTxn.Read("memory", testutil.InputItemList[0].Value, &res1)
+// 	assert.Equal(t, testutil.InputItemList[0], res1)
 
-// 	var res2 TestItem
-// 	postTxn.Read("memory", inputItemList[1].Value, &res2)
-// 	assert.Equal(t, inputItemList[1], res2)
+// 	var res2 testutil.TestItem
+// 	postTxn.Read("memory", testutil.InputItemList[1].Value, &res2)
+// 	assert.Equal(t, testutil.InputItemList[1], res2)
 
 // 	for i := 2; i <= 4; i++ {
-// 		var res TestItem
-// 		postTxn.Read("memory", inputItemList[i].Value, &res)
-// 		assert.Equal(t, inputItemList[i].Value+"-fast", res.Value)
+// 		var res testutil.TestItem
+// 		postTxn.Read("memory", testutil.InputItemList[i].Value, &res)
+// 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
 // 	}
 
 // 	err = postTxn.Commit()

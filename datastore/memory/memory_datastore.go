@@ -1,4 +1,4 @@
-package main
+package memory
 
 import (
 	"cmp"
@@ -6,10 +6,14 @@ import (
 	"errors"
 	"slices"
 	"time"
+
+	"github.com/kkkzoz/vanilla-icecream/config"
+	"github.com/kkkzoz/vanilla-icecream/txn"
+	"github.com/kkkzoz/vanilla-icecream/util"
 )
 
 type MemoryDatastore struct {
-	dataStore
+	txn.BaseDataStore
 	conn       MemoryConnectionInterface
 	readCache  map[string]MemoryItem
 	writeCache map[string]MemoryItem
@@ -19,7 +23,7 @@ type MemoryItem struct {
 	Key       string
 	Value     string
 	TxnId     string
-	TxnState  State
+	TxnState  config.State
 	TValid    time.Time
 	TLease    time.Time
 	Prev      string
@@ -33,10 +37,10 @@ func (m MemoryItem) GetKey() string {
 
 func NewMemoryDatastore(name string, conn MemoryConnectionInterface) *MemoryDatastore {
 	return &MemoryDatastore{
-		dataStore:  dataStore{Name: name},
-		conn:       conn,
-		readCache:  make(map[string]MemoryItem),
-		writeCache: make(map[string]MemoryItem),
+		BaseDataStore: txn.BaseDataStore{Name: name},
+		conn:          conn,
+		readCache:     make(map[string]MemoryItem),
+		writeCache:    make(map[string]MemoryItem),
 	}
 }
 
@@ -72,13 +76,13 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		return err
 	}
 
-	if item.TxnState == COMMITTED {
+	if item.TxnState == config.COMMITTED {
 		return m.readAsCommitted(item, value)
 	}
-	if item.TxnState == PREPARED {
-		var state State
-		txnId := item.TxnId
-		err := m.Txn.globalDataStore.Read(txnId, &state)
+	if item.TxnState == config.PREPARED {
+
+		//TODO: what if the state is ABORTED
+		_, err := m.Txn.GetTSRState()
 		if err == nil {
 			// if TSR exists
 			// roll forward the record
@@ -141,7 +145,7 @@ func (m *MemoryDatastore) readAsCommitted(item MemoryItem, value any) error {
 }
 
 func (m *MemoryDatastore) Write(key string, value any) error {
-	jsonString := toJSONString(value)
+	jsonString := util.ToJSONString(value)
 	// if the record is in the writeCache
 	if item, ok := m.writeCache[key]; ok {
 		item.Value, item.isDeleted = jsonString, false
@@ -161,7 +165,7 @@ func (m *MemoryDatastore) Write(key string, value any) error {
 		Value:     jsonString,
 		TxnId:     m.Txn.TxnId,
 		TValid:    time.Now(),
-		TLease:    time.Now().Add(leastTime * time.Millisecond),
+		TLease:    time.Now().Add(config.LeastTime * time.Millisecond),
 		Version:   version,
 		isDeleted: false,
 	}
@@ -205,7 +209,7 @@ func (m *MemoryDatastore) Delete(key string) error {
 		Key:       key,
 		isDeleted: true,
 		TxnId:     m.Txn.TxnId,
-		TxnState:  COMMITTED,
+		TxnState:  config.COMMITTED,
 		TValid:    time.Now(),
 		TLease:    time.Now(),
 		Version:   version,
@@ -213,25 +217,32 @@ func (m *MemoryDatastore) Delete(key string) error {
 	return nil
 }
 
-func (m *MemoryDatastore) conditionalUpdate(item Item) bool {
+func (m *MemoryDatastore) conditionalUpdate(item txn.Item) error {
 	memItem := item.(MemoryItem)
 
+	key := "memory" + memItem.Key
+	err := m.Txn.Lock(key, memItem.TxnId, 100*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	defer m.Txn.Unlock(key, memItem.TxnId)
+
 	var oldItem MemoryItem
-	err := m.conn.Get(memItem.Key, &oldItem)
+	err = m.conn.Get(memItem.Key, &oldItem)
 	if err != nil {
 		// this is a new record
 		newItem := m.updateMetadata(memItem, MemoryItem{})
 		// Write the new item to the data store
 		if err = m.conn.Put(newItem.Key, newItem); err != nil {
-			return false
+			return err
 		} else {
-			return true
+			return nil
 		}
 	}
 
 	// TODO: 需不需要根据情况 roll forward ?
-	if oldItem.TxnState == PREPARED {
-		return false
+	if oldItem.TxnState == config.PREPARED {
+		return errors.New("write conflicted: the record is in PREPARED state")
 	}
 
 	// the old item is in COMMITTED state
@@ -242,12 +253,12 @@ func (m *MemoryDatastore) conditionalUpdate(item Item) bool {
 		newItem := m.updateMetadata(memItem, oldItem)
 		// Write the new item to the data store
 		if err = m.conn.Put(newItem.Key, newItem); err != nil {
-			return false
+			return err
 		} else {
-			return true
+			return nil
 		}
 	} else {
-		return false
+		return errors.New("write conflicted: the record has been modified by others")
 	}
 }
 
@@ -255,14 +266,13 @@ func (m *MemoryDatastore) updateMetadata(newItem MemoryItem, oldItem MemoryItem)
 	// clear the Prev field of the old item
 	oldItem.Prev = ""
 	// update record's metadata
-	newItem.Prev = toJSONString(oldItem)
+	newItem.Prev = util.ToJSONString(oldItem)
 	newItem.Version++
-	newItem.TxnState = PREPARED
+	newItem.TxnState = config.PREPARED
 	newItem.TValid = m.Txn.TxnCommitTime
-	newItem.TLease = m.Txn.TxnCommitTime.Add(leastTime * time.Millisecond)
+	newItem.TLease = m.Txn.TxnCommitTime.Add(config.LeastTime * time.Millisecond)
 
 	return newItem
-
 }
 
 func (m *MemoryDatastore) Prepare() error {
@@ -278,14 +288,18 @@ func (m *MemoryDatastore) Prepare() error {
 		},
 	)
 	for _, v := range records {
-		ok := m.conditionalUpdate(v)
-		if !ok {
-			return errors.New("write conflicted")
+		err := m.conditionalUpdate(v)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
+// Commit updates the state of records in the data store to COMMITTED.
+// It iterates over the write cache and updates each record's state to COMMITTED.
+// After updating the records, it clears the write cache.
+// Returns an error if there is any issue updating the records or clearing the cache.
 func (m *MemoryDatastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
 	for _, v := range m.writeCache {
@@ -294,7 +308,7 @@ func (m *MemoryDatastore) Commit() error {
 		if err != nil {
 			return err
 		}
-		item.TxnState = COMMITTED
+		item.TxnState = config.COMMITTED
 		err = m.conn.Put(v.Key, item)
 		if err != nil {
 			return err
@@ -305,6 +319,10 @@ func (m *MemoryDatastore) Commit() error {
 	return nil
 }
 
+// Abort discards the changes made in the current transaction.
+// If hasCommitted is false, it clears the write cache.
+// If hasCommitted is true, it rolls back the changes made by the current transaction.
+// It returns an error if there is any issue during the rollback process.
 func (m *MemoryDatastore) Abort(hasCommitted bool) error {
 	if !hasCommitted {
 		m.writeCache = make(map[string]MemoryItem)
@@ -332,7 +350,7 @@ func (m *MemoryDatastore) Recover(key string) {
 	panic("implement me")
 }
 
-// overwrite the record with the application data and metadata that found in field Prev
+// rollback overwrites the record with the application data and metadata that found in field Prev
 func (m *MemoryDatastore) rollback(item MemoryItem) (MemoryItem, error) {
 	var newItem MemoryItem
 	err := json.Unmarshal([]byte(item.Prev), &newItem)
@@ -343,27 +361,34 @@ func (m *MemoryDatastore) rollback(item MemoryItem) (MemoryItem, error) {
 	return newItem, err
 }
 
-// make the record metadata with COMMITTED state
+// rollForward makes the record metadata with COMMITTED state
 func (m *MemoryDatastore) rollForward(item MemoryItem) (MemoryItem, error) {
 	// var oldItem MemoryItem
 	// m.conn.Get(item.Key, &oldItem)
-	item.TxnState = COMMITTED
+	item.TxnState = config.COMMITTED
 	err := m.conn.Put(item.Key, item)
 	return item, err
 }
 
+// GetName returns the name of the MemoryDatastore.
 func (m *MemoryDatastore) GetName() string {
 	return m.Name
 }
 
-func (m *MemoryDatastore) SetTxn(txn *Transaction) {
+// SetTxn sets the transaction for the MemoryDatastore.
+// It takes a pointer to a Transaction as input and assigns it to the Txn field of the MemoryDatastore.
+func (m *MemoryDatastore) SetTxn(txn *txn.Transaction) {
 	m.Txn = txn
 }
 
-func (m *MemoryDatastore) WriteTSR(txnId string, txnState State) error {
+// WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the memory datastore.
+// It returns an error if the write operation fails.
+func (m *MemoryDatastore) WriteTSR(txnId string, txnState config.State) error {
 	return m.conn.Put(txnId, txnState)
 }
 
+// DeleteTSR deletes a transaction with the given transaction ID from the memory datastore.
+// It returns an error if the deletion operation fails.
 func (m *MemoryDatastore) DeleteTSR(txnId string) error {
 	return m.conn.Delete(txnId)
 }

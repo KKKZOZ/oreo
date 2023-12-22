@@ -1,42 +1,44 @@
-package main
+package memory
 
 import (
 	"testing"
 	"time"
+
+	"github.com/kkkzoz/vanilla-icecream/testutil"
+	"github.com/stretchr/testify/assert"
 )
 
-func NewTransactionWithSetup() *Transaction {
-	txn := NewTransaction()
-	conn := NewMemoryConnection("localhost", 8321)
-	mds := NewMemoryDatastore("memory", conn)
-	txn.AddDatastore(mds)
-	txn.SetGlobalDatastore(mds)
-	return txn
-}
-
+// TestTxnStartAgain tests the behavior of starting a transaction multiple times.
 func TestTxnStartAgain(t *testing.T) {
+	// Create a new memory database instance
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
+	// Create a new transaction with setup
 	txn := NewTransactionWithSetup()
+
+	// Start the transaction
 	err := txn.Start()
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
+
+	// Try starting the transaction again and expect an error
 	err = txn.Start()
 	if err == nil {
 		t.Errorf("Expected error starting transaction")
 	}
 }
 
+// TestTxnCommitWithoutStart tests the scenario where a transaction is committed without being started.
 func TestTxnCommitWithoutStart(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	txn := NewTransactionWithSetup()
@@ -46,11 +48,12 @@ func TestTxnCommitWithoutStart(t *testing.T) {
 	}
 }
 
+// TestTxnAbortWithoutStart tests the behavior of aborting a transaction without starting it.
 func TestTxnAbortWithoutStart(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	txn := NewTransactionWithSetup()
@@ -60,15 +63,17 @@ func TestTxnAbortWithoutStart(t *testing.T) {
 	}
 }
 
+// TestTxnOperateWithoutStart tests the behavior of transaction operations
+// when the database has not been started.
 func TestTxnOperateWithoutStart(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	txn := NewTransactionWithSetup()
-	var person Person
+	var person testutil.Person
 	err := txn.Read("memory", "John", &person)
 	if err == nil {
 		t.Errorf("Expected error reading record")
@@ -85,14 +90,14 @@ func TestTxnOperateWithoutStart(t *testing.T) {
 
 func TestTxnWrite(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	txn1 := NewTransactionWithSetup()
 
-	expected := NewDefaultPerson()
+	expected := testutil.NewDefaultPerson()
 
 	// Txn1 writes the record
 	err := txn1.Start()
@@ -115,7 +120,7 @@ func TestTxnWrite(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
-	var actual Person
+	var actual testutil.Person
 	err = txn2.Read("memory", "John", &actual)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
@@ -133,13 +138,13 @@ func TestTxnWrite(t *testing.T) {
 
 func TestReadOwnWrite(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
@@ -151,7 +156,7 @@ func TestReadOwnWrite(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
-	var person Person
+	var person testutil.Person
 	err = txn.Read("memory", "John", &person)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
@@ -161,7 +166,7 @@ func TestReadOwnWrite(t *testing.T) {
 	expected.Age = 31
 	txn.Write("memory", "John", expected)
 
-	var actual Person
+	var actual testutil.Person
 	err = txn.Read("memory", "John", &actual)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
@@ -179,24 +184,24 @@ func TestReadOwnWrite(t *testing.T) {
 
 func TestSingleKeyWriteConflict(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
 
 	txn := NewTransactionWithSetup()
 	txn.Start()
-	var person Person
+	var person testutil.Person
 	txn.Read("memory", "John", &person)
 	person.Age = 31
 	txn.Write("memory", "John", person)
-	var anotherPerson Person
+	var anotherPerson testutil.Person
 	txn.Read("memory", "John", &anotherPerson)
 
 	if person != anotherPerson {
@@ -206,7 +211,7 @@ func TestSingleKeyWriteConflict(t *testing.T) {
 
 	postTxn := NewTransactionWithSetup()
 	postTxn.Start()
-	var postPerson Person
+	var postPerson testutil.Person
 	postTxn.Read("memory", "John", &postPerson)
 	if postPerson != person {
 		t.Errorf("got %v want %v", postPerson, person)
@@ -216,31 +221,33 @@ func TestSingleKeyWriteConflict(t *testing.T) {
 
 func TestMultileKeyWriteConflict(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	item1 := testutil.NewTestItem("item1")
+	item2 := testutil.NewTestItem("item2")
 	preTxn.Start()
-	preTxn.Write("memory", "John", dataPerson)
-	preTxn.Write("memory", "Jane", dataPerson)
-	preTxn.Commit()
+	preTxn.Write("memory", "item1", item1)
+	preTxn.Write("memory", "item2", item2)
+	err := preTxn.Commit()
+	assert.Nil(t, err)
 
 	resChan := make(chan bool)
 
 	go func() {
 		txn1 := NewTransactionWithSetup()
 		txn1.Start()
-		var person Person
-		txn1.Read("memory", "John", &person)
-		person.Age = 31
-		txn1.Write("memory", "John", person)
+		var item testutil.TestItem
+		txn1.Read("memory", "item1", &item)
+		item.Value = "item1-updated-by-txn1"
+		txn1.Write("memory", "item1", item)
 
-		txn1.Read("memory", "Jane", &person)
-		person.Age = 31
-		txn1.Write("memory", "Jane", person)
+		txn1.Read("memory", "item2", &item)
+		item.Value = "item2-updated-by-txn1"
+		txn1.Write("memory", "item2", item)
 
 		err := txn1.Commit()
 		if err != nil {
@@ -254,14 +261,14 @@ func TestMultileKeyWriteConflict(t *testing.T) {
 	go func() {
 		txn2 := NewTransactionWithSetup()
 		txn2.Start()
-		var person Person
-		txn2.Read("memory", "Jane", &person)
-		person.Age = 32
-		txn2.Write("memory", "Jane", person)
+		var item testutil.TestItem
+		txn2.Read("memory", "item2", &item)
+		item.Value = "item2-updated-by-txn2"
+		txn2.Write("memory", "item2", item)
 
-		txn2.Read("memory", "John", &person)
-		person.Age = 32
-		txn2.Write("memory", "John", person)
+		txn2.Read("memory", "item1", &item)
+		item.Value = "item1-updated-by-txn2"
+		txn2.Write("memory", "item1", item)
 
 		err := txn2.Commit()
 		if err != nil {
@@ -276,20 +283,29 @@ func TestMultileKeyWriteConflict(t *testing.T) {
 	res2 := <-resChan
 
 	// only one transaction should succeed
-	if res1 != res2 {
+	if res1 == res2 {
+		t.Logf("res1: %v, res2: %v", res1, res2)
 		t.Errorf("Expected only one transaction to succeed")
+		postTxn := NewTransactionWithSetup()
+		postTxn.Start()
+		var item testutil.TestItem
+		postTxn.Read("memory", "item1", &item)
+		t.Logf("item1: %v", item)
+		postTxn.Read("memory", "item2", &item)
+		t.Logf("item2: %v", item)
+		postTxn.Commit()
 	}
 }
 
 func TestRepeatableReadWhenRecordDeleted(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
@@ -299,14 +315,14 @@ func TestRepeatableReadWhenRecordDeleted(t *testing.T) {
 	txn.Start()
 	manualTxn.Start()
 
-	var person1 Person
+	var person1 testutil.Person
 	txn.Read("memory", "John", &person1)
 
 	// manualTxn deletes John and commits
 	manualTxn.Delete("memory", "John")
 	manualTxn.Commit()
 
-	var person2 Person
+	var person2 testutil.Person
 	txn.Read("memory", "John", &person2)
 
 	// two read in txn should be the same
@@ -317,13 +333,13 @@ func TestRepeatableReadWhenRecordDeleted(t *testing.T) {
 
 func TestRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
@@ -333,11 +349,11 @@ func TestRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 	txn.Start()
 	manualTxn1.Start()
 
-	var person1 Person
+	var person1 testutil.Person
 	txn.Read("memory", "John", &person1)
 
 	// manualTxn1 updates John and commits
-	var manualPerson1 Person
+	var manualPerson1 testutil.Person
 	manualTxn1.Read("memory", "John", &manualPerson1)
 	manualPerson1.Age = 31
 	manualTxn1.Write("memory", "John", manualPerson1)
@@ -346,13 +362,13 @@ func TestRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 	manualTxn2 := NewTransactionWithSetup()
 	manualTxn2.Start()
 	// manualTxn updates John again and commits
-	var manualPerson2 Person
+	var manualPerson2 testutil.Person
 	manualTxn2.Read("memory", "John", &manualPerson2)
 	manualPerson2.Age = 32
 	manualTxn2.Write("memory", "John", manualPerson2)
 	manualTxn2.Commit()
 
-	var person2 Person
+	var person2 testutil.Person
 	err := txn.Read("memory", "John", &person2)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
@@ -372,13 +388,13 @@ func TestRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 // two read in txn2 should be the same
 func TestRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
@@ -388,7 +404,7 @@ func TestRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	go func() {
 		txn1 := NewTransactionWithSetup()
 		txn1.Start()
-		var person Person
+		var person testutil.Person
 		txn1.Read("memory", "John", &person)
 		time.Sleep(50 * time.Millisecond)
 
@@ -409,12 +425,12 @@ func TestRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	go func() {
 		txn2 := NewTransactionWithSetup()
 		txn2.Start()
-		var person1 Person
+		var person1 testutil.Person
 		// txn2 reads John
 		txn2.Read("memory", "John", &person1)
 		time.Sleep(100 * time.Millisecond)
 
-		var person2 Person
+		var person2 testutil.Person
 		// txn2 reads John again
 		txn2.Read("memory", "John", &person2)
 
@@ -449,13 +465,13 @@ func TestRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 // two read in txn2 should be the same
 func TestRepeatableReadWhenAnotherCommitted(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
-	dataPerson := NewDefaultPerson()
+	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
 	preTxn.Commit()
@@ -465,7 +481,7 @@ func TestRepeatableReadWhenAnotherCommitted(t *testing.T) {
 	go func() {
 		txn1 := NewTransactionWithSetup()
 		txn1.Start()
-		var person Person
+		var person testutil.Person
 		txn1.Read("memory", "John", &person)
 		time.Sleep(50 * time.Millisecond)
 
@@ -484,12 +500,12 @@ func TestRepeatableReadWhenAnotherCommitted(t *testing.T) {
 	go func() {
 		txn2 := NewTransactionWithSetup()
 		txn2.Start()
-		var person1 Person
+		var person1 testutil.Person
 		// txn2 reads John
 		txn2.Read("memory", "John", &person1)
 		time.Sleep(100 * time.Millisecond)
 
-		var person2 Person
+		var person2 testutil.Person
 		// txn2 reads John again
 		txn2.Read("memory", "John", &person2)
 
@@ -517,19 +533,19 @@ func TestRepeatableReadWhenAnotherCommitted(t *testing.T) {
 
 func TestTxnAbort(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup()
 	preTxn.Start()
-	expected := NewDefaultPerson()
+	expected := testutil.NewDefaultPerson()
 	preTxn.Write("memory", "John", expected)
 	preTxn.Commit()
 
 	txn := NewTransactionWithSetup()
-	var person Person
+	var person testutil.Person
 	txn.Start()
 	txn.Read("memory", "John", &person)
 	person.Age = 31
@@ -538,7 +554,7 @@ func TestTxnAbort(t *testing.T) {
 
 	postTxn := NewTransactionWithSetup()
 	postTxn.Start()
-	var postPerson Person
+	var postPerson testutil.Person
 	postTxn.Read("memory", "John", &postPerson)
 	postTxn.Commit()
 	if postPerson != expected {
@@ -549,17 +565,19 @@ func TestTxnAbort(t *testing.T) {
 // TODO: WTF why this test failed when using CLI
 func TestTxnAbortCausedByWriteConflict(t *testing.T) {
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.start()
-	defer func() { <-memoryDatabase.msgChan }()
-	defer func() { go memoryDatabase.stop() }()
-	time.Sleep(500 * time.Millisecond)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+	assert.Nil(t, err)
 
 	preTxn := NewTransactionWithSetup()
 	preTxn.Start()
-	for _, item := range inputItemList {
+	for _, item := range testutil.InputItemList {
 		preTxn.Write("memory", item.Value, item)
 	}
-	preTxn.Commit()
+	err = preTxn.Commit()
+	assert.Nil(t, err)
 
 	txn := NewTransactionWithSetup()
 	manualTxn := NewTransactionWithSetup()
@@ -567,38 +585,35 @@ func TestTxnAbortCausedByWriteConflict(t *testing.T) {
 	manualTxn.Start()
 
 	// txn reads all items and modify them
-	for _, item := range inputItemList {
-		var actual TestItem
+	for _, item := range testutil.InputItemList {
+		var actual testutil.TestItem
 		txn.Read("memory", item.Value, &actual)
 		actual.Value = item.Value + "updated"
 		txn.Write("memory", item.Value, actual)
 	}
 
 	// manualTxn reads one item and modify it
-	var manualItem TestItem
+	var manualItem testutil.TestItem
 	manualTxn.Read("memory", "item4", &manualItem)
 	manualItem.Value = "item4updated"
 	manualTxn.Write("memory", "item4", manualItem)
-	manualTxn.Commit()
+	err = manualTxn.Commit()
+	assert.Nil(t, err)
 
-	err := txn.Commit()
+	err = txn.Commit()
 	if err == nil {
 		t.Errorf("Expected error committing transaction")
 	}
 
 	postTxn := NewTransactionWithSetup()
 	postTxn.Start()
-	for _, item := range inputItemList {
-		var actual TestItem
+	for _, item := range testutil.InputItemList {
+		var actual testutil.TestItem
 		postTxn.Read("memory", item.Value, &actual)
 		if item.Value != "item4" {
-			if actual != item {
-				t.Errorf("got %v want %v", actual, item)
-			}
+			assert.Equal(t, item, actual)
 		} else {
-			if actual != manualItem {
-				t.Errorf("got %v want %v", actual, manualItem)
-			}
+			assert.Equal(t, manualItem, actual)
 		}
 	}
 	postTxn.Commit()

@@ -1,4 +1,4 @@
-package main
+package memory
 
 import (
 	"errors"
@@ -11,9 +11,9 @@ import (
 func TestDebugCounter(t *testing.T) {
 	t.Run("test less than limit", func(t *testing.T) {
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
-		go memoryDatabase.start()
-		defer func() { <-memoryDatabase.msgChan }()
-		defer func() { go memoryDatabase.stop() }()
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
 		time.Sleep(100 * time.Millisecond)
 
 		conn := NewMockMemoryConnection("localhost", 8321, 10, true,
@@ -34,9 +34,9 @@ func TestDebugCounter(t *testing.T) {
 
 	t.Run("test equal the limit", func(t *testing.T) {
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
-		go memoryDatabase.start()
-		defer func() { <-memoryDatabase.msgChan }()
-		defer func() { go memoryDatabase.stop() }()
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
 		time.Sleep(100 * time.Millisecond)
 
 		conn := NewMockMemoryConnection("localhost", 8321, 3, true,
@@ -61,9 +61,9 @@ func TestDebugFunc(t *testing.T) {
 
 	t.Run("trigger debugFunc", func(t *testing.T) {
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
-		go memoryDatabase.start()
-		defer func() { <-memoryDatabase.msgChan }()
-		defer func() { go memoryDatabase.stop() }()
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
 		time.Sleep(100 * time.Millisecond)
 
 		conn := NewMockMemoryConnection("localhost", 8321, 3, true,
@@ -84,9 +84,9 @@ func TestDebugFunc(t *testing.T) {
 
 	t.Run("after triggerring debugFunc", func(t *testing.T) {
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
-		go memoryDatabase.start()
-		defer func() { <-memoryDatabase.msgChan }()
-		defer func() { go memoryDatabase.stop() }()
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
 		time.Sleep(100 * time.Millisecond)
 
 		conn := NewMockMemoryConnection("localhost", 8321, 3, true,
@@ -116,9 +116,9 @@ func TestCallTimes(t *testing.T) {
 	testCases := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	for _, testCase := range testCases {
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
-		go memoryDatabase.start()
-		defer func() { <-memoryDatabase.msgChan }()
-		defer func() { go memoryDatabase.stop() }()
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
 		time.Sleep(100 * time.Millisecond)
 
 		conn := NewMockMemoryConnection("localhost", 8321, 20, true,

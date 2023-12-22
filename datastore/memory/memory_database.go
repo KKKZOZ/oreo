@@ -1,4 +1,4 @@
-package main
+package memory
 
 import (
 	"context"
@@ -14,7 +14,7 @@ type MemoryDatabase struct {
 	Port    int
 	records map[string]string
 	server  http.Server
-	msgChan chan string
+	MsgChan chan string
 }
 
 func NewMemoryDatabase(address string, port int) *MemoryDatabase {
@@ -22,7 +22,7 @@ func NewMemoryDatabase(address string, port int) *MemoryDatabase {
 		Address: address,
 		Port:    port,
 		records: make(map[string]string),
-		msgChan: make(chan string),
+		MsgChan: make(chan string),
 	}
 }
 
@@ -74,12 +74,17 @@ func (m *MemoryDatabase) serveDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *MemoryDatabase) start() error {
+func (m *MemoryDatabase) serveHeartbeat(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "OK")
+}
+
+func (m *MemoryDatabase) Start() error {
 
 	router := mux.NewRouter()
 	router.HandleFunc("/get/{key}", m.serveGet).Methods("GET")
 	router.HandleFunc("/put/{key}", m.servePut).Methods("POST")
 	router.HandleFunc("/delete/{key}", m.serveDelete).Methods("DELETE")
+	router.HandleFunc("/heartbeat", m.serveHeartbeat).Methods("GET")
 
 	m.server = http.Server{
 		Addr:    fmt.Sprintf("%s:%d", m.Address, m.Port),
@@ -88,8 +93,8 @@ func (m *MemoryDatabase) start() error {
 	return m.server.ListenAndServe()
 }
 
-func (m *MemoryDatabase) stop() {
+func (m *MemoryDatabase) Stop() {
 	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	m.server.Shutdown(ctx)
-	m.msgChan <- "Memory database stopped"
+	m.MsgChan <- "Memory database stopped"
 }

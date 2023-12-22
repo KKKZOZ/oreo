@@ -39,6 +39,10 @@
 
 + 把读集和写集分离
 
++ 在读一个数据时，应该先从写集里面查找，再从读集里面查找
+
++ 在写一个数据时，先查找 writeCache 中是否已经有记录。
+
 Transaction Read:
 
 + if the record is in writeCache, use the cached record
@@ -88,6 +92,58 @@ Prepare：
 DataStore 中应该有对应数据库的驱动/连接，建议再单独包装一层
 
 + 数据库连接应该有一个数据库连接池进行维护
+
+### 关于 conditionalUpdate
+
+conditionalUpdate 需要保障**对单个记录读写**的原子性和隔离性，考虑以下这种情况：
+
+> 发生在 `TestMultileKeyWriteConflict` 中
+
+两个事务都对两条记录进行修改，两个事务都成功了，但是数据处于不一致的状态：
+
+```log
+--- FAIL: TestMultileKeyWriteConflict (0.18s)
+    /home/kkkzoz/Projects/vanilla-icecream/transaction_test.go:284: res1: true, res2: true
+    /home/kkkzoz/Projects/vanilla-icecream/transaction_test.go:285: Expected only one transaction to succeed
+    /home/kkkzoz/Projects/vanilla-icecream/transaction_test.go:290: item1: {item1-updated-by-txn1}
+    /home/kkkzoz/Projects/vanilla-icecream/transaction_test.go:292: item2: {item2-updated-by-txn2}
+```
+
+这是因为我测试时的 conditionalUpdate 实现中没有原子性保证，我是这么实现的：
+
+1. 先从 datastore 中读取旧记录
+2. 比较旧记录和新记录的版本号
+3. 如果一致的话，就将新记录写入
+
+这样很容易想到 race condition:
+
+在 Prepare Phase 的执行过程中：
+1. txn2 读 item1
+2. txn1 读 item1
+3. txn2 发现版本号一致，写入新的 item1
+4. txn1 发现版本号一致，写入新的 item1 (将 txn2 的记录覆盖了)
+5. txn1 读 item2
+6. txn2 读 item2
+7. txn1 发现版本号一致，写入新的 item2
+8. txn2 发现版本号一致，写入新的 item2 (将 txn1 的记录覆盖了)
+9. txn1 和 txn2 都成功 commit
+
+最终出现了 txn1 和 txn2 都成功提交，但是数据不一致的情况
+
+这里有两种处理方式：
+
++ 在 `MemoryDatabase` 中实现了一个带锁的 `ConditionalUpdate`，保证其原子性
+  + 和论文的要求保持一致
+  + `MemoryDatebase` 中的锁相当于是个数据库锁：
+    + 在进入 `ConditionalUpdate` 时锁住，在离开 `ConditionalUpdate` 时释放，
+    + 不用考虑 NPC 问题
+  + 但这样其实违背了 `MemoryDatabase` 和 `MemoryConnection` 的设计思路：
+    + 这两个的设计思路是要为最广泛的 KV Store 提供支持，只需要底层数据库支持 “the option when reading for single-item strong consistency” 就行
+  + 所以 `MemoryDatastore` 必须考虑使用分布式锁
++ 在 `Transaction` 层面实现一个 lightweight lock manager，和 time oracle 实现在一起
+  + 这样底层就不要求有原子性的 `ConditionalUpdate` 实现了
+  + 这样相当于组件中多了一个分布式锁
+    + 需要考虑对应的 NPC 问题
 
 
 ### 关于 delete
@@ -183,15 +239,40 @@ Abort 情况分为两种：
   + $T_{least\_time}$ has **not** expired: 无法确定对方事务状态(可能还在进行中)，事务终止
   + $T_{least\_time}$ has expired: 无法确定对方事务状态，事务终止
 
+### Time Oracle 
+
+提供以下两个功能：
+
++ 全局时间戳
++ 轻量级的锁管理
+
+
+### Lock Manager
+
+Lock manager 也可以修改配置：
+
++ LOCAL
++ GLOBAL
+
+如果设置为 LOCAL，就需要每个 Transaction 都去设置相同的 Locker
+
+
+
+
+
+锁：
+
++ KV Pair
+  + Key: logical key
+  + Value: lease time and id
+
+
 
 
 ### TODO
 
 Transaction: State 可以用 StateMachine 来管理状态
 
+#### 12.21
 
-读写集分离
-
-+ 在读一个数据时，应该先从写集里面查找，再从读集里面查找
-
-+ 在写一个数据时，先查找 writeCache 中是否已经有记录。
+Time Oracle  Locker

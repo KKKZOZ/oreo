@@ -1,9 +1,11 @@
-package main
+package memory
 
 import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/kkkzoz/vanilla-icecream/util"
 )
 
 // MockMemoryConnection is a mock of MemoryConnection
@@ -39,7 +41,7 @@ func (m *MockMemoryConnection) Put(key string, value any) error {
 		}
 	}
 
-	jsonStr := toJSONString(value)
+	jsonStr := util.ToJSONString(value)
 	path := fmt.Sprintf("%s/put/%s", m.baseURL, key)
 	baseURL, err := url.Parse(path)
 	if err != nil {
