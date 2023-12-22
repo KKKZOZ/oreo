@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kkkzoz/oreo/config"
-	"github.com/kkkzoz/oreo/locker"
+	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/locker"
 )
 
 type SourceType string

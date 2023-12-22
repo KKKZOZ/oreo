@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/config"
-	"github.com/kkkzoz/oreo/testutil"
-	"github.com/kkkzoz/oreo/txn"
-	"github.com/kkkzoz/oreo/util"
+	"github.com/kkkzoz/oreo/internal/testutil"
+	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 

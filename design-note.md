@@ -274,6 +274,7 @@ Lock manager 也可以修改配置：
 + TimeSource 为全局的情况下，LockerSource 也必须为全局
 + TimeSource 为本地的情况下，LockerSource 可以为任意一种情况
 
+由于每次新建一个 Transaction 都需要设置其相关的 Datastore 等设定，所以可以设置一个 Factory 类来帮助完成初始化
 
 
 ### TODO

@@ -1,4 +1,13 @@
+.idea/
+.intellij/
+*.iml
+.vscode/
+.DS_Store
+
+cover.out
 coverage.out
 coverage.html
 
 .VSCodeCounter
+
+design-note.md

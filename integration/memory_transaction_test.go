@@ -1,17 +1,28 @@
-package memory
+package integration
 
 import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/testutil"
+	"github.com/kkkzoz/oreo/internal/testutil"
+	"github.com/kkkzoz/oreo/pkg/datastore/memory"
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
+
+func NewTransactionWithSetup() *txn.Transaction {
+	txn := txn.NewTransaction()
+	conn := memory.NewMemoryConnection("localhost", 8321)
+	mds := memory.NewMemoryDatastore("memory", conn)
+	txn.AddDatastore(mds)
+	txn.SetGlobalDatastore(mds)
+	return txn
+}
 
 // TestTxnStartAgain tests the behavior of starting a transaction multiple times.
 func TestTxnStartAgain(t *testing.T) {
 	// Create a new memory database instance
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -35,7 +46,7 @@ func TestTxnStartAgain(t *testing.T) {
 
 // TestTxnCommitWithoutStart tests the scenario where a transaction is committed without being started.
 func TestTxnCommitWithoutStart(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -50,7 +61,7 @@ func TestTxnCommitWithoutStart(t *testing.T) {
 
 // TestTxnAbortWithoutStart tests the behavior of aborting a transaction without starting it.
 func TestTxnAbortWithoutStart(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -66,7 +77,7 @@ func TestTxnAbortWithoutStart(t *testing.T) {
 // TestTxnOperateWithoutStart tests the behavior of transaction operations
 // when the database has not been started.
 func TestTxnOperateWithoutStart(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -89,7 +100,7 @@ func TestTxnOperateWithoutStart(t *testing.T) {
 }
 
 func TestTxnWrite(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -137,7 +148,7 @@ func TestTxnWrite(t *testing.T) {
 }
 
 func TestReadOwnWrite(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -183,7 +194,7 @@ func TestReadOwnWrite(t *testing.T) {
 }
 
 func TestSingleKeyWriteConflict(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -220,7 +231,7 @@ func TestSingleKeyWriteConflict(t *testing.T) {
 }
 
 func TestMultileKeyWriteConflict(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -298,7 +309,7 @@ func TestMultileKeyWriteConflict(t *testing.T) {
 }
 
 func TestRepeatableReadWhenRecordDeleted(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -332,7 +343,7 @@ func TestRepeatableReadWhenRecordDeleted(t *testing.T) {
 }
 
 func TestRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -387,7 +398,7 @@ func TestRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 // txn2 read John again
 // two read in txn2 should be the same
 func TestRepeatableReadWhenAnotherUncommitted(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -464,7 +475,7 @@ func TestRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 // txn2 read John again
 // two read in txn2 should be the same
 func TestRepeatableReadWhenAnotherCommitted(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -532,7 +543,7 @@ func TestRepeatableReadWhenAnotherCommitted(t *testing.T) {
 }
 
 func TestTxnAbort(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
@@ -564,7 +575,7 @@ func TestTxnAbort(t *testing.T) {
 
 // TODO: WTF why this test failed when using CLI
 func TestTxnAbortCausedByWriteConflict(t *testing.T) {
-	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()

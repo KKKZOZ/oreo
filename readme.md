@@ -10,15 +10,21 @@ It supports:
 + MongoDB
 + CouchDB
 
-## About Cherry Garicia
+> ***It is currently alpha***.
 
-A client coordinated transaction protocol to enable efficient multi-item transactions across heterogeneous key-value store.
+## Main Features
+
++ An easy-to-use interface for distributed transactions.
++ Support heterogeneous key-value store.
++ Clear architecture.
+
+
 
 ## Project Structure
 
 ![Project Structure](./assets/img/project_structure.png)
 
-## Get Started
+## Getting Started
 
 > Full example is in `examples/oreo_memory_basic`
 
@@ -49,7 +55,11 @@ func insertTwoUsers(txn *txn.Transaction) {
 
 ## Why this name?
 
-I love Oreo and Oreo also has many different flavors of fillings.
+I love Oreo and Oreo also has many different flavors of fillings!
+
+## About Cherry Garicia
+
+A client coordinated transaction protocol to enable efficient multi-item transactions across heterogeneous key-value store.
 
 ## Roadmap
 

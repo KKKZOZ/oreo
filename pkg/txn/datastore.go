@@ -1,6 +1,6 @@
 package txn
 
-import "github.com/kkkzoz/oreo/config"
+import "github.com/kkkzoz/oreo/pkg/config"
 
 // Datastore is an interface that defines the operations for interacting with a data store.
 //

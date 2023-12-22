@@ -7,9 +7,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kkkzoz/oreo/config"
-	"github.com/kkkzoz/oreo/txn"
-	"github.com/kkkzoz/oreo/util"
+	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 type MemoryDatastore struct {
@@ -316,6 +316,7 @@ func (m *MemoryDatastore) Commit() error {
 	}
 	// clear the cache
 	m.writeCache = make(map[string]MemoryItem)
+	m.readCache = make(map[string]MemoryItem)
 	return nil
 }
 
