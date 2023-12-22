@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestSimpleLockAndUnlock tests the functionality of locking and unlocking a key in the memory locker.
 func TestSimpleLockAndUnlock(t *testing.T) {
 	locker := NewMemoryLocker()
 	err := locker.Lock("key1", "txnId-1", 100*time.Millisecond)
@@ -18,6 +19,8 @@ func TestSimpleLockAndUnlock(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+// TestLockTwice tests the behavior of locking the same key twice using the MemoryLocker.
+// It verifies that the second lock request is successful and that the duration between the two locks is greater than 90 milliseconds.
 func TestLockTwice(t *testing.T) {
 	locker := NewMemoryLocker()
 	err := locker.Lock("key1", "txnId-1", 100*time.Millisecond)
@@ -29,6 +32,7 @@ func TestLockTwice(t *testing.T) {
 	assert.True(t, endTime.Sub(startTime) > 90*time.Millisecond)
 }
 
+// TestConcurrentLock tests the concurrent locking and unlocking of a counter using the MemoryLocker.
 func TestConcurrentLock(t *testing.T) {
 	locker := NewMemoryLocker()
 

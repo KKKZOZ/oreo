@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/kkkzoz/vanilla-icecream/util"
+	"github.com/kkkzoz/oreo/util"
 )
 
 func TestServerStartAndStop(t *testing.T) {

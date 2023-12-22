@@ -1,4 +1,4 @@
-module github.com/kkkzoz/vanilla-icecream
+module github.com/kkkzoz/oreo
 
 go 1.21.1
 

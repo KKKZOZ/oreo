@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/vanilla-icecream/testutil"
+	"github.com/kkkzoz/oreo/testutil"
 	"github.com/stretchr/testify/assert"
 )
 

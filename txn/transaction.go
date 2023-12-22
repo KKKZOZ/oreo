@@ -4,13 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kkkzoz/vanilla-icecream/config"
-	"github.com/kkkzoz/vanilla-icecream/locker"
+	"github.com/kkkzoz/oreo/config"
+	"github.com/kkkzoz/oreo/locker"
 )
 
 type SourceType string
@@ -21,16 +19,28 @@ const (
 	GLOBAL SourceType = "GLOBAL"
 )
 
+// Transaction represents a transaction in the system.
+// It contains information such as the transaction ID, state, timestamps,
+// datastores, time source, oracle URL, and locker.
 type Transaction struct {
-	TxnId           string
-	TxnState        config.State
-	TxnStartTime    time.Time
-	TxnCommitTime   time.Time
+	// TxnId is the unique identifier for the transaction.
+	TxnId string
+	// TxnState represents the current state of the transaction.
+	TxnState config.State
+	// TxnStartTime is the timestamp when the transaction started.
+	TxnStartTime time.Time
+	// TxnCommitTime is the timestamp when the transaction was committed.
+	TxnCommitTime time.Time
+	// globalDataStore is the shared datastore for all transactions.
 	globalDataStore Datastore
-	dataStoreMap    map[string]Datastore
-	timeSource      SourceType
-	oracleURL       string
-	locker          locker.Locker
+	// dataStoreMap is a map of transaction-specific datastores.
+	dataStoreMap map[string]Datastore
+	// timeSource represents the source of time for the transaction.
+	timeSource SourceType
+	// oracleURL is the URL of the oracle service used by the transaction.
+	oracleURL string
+	// locker is used for transaction-level locking.
+	locker locker.Locker
 }
 
 // NewTransaction creates a new Transaction object.
@@ -41,7 +51,7 @@ func NewTransaction() *Transaction {
 		TxnState:     config.EMPTY,
 		dataStoreMap: make(map[string]Datastore),
 		timeSource:   LOCAL,
-		locker:       locker.NewMemoryLocker(),
+		locker:       locker.AMemoryLocker,
 	}
 }
 
@@ -181,8 +191,7 @@ func (t *Transaction) Commit() error {
 
 	// Commit phase
 	// The sync point
-
-	txnState, err := t.GetTSRState()
+	txnState, err := t.GetTSRState(t.TxnId)
 	if err == nil && txnState == config.ABORTED {
 		t.Abort()
 		return errors.New("transaction is aborted by other transaction")
@@ -200,7 +209,6 @@ func (t *Transaction) Commit() error {
 	}
 
 	t.DeleteTSR()
-
 	return nil
 }
 
@@ -240,14 +248,8 @@ func (t *Transaction) DeleteTSR() error {
 	return t.globalDataStore.DeleteTSR(t.TxnId)
 }
 
-// GetTSRState returns the current state of the transaction.
-// It retrieves the state from the global data store using the transaction ID.
-// If successful, it returns the state and nil error.
-// If an error occurs during the retrieval, it returns an empty state and the error.
-func (t *Transaction) GetTSRState() (config.State, error) {
-	var state config.State
-	err := t.globalDataStore.Read(t.TxnId, &state)
-	return state, err
+func (t *Transaction) GetTSRState(txnId string) (config.State, error) {
+	return t.globalDataStore.ReadTSR(txnId)
 }
 
 // SetGlobalTimeSource sets the global time source for the transaction.
@@ -279,27 +281,28 @@ func (t *Transaction) getTime() (time.Time, error) {
 	return time.Now(), nil
 }
 
-func (t *Transaction) Lock(key string, id string, duration time.Duration) error {
-	data := url.Values{}
-	data.Set("key", key)
-	data.Set("id", id)
-	data.Set("duration", strconv.Itoa(int(duration)))
-
-	_, err := http.Get(t.oracleURL + "/lock?" + data.Encode())
-	if err != nil {
-		return errors.New("failed to lock")
-	}
-	return nil
+// SetLocker sets the locker for the transaction.
+// The locker is responsible for managing the concurrency of the transaction.
+// It ensures that only one goroutine can access the transaction at a time.
+// The locker must implement the locker.Locker interface.
+func (t *Transaction) SetLocker(locker locker.Locker) {
+	t.locker = locker
 }
 
-func (t *Transaction) Unlock(key string, id string) error {
-	data := url.Values{}
-	data.Set("key", key)
-	data.Set("id", id)
-
-	_, err := http.Get(t.oracleURL + "/unlock?" + data.Encode())
-	if err != nil {
-		return err
+// Lock locks the specified key with the given ID for the specified duration.
+// If the locker is not set, it returns an error.
+func (t *Transaction) Lock(key string, id string, duration time.Duration) error {
+	if t.locker == nil {
+		return errors.New("locker not set")
 	}
-	return nil
+	return t.locker.Lock(key, id, duration)
+}
+
+// Unlock unlocks the specified key with the given ID.
+// It returns an error if the locker is not set or if unlocking fails.
+func (t *Transaction) Unlock(key string, id string) error {
+	if t.locker == nil {
+		return errors.New("locker not set")
+	}
+	return t.locker.Unlock(key, id)
 }

@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
 )
 
 type MemoryDatabase struct {
+	mu      sync.Mutex
 	Address string
 	Port    int
 	records map[string]string
@@ -27,6 +29,8 @@ func NewMemoryDatabase(address string, port int) *MemoryDatabase {
 }
 
 func (m *MemoryDatabase) serveGet(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	vars := mux.Vars(r)
 	key := vars["key"]
 	if value, ok := m.records[key]; ok {
@@ -40,6 +44,9 @@ func (m *MemoryDatabase) serveGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MemoryDatabase) servePut(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	vars := mux.Vars(r)
 	key := vars["key"]
 	err := r.ParseForm()
@@ -61,6 +68,9 @@ func (m *MemoryDatabase) servePut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MemoryDatabase) serveDelete(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	vars := mux.Vars(r)
 	key := vars["key"]
 	if _, ok := m.records[key]; ok {
@@ -96,5 +106,5 @@ func (m *MemoryDatabase) Start() error {
 func (m *MemoryDatabase) Stop() {
 	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	m.server.Shutdown(ctx)
-	m.MsgChan <- "Memory database stopped"
+	go func() { m.MsgChan <- "Memory database stopped" }()
 }

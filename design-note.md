@@ -109,7 +109,7 @@ conditionalUpdate 需要保障**对单个记录读写**的原子性和隔离性�
     /home/kkkzoz/Projects/vanilla-icecream/transaction_test.go:292: item2: {item2-updated-by-txn2}
 ```
 
-这是因为我测试时的 conditionalUpdate 实现中没有原子性保证，我是这么实现的：
+这是因为我测试时的 conditionalUpdate 实现中没有互斥区保证，我是这么实现的：
 
 1. 先从 datastore 中读取旧记录
 2. 比较旧记录和新记录的版本号
@@ -132,7 +132,7 @@ conditionalUpdate 需要保障**对单个记录读写**的原子性和隔离性�
 
 这里有两种处理方式：
 
-+ 在 `MemoryDatabase` 中实现了一个带锁的 `ConditionalUpdate`，保证其原子性
++ 在 `MemoryDatabase` 中实现了一个带锁的 `ConditionalUpdate`，保证 `conditionalUpdate` 的互斥性
   + 和论文的要求保持一致
   + `MemoryDatebase` 中的锁相当于是个数据库锁：
     + 在进入 `ConditionalUpdate` 时锁住，在离开 `ConditionalUpdate` 时释放，
@@ -257,15 +257,22 @@ Lock manager 也可以修改配置：
 如果设置为 LOCAL，就需要每个 Transaction 都去设置相同的 Locker
 
 
-
-
-
 锁：
 
 + KV Pair
   + Key: logical key
   + Value: lease time and id
 
+### Transaction 新建逻辑
+
+默认情况下， `conditionalUpdate()` 是不需要 Transaction 介入的，因为 `conditionalUpdate()` 的互斥性由下层的数据库保证。数据库没有这个机制，再考虑使用 Transaction 自带的锁机制。
+
++ 如果客户端应用程序是单体架构，那么 TimeSource 和 LockerSource 都使用本地的就行，足够处理单个客户端的并发使用了
++ 如果客户端应用程序是分布式架构，那么 TimeSource 和 LockerSource 都必须使用全局的
+
+所以可以分情况讨论: 
++ TimeSource 为全局的情况下，LockerSource 也必须为全局
++ TimeSource 为本地的情况下，LockerSource 可以为任意一种情况
 
 
 
@@ -273,6 +280,9 @@ Lock manager 也可以修改配置：
 
 Transaction: State 可以用 StateMachine 来管理状态
 
-#### 12.21
+#### 12.22
 
-Time Oracle  Locker
++ Pass all tests
++ TransactionFactory
++ TransactionFactory.config
++ More tests

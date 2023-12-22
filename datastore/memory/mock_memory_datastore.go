@@ -1,6 +1,6 @@
 package memory
 
-import "github.com/kkkzoz/vanilla-icecream/txn"
+import "github.com/kkkzoz/oreo/txn"
 
 type MockMemoryDatastore struct {
 	MemoryDatastore

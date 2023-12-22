@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/kkkzoz/vanilla-icecream/util"
+	"github.com/kkkzoz/oreo/util"
 )
 
 // MockMemoryConnection is a mock of MemoryConnection

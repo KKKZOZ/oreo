@@ -7,9 +7,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kkkzoz/vanilla-icecream/config"
-	"github.com/kkkzoz/vanilla-icecream/txn"
-	"github.com/kkkzoz/vanilla-icecream/util"
+	"github.com/kkkzoz/oreo/config"
+	"github.com/kkkzoz/oreo/txn"
+	"github.com/kkkzoz/oreo/util"
 )
 
 type MemoryDatastore struct {
@@ -82,7 +82,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 	if item.TxnState == config.PREPARED {
 
 		//TODO: what if the state is ABORTED
-		_, err := m.Txn.GetTSRState()
+		_, err := m.Txn.GetTSRState(item.TxnId)
 		if err == nil {
 			// if TSR exists
 			// roll forward the record
@@ -379,6 +379,15 @@ func (m *MemoryDatastore) GetName() string {
 // It takes a pointer to a Transaction as input and assigns it to the Txn field of the MemoryDatastore.
 func (m *MemoryDatastore) SetTxn(txn *txn.Transaction) {
 	m.Txn = txn
+}
+
+func (m *MemoryDatastore) ReadTSR(txnId string) (config.State, error) {
+	var txnState config.State
+	err := m.conn.Get(txnId, &txnState)
+	if err != nil {
+		return txnState, err
+	}
+	return txnState, nil
 }
 
 // WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the memory datastore.

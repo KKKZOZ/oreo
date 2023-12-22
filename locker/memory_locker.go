@@ -13,6 +13,8 @@ type MemoryLocker struct {
 	timers map[string]*time.Timer
 }
 
+var AMemoryLocker = NewMemoryLocker()
+
 // NewMemoryLocker creates a new instance of MemoryLocker.
 // MemoryLocker is a type that provides a mechanism for locking and unlocking memory resources.
 // It initializes the locks and timers maps and returns a pointer to the newly created MemoryLocker.

@@ -3,16 +3,19 @@ package memory
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"time"
 
-	"github.com/kkkzoz/vanilla-icecream/util"
+	"github.com/kkkzoz/oreo/util"
 )
 
 type MemoryConnection struct {
-	Address string
-	Port    int
-	baseURL string
+	Address   string
+	Port      int
+	baseURL   string
+	transport *http.Transport
 }
 
 func NewMemoryConnection(address string, port int) *MemoryConnection {
@@ -20,6 +23,12 @@ func NewMemoryConnection(address string, port int) *MemoryConnection {
 		Address: address,
 		Port:    port,
 		baseURL: fmt.Sprintf("http://%s:%d", address, port),
+		transport: &http.Transport{
+			MaxIdleConns:        6000,
+			MaxConnsPerHost:     6000,
+			MaxIdleConnsPerHost: 6000,
+			IdleConnTimeout:     60 * time.Second,
+		},
 	}
 }
 
@@ -31,12 +40,14 @@ func (m *MemoryConnection) Get(key string, value any) error {
 	url := fmt.Sprintf("%s/get/%s", m.baseURL, key)
 	req, _ := http.NewRequest("GET", url, nil)
 
-	httpClient := &http.Client{}
+	httpClient := &http.Client{Transport: m.transport}
 	response, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 	if response.StatusCode == http.StatusNotFound {
+		_, _ = io.CopyN(io.Discard, response.Body, 1024*4)
 		return fmt.Errorf("key not found")
 	}
 
@@ -59,26 +70,30 @@ func (m *MemoryConnection) Put(key string, value any) error {
 
 	req, _ := http.NewRequest("POST", baseURL.String(), nil)
 
-	httpClient := &http.Client{}
+	httpClient := &http.Client{Transport: m.transport}
 	response, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		_, _ = io.CopyN(io.Discard, response.Body, 1024*4)
 		return fmt.Errorf("put failed")
 	}
 	return nil
 }
 
 func (m *MemoryConnection) Delete(key string) error {
-	httpClient := &http.Client{}
+	httpClient := &http.Client{Transport: m.transport}
 	url := fmt.Sprintf("%s/delete/%s", m.baseURL, key)
 	req, _ := http.NewRequest("DELETE", url, nil)
 	response, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
+	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
+		_, _ = io.CopyN(io.Discard, response.Body, 1024*4)
 		return fmt.Errorf("delete failed")
 	}
 	return nil

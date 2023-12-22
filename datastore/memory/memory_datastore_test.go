@@ -7,12 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/vanilla-icecream/config"
-	"github.com/kkkzoz/vanilla-icecream/locker"
-	"github.com/kkkzoz/vanilla-icecream/testutil"
-	"github.com/kkkzoz/vanilla-icecream/timeoracle"
-	"github.com/kkkzoz/vanilla-icecream/txn"
-	"github.com/kkkzoz/vanilla-icecream/util"
+	"github.com/kkkzoz/oreo/config"
+	"github.com/kkkzoz/oreo/testutil"
+	"github.com/kkkzoz/oreo/txn"
+	"github.com/kkkzoz/oreo/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -319,7 +317,7 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 	conn.Put(key, expectedMemoryItem)
 
 	// Write the TSR
-	txn.WriteTSR(config.COMMITTED)
+	conn.Put("100", config.COMMITTED)
 
 	// Start the transaction
 	err := txn.Start()
@@ -769,13 +767,15 @@ func TestDeleteWithRead(t *testing.T) {
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("memory", "John", dataPerson)
-	preTxn.Commit()
+	err := preTxn.Commit()
+	assert.NoError(t, err)
 
 	txn := NewTransactionWithSetup()
 	txn.Start()
 	var person testutil.Person
-	txn.Read("memory", "John", &person)
-	err := txn.Delete("memory", "John")
+	err = txn.Read("memory", "John", &person)
+	assert.NoError(t, err)
+	err = txn.Delete("memory", "John")
 	assert.NoError(t, err)
 
 	err = txn.Commit()
@@ -1029,7 +1029,7 @@ func TestMockConnectionInTxn(t *testing.T) {
 		}
 
 		err := txn.Commit()
-		assert.EqualError(t, err, "prepare phase failed: write conflicted")
+		assert.EqualError(t, err, "prepare phase failed: debug error")
 
 		// addtionally, we can check data consistency
 		postTxn := NewTransactionWithSetup()
@@ -1051,25 +1051,23 @@ func TestMemoryDatastore_ConcurrentWriteConflicts(t *testing.T) {
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
-	timeOracle := timeoracle.NewSimpleTimeOracle("localhost", 8300, locker.NewMemoryLocker())
-	timeOracle.WaitForStartUp(100 * time.Millisecond)
-	defer func() { <-timeOracle.MsgChan }()
-	defer func() { go timeOracle.Stop() }()
 
 	preTxn := NewTransactionWithSetup()
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
 		preTxn.Write("memory", item.Value, item)
 	}
-	preTxn.Commit()
+	err := preTxn.Commit()
+	assert.NoError(t, err)
 
 	resChan := make(chan bool)
 	successId := 0
 
-	for i := 1; i <= 3; i++ {
+	concurrentCount := 100
+
+	for i := 1; i <= concurrentCount; i++ {
 		go func(id int) {
 			txn := NewTransactionWithSetup()
-			txn.SetGlobalTimeSource("localhost", 8300)
 			txn.Start()
 			time.Sleep(100 * time.Millisecond)
 			for _, item := range testutil.InputItemList {
@@ -1081,6 +1079,10 @@ func TestMemoryDatastore_ConcurrentWriteConflicts(t *testing.T) {
 
 			err := txn.Commit()
 			if err != nil {
+				if err.Error() != "prepare phase failed: write conflicted: the record is in PREPARED state" &&
+					err.Error() != "prepare phase failed: write conflicted: the record has been modified by others" {
+					t.Errorf("Unexpected error: %s", err)
+				}
 				resChan <- false
 			} else {
 				resChan <- true
@@ -1090,7 +1092,7 @@ func TestMemoryDatastore_ConcurrentWriteConflicts(t *testing.T) {
 	}
 	commitCount := 0
 
-	for i := 1; i <= 100; i++ {
+	for i := 1; i <= concurrentCount; i++ {
 		res := <-resChan
 		if res {
 			commitCount++
@@ -1106,7 +1108,7 @@ func TestMemoryDatastore_ConcurrentWriteConflicts(t *testing.T) {
 		postTxn.Read("memory", item.Value, &res)
 		assert.Equal(t, item.Value+"-new-"+strconv.Itoa(successId), res.Value)
 	}
-	err := postTxn.Commit()
+	err = postTxn.Commit()
 	assert.NoError(t, err)
 
 }

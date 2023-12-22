@@ -8,18 +8,27 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/kkkzoz/vanilla-icecream/locker"
+	"github.com/kkkzoz/oreo/locker"
 )
 
+// SimpleTimeOracle represents a simple time oracle that provides time-related information.
+// It contains the address, port, base URL, server, message channel, and locker.
 type SimpleTimeOracle struct {
+	// Address is the IP address of the time oracle.
 	Address string
-	Port    int
+	// Port is the port number of the time oracle.
+	Port int
+	// baseURL is the base URL of the time oracle.
 	baseURL string
-	server  http.Server
+	// server is the HTTP server used by the time oracle.
+	server http.Server
+	// MsgChan is the channel used for sending and receiving messages.
 	MsgChan chan string
-	locker  locker.Locker
+	// locker is used for synchronizing access to the time oracle.
+	locker locker.Locker
 }
 
+// NewSimpleTimeOracle creates a new instance of SimpleTimeOracle.
 func NewSimpleTimeOracle(address string, port int, locker locker.Locker) *SimpleTimeOracle {
 	return &SimpleTimeOracle{
 		Address: address,
@@ -30,6 +39,7 @@ func NewSimpleTimeOracle(address string, port int, locker locker.Locker) *Simple
 	}
 }
 
+// GetTime returns the current time as reported by the SimpleTimeOracle.
 func (s *SimpleTimeOracle) GetTime() time.Time {
 	return time.Now()
 }
@@ -99,6 +109,10 @@ func (s *SimpleTimeOracle) serveUnlock(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "OK")
 }
 
+// Start starts the SimpleTimeOracle server.
+// It initializes the router and sets up the necessary routes for serving time, locking, and unlocking.
+// It then starts the server and listens for incoming requests.
+// Returns an error if there was a problem starting the server.
 func (s *SimpleTimeOracle) Start() error {
 
 	router := mux.NewRouter()
@@ -113,6 +127,8 @@ func (s *SimpleTimeOracle) Start() error {
 	return s.server.ListenAndServe()
 }
 
+// WaitForStartUp waits for the server to start up by continuously sending HTTP requests to the "/time" endpoint until a successful response is received or the timeout is reached.
+// It returns an error if the server does not reply within the specified timeout duration.
 func (s *SimpleTimeOracle) WaitForStartUp(timeout time.Duration) error {
 	ch := make(chan bool)
 	go func() {
@@ -133,6 +149,9 @@ func (s *SimpleTimeOracle) WaitForStartUp(timeout time.Duration) error {
 	}
 }
 
+// Stop stops the SimpleTimeOracle server gracefully.
+// It shuts down the server and sends a message to the MsgChan indicating that the Simple Time Oracle has stopped.
+// It returns an error if there was an issue shutting down the server.
 func (s *SimpleTimeOracle) Stop() error {
 	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	s.server.Shutdown(ctx)

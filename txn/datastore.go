@@ -1,8 +1,8 @@
 package txn
 
-import "github.com/kkkzoz/vanilla-icecream/config"
+import "github.com/kkkzoz/oreo/config"
 
-// Datastore is an interface that defines the operations for a data store.
+// Datastore is an interface that defines the operations for interacting with a data store.
 //
 //go:generate mockery --name Datastore
 type Datastore interface {
@@ -45,6 +45,9 @@ type Datastore interface {
 	// SetTxn sets the current transaction for the data store.
 	SetTxn(txn *Transaction)
 
+	// ReadTSR reads the transaction state record (TSR) for a transaction.
+	ReadTSR(txnId string) (config.State, error)
+
 	// WriteTSR writes the transaction state record (TSR) for a transaction.
 	WriteTSR(txnId string, txnState config.State) error
 
@@ -52,6 +55,7 @@ type Datastore interface {
 	DeleteTSR(txnId string) error
 }
 
+// BaseDataStore represents a base data store with a name and a transaction.
 type BaseDataStore struct {
 	Name string
 	Txn  *Transaction
