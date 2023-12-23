@@ -25,8 +25,6 @@ const (
 type Transaction struct {
 	// TxnId is the unique identifier for the transaction.
 	TxnId string
-	// TxnState represents the current state of the transaction.
-	TxnState config.State
 	// TxnStartTime is the timestamp when the transaction started.
 	TxnStartTime time.Time
 	// TxnCommitTime is the timestamp when the transaction was committed.
@@ -41,6 +39,8 @@ type Transaction struct {
 	oracleURL string
 	// locker is used for transaction-level locking.
 	locker locker.Locker
+
+	*StateMachine
 }
 
 // NewTransaction creates a new Transaction object.
@@ -48,10 +48,10 @@ type Transaction struct {
 func NewTransaction() *Transaction {
 	return &Transaction{
 		TxnId:        "",
-		TxnState:     config.EMPTY,
 		dataStoreMap: make(map[string]Datastore),
 		timeSource:   LOCAL,
 		locker:       locker.AMemoryLocker,
+		StateMachine: NewStateMachine(),
 	}
 }
 
@@ -62,10 +62,10 @@ func NewTransaction() *Transaction {
 // It starts each datastore associated with the transaction.
 // Returns an error if any of the above steps fail, otherwise returns nil.
 func (t *Transaction) Start() error {
-	if t.TxnState != config.EMPTY {
-		return errors.New("transaction is already started")
+	err := t.SetState(config.STARTED)
+	if err != nil {
+		return err
 	}
-	t.TxnState = config.STARTED
 
 	// check nessary datastores are added
 	if t.globalDataStore == nil {
@@ -75,7 +75,6 @@ func (t *Transaction) Start() error {
 		return errors.New("no datastores added")
 	}
 	t.TxnId = uuid.NewString()
-	var err error
 	t.TxnStartTime, err = t.getTime()
 	if err != nil {
 		return err
@@ -111,8 +110,9 @@ func (t *Transaction) SetGlobalDatastore(ds Datastore) {
 // Read reads the value associated with the given key from the specified datastore.
 // It returns an error if the transaction is not in the STARTED state or if the datastore is not found.
 func (t *Transaction) Read(dsName string, key string, value any) error {
-	if t.TxnState != config.STARTED {
-		return errors.New("transaction is not in STARTED state")
+	err := t.CheckState(config.STARTED)
+	if err != nil {
+		return err
 	}
 
 	if ds, ok := t.dataStoreMap[dsName]; ok {
@@ -124,8 +124,9 @@ func (t *Transaction) Read(dsName string, key string, value any) error {
 // Write writes the given key-value pair to the specified datastore in the transaction.
 // It returns an error if the transaction is not in the STARTED state or if the datastore is not found.
 func (t *Transaction) Write(dsName string, key string, value any) error {
-	if t.TxnState != config.STARTED {
-		return errors.New("transaction is not in STARTED state")
+	err := t.CheckState(config.STARTED)
+	if err != nil {
+		return err
 	}
 
 	if ds, ok := t.dataStoreMap[dsName]; ok {
@@ -137,8 +138,9 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 // Delete deletes a key from the specified datastore in the transaction.
 // It returns an error if the transaction is not in the STARTED state or if the datastore is not found.
 func (t *Transaction) Delete(dsName string, key string) error {
-	if t.TxnState != config.STARTED {
-		return errors.New("transaction is not in STARTED state")
+	err := t.CheckState(config.STARTED)
+	if err != nil {
+		return err
 	}
 
 	if ds, ok := t.dataStoreMap[dsName]; ok {
@@ -154,19 +156,13 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Finally, it deletes the transaction state record.
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
-	if t.TxnState == config.COMMITTED {
-		return errors.New("transaction is already being committed")
+
+	err := t.SetState(config.COMMITTED)
+	if err != nil {
+		return err
 	}
-	if t.TxnState == config.ABORTED {
-		return errors.New("transaction is already aborted")
-	}
-	if t.TxnState == config.EMPTY {
-		return errors.New("transaction is not started")
-	}
-	t.TxnState = config.COMMITTED
 
 	// Prepare phase
-	var err error
 	t.TxnCommitTime, err = t.getTime()
 	if err != nil {
 		return err
@@ -217,17 +213,10 @@ func (t *Transaction) Commit() error {
 // If the transaction is in a valid state, it sets the transaction state to ABORTED and calls the Abort method on each data store associated with the transaction.
 // Returns an error if any of the data store's Abort method returns an error, otherwise returns nil.
 func (t *Transaction) Abort() error {
-	if t.TxnState == config.COMMITTED {
-		return errors.New("transaction is already committed")
+	err := t.SetState(config.ABORTED)
+	if err != nil {
+		return err
 	}
-	if t.TxnState == config.ABORTED {
-		return errors.New("transaction is already aborted")
-	}
-	if t.TxnState == config.EMPTY {
-		return errors.New("transaction is not started")
-	}
-
-	t.TxnState = config.ABORTED
 	for _, ds := range t.dataStoreMap {
 		ds.Abort(false)
 	}
