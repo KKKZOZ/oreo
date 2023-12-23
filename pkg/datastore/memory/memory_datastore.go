@@ -402,3 +402,7 @@ func (m *MemoryDatastore) WriteTSR(txnId string, txnState config.State) error {
 func (m *MemoryDatastore) DeleteTSR(txnId string) error {
 	return m.conn.Delete(txnId)
 }
+
+func (m *MemoryDatastore) Copy() txn.Datastore {
+	return NewMemoryDatastore(m.Name, m.conn)
+}

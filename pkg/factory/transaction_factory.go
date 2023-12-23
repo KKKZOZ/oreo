@@ -1,11 +1,10 @@
-package txn
+package factory
 
 import (
-	"bytes"
-	"encoding/gob"
 	"errors"
 
 	"github.com/kkkzoz/oreo/pkg/locker"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 // TransactionFactory represents a factory for creating transactions.
@@ -16,20 +15,20 @@ type TransactionFactory struct {
 	// locker is the locker used for transaction synchronization.
 	locker locker.Locker
 	// TimeOracleSource is the source type for the time oracle.
-	TimeOracleSource SourceType
+	TimeOracleSource txn.SourceType
 	// LockerSource is the source type for the locker.
-	LockerSource SourceType
+	LockerSource txn.SourceType
 
-	dateStoreList   []Datastore
-	globalDatastore Datastore
+	dateStoreList   []txn.Datastore
+	globalDatastore txn.Datastore
 }
 
 type TransactionConfig struct {
 	// TimeOracleSource specifies the source type for the time oracle.
-	TimeOracleSource SourceType
+	TimeOracleSource txn.SourceType
 
 	// LockerSource specifies the source type for the locker.
-	LockerSource SourceType
+	LockerSource txn.SourceType
 
 	// OracleURL is the URL of the oracle.
 	OracleURL string
@@ -38,10 +37,10 @@ type TransactionConfig struct {
 	Options map[string]string
 
 	// DatastoreList is a list of datastores to be added to the transaction.
-	DatastoreList []Datastore
+	DatastoreList []txn.Datastore
 
 	// GlobalDatastore is the global datastore to be added to the transaction.
-	GlobalDatastore Datastore
+	GlobalDatastore txn.Datastore
 
 	// LocalLocker is the local locker instance.
 	LocalLocker locker.Locker
@@ -51,15 +50,15 @@ type TransactionConfig struct {
 func NewTransactionFactory(config *TransactionConfig) (*TransactionFactory, error) {
 	if config == nil {
 		config = &TransactionConfig{
-			TimeOracleSource: LOCAL,
-			LockerSource:     LOCAL,
+			TimeOracleSource: txn.LOCAL,
+			LockerSource:     txn.LOCAL,
 		}
 	}
 	if config.TimeOracleSource == "" {
-		config.TimeOracleSource = LOCAL
+		config.TimeOracleSource = txn.LOCAL
 	}
 	if config.LockerSource == "" {
-		config.LockerSource = LOCAL
+		config.LockerSource = txn.LOCAL
 	}
 
 	if len(config.DatastoreList) == 0 {
@@ -70,20 +69,20 @@ func NewTransactionFactory(config *TransactionConfig) (*TransactionFactory, erro
 		return nil, errors.New("GlobalDatastore is empty")
 	}
 
-	if config.TimeOracleSource == GLOBAL {
+	if config.TimeOracleSource == txn.GLOBAL {
 		if config.OracleURL == "" {
 			return nil, errors.New("OracleURL is empty")
 		}
 	}
 
-	if config.LockerSource == GLOBAL {
+	if config.LockerSource == txn.GLOBAL {
 		if config.OracleURL == "" {
 			return nil, errors.New("OracleURL is empty")
 		}
 	}
 
 	// when using a global time oracle, the locker must also be global
-	if config.TimeOracleSource == GLOBAL && config.LockerSource == LOCAL {
+	if config.TimeOracleSource == txn.GLOBAL && config.LockerSource == txn.LOCAL {
 		return nil, errors.New("LockerSource must be GLOBAL when using a global time oracle")
 	}
 
@@ -99,39 +98,26 @@ func NewTransactionFactory(config *TransactionConfig) (*TransactionFactory, erro
 }
 
 // NewTransaction creates a new Transaction object.
-func (t *TransactionFactory) NewTransaction() *Transaction {
+func (t *TransactionFactory) NewTransaction() *txn.Transaction {
 	// By default, time oracle and locker are local
-	txn := NewTransaction()
+	txn1 := txn.NewTransaction()
 
-	if t.TimeOracleSource == GLOBAL {
-		txn.oracleURL = t.oracleURL
-		txn.timeSource = GLOBAL
-		txn.locker = locker.NewHttpLocker(t.oracleURL)
+	if t.TimeOracleSource == txn.GLOBAL {
+		txn1.SetGlobalTimeSource(t.oracleURL)
+		txn1.SetLocker(locker.NewHttpLocker(t.oracleURL))
 	}
 
-	if t.LockerSource == GLOBAL {
-		txn.locker = locker.NewHttpLocker(t.oracleURL)
+	if t.LockerSource == txn.GLOBAL {
+		txn1.SetLocker(locker.NewHttpLocker(t.oracleURL))
 	}
 
 	for _, ds := range t.dateStoreList {
-		// var tar Datastore
-		// deepcopy(&ds, &tar)
-		txn.AddDatastore(ds)
+		copy := ds.Copy()
+		txn1.AddDatastore(copy)
 		if ds == t.globalDatastore {
-			txn.SetGlobalDatastore(ds)
+			txn1.SetGlobalDatastore(copy)
 		}
 	}
 
-	return txn
-}
-
-func deepcopy(src, dest *Datastore) error {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	dec := gob.NewDecoder(&buf)
-	err := enc.Encode(src)
-	if err != nil {
-		return err
-	}
-	return dec.Decode(dest)
+	return txn1
 }

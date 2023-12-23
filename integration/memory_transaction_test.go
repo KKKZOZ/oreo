@@ -5,7 +5,10 @@ import (
 	"time"
 
 	"github.com/kkkzoz/oreo/internal/testutil"
+	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/datastore/memory"
+	"github.com/kkkzoz/oreo/pkg/factory"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
@@ -628,4 +631,227 @@ func TestTxnAbortCausedByWriteConflict(t *testing.T) {
 		}
 	}
 	postTxn.Commit()
+}
+
+// TODO: Dangetous test due to use of an unstable version of TransactionFactory
+func TestConcurrentTransaction(t *testing.T) {
+	// Create a new memory database instance
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	// Create a new memory datastore instance
+	memDst1 := memory.NewMemoryDatastore("mem1", memory.NewMemoryConnection("localhost", 8321))
+
+	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
+		DatastoreList:    []txn.Datastore{memDst1},
+		GlobalDatastore:  memDst1,
+		TimeOracleSource: txn.LOCAL,
+		LockerSource:     txn.LOCAL,
+	})
+	assert.NoError(t, err)
+
+	preTxn := txnFactory.NewTransaction()
+	preTxn.Start()
+	person := testutil.NewDefaultPerson()
+	preTxn.Write("mem1", "John", person)
+	err = preTxn.Commit()
+	assert.NoError(t, err)
+
+	resChan := make(chan bool)
+
+	conNum := 10
+
+	for i := 1; i <= conNum; i++ {
+		go func(id int) {
+			txn := NewTransactionWithSetup()
+			txn.Start()
+			var person testutil.Person
+			txn.Read("memory", "John", &person)
+			person.Age = person.Age + id
+			txn.Write("memory", "John", person)
+			err = txn.Commit()
+			if err != nil {
+				resChan <- false
+			} else {
+				resChan <- true
+			}
+		}(i)
+	}
+
+	successNum := 0
+	for i := 1; i <= conNum; i++ {
+		res := <-resChan
+		if res {
+			successNum++
+		}
+	}
+	assert.Equal(t, 1, successNum)
+}
+
+func TestSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
+	// run a memory database
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	preTxn := NewTransactionWithSetup()
+	preTxn.Start()
+	for _, item := range testutil.InputItemList {
+		preTxn.Write("memory", item.Value, item)
+	}
+	preTxn.Commit()
+
+	go func() {
+		slowTxn := txn.NewTransaction()
+		conn := memory.NewMockMemoryConnection("localhost", 8321, 2, false,
+			func() error { time.Sleep(3 * time.Second); return nil })
+		mds := memory.NewMemoryDatastore("memory", conn)
+		slowTxn.AddDatastore(mds)
+		slowTxn.SetGlobalDatastore(mds)
+
+		slowTxn.Start()
+		for _, item := range testutil.InputItemList {
+			var result testutil.TestItem
+			slowTxn.Read("memory", item.Value, &result)
+			result.Value = item.Value + "-slow"
+			slowTxn.Write("memory", item.Value, result)
+		}
+		err := slowTxn.Commit()
+		assert.EqualError(t, err, "prepare phase failed: write conflicted")
+	}()
+	time.Sleep(2 * time.Second)
+
+	testConn := memory.NewMemoryConnection("localhost", 8321)
+	testConn.Connect()
+	var memItem1 memory.MemoryItem
+	testConn.Get("item1", &memItem1)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value)
+	assert.Equal(t, memItem1.TxnState, config.PREPARED)
+
+	var memItem2 memory.MemoryItem
+	testConn.Get("item2", &memItem2)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item2-slow")), memItem2.Value)
+	assert.Equal(t, memItem2.TxnState, config.PREPARED)
+
+	var memItem3 memory.MemoryItem
+	testConn.Get("item3", &memItem3)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value)
+	assert.Equal(t, memItem3.TxnState, config.COMMITTED)
+
+	fastTxn := NewTransactionWithSetup()
+	fastTxn.Start()
+	for i := 2; i <= 4; i++ {
+		var result testutil.TestItem
+		fastTxn.Read("memory", testutil.InputItemList[i].Value, &result)
+		result.Value = testutil.InputItemList[i].Value + "-fast"
+		fastTxn.Write("memory", testutil.InputItemList[i].Value, result)
+	}
+	err := fastTxn.Commit()
+	assert.NoError(t, err)
+
+	postTxn := NewTransactionWithSetup()
+	postTxn.Start()
+
+	var res1 testutil.TestItem
+	postTxn.Read("memory", testutil.InputItemList[0].Value, &res1)
+	assert.Equal(t, testutil.InputItemList[0], res1)
+
+	var res2 testutil.TestItem
+	postTxn.Read("memory", testutil.InputItemList[1].Value, &res2)
+	assert.Equal(t, testutil.InputItemList[1], res2)
+
+	for i := 2; i <= 4; i++ {
+		var res testutil.TestItem
+		postTxn.Read("memory", testutil.InputItemList[i].Value, &res)
+		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
+	}
+
+	err = postTxn.Commit()
+	assert.NoError(t, err)
+
+}
+
+func TestSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
+	// run a memory database
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	preTxn := NewTransactionWithSetup()
+	preTxn.Start()
+	for _, item := range testutil.InputItemList {
+		preTxn.Write("memory", item.Value, item)
+	}
+	preTxn.Commit()
+
+	go func() {
+		slowTxn := txn.NewTransaction()
+		conn := memory.NewMockMemoryConnection("localhost", 8321, 5, false,
+			func() error { time.Sleep(3 * time.Second); return nil })
+		mds := memory.NewMemoryDatastore("memory", conn)
+		slowTxn.AddDatastore(mds)
+		slowTxn.SetGlobalDatastore(mds)
+
+		slowTxn.Start()
+		for _, item := range testutil.InputItemList {
+			var result testutil.TestItem
+			slowTxn.Read("memory", item.Value, &result)
+			result.Value = item.Value + "-slow"
+			slowTxn.Write("memory", item.Value, result)
+		}
+		err := slowTxn.Commit()
+		assert.EqualError(t, err, "transaction is aborted by other transaction")
+	}()
+	time.Sleep(2 * time.Second)
+
+	testConn := memory.NewMemoryConnection("localhost", 8321)
+	testConn.Connect()
+
+	// all records should be PREPARED state
+	for _, item := range testutil.InputItemList {
+		var memItem memory.MemoryItem
+		testConn.Get(item.Value, &memItem)
+		itemValue := item.Value + "-slow"
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem(itemValue)), memItem.Value)
+		assert.Equal(t, memItem.TxnState, config.PREPARED)
+	}
+
+	fastTxn := NewTransactionWithSetup()
+	fastTxn.Start()
+	for i := 2; i <= 4; i++ {
+		var result testutil.TestItem
+		fastTxn.Read("memory", testutil.InputItemList[i].Value, &result)
+		result.Value = testutil.InputItemList[i].Value + "-fast"
+		fastTxn.Write("memory", testutil.InputItemList[i].Value, result)
+	}
+	err := fastTxn.Commit()
+	assert.NoError(t, err)
+
+	postTxn := NewTransactionWithSetup()
+	postTxn.Start()
+
+	var res1 testutil.TestItem
+	postTxn.Read("memory", testutil.InputItemList[0].Value, &res1)
+	assert.Equal(t, testutil.InputItemList[0], res1)
+
+	var res2 testutil.TestItem
+	postTxn.Read("memory", testutil.InputItemList[1].Value, &res2)
+	assert.Equal(t, testutil.InputItemList[1], res2)
+
+	for i := 2; i <= 4; i++ {
+		var res testutil.TestItem
+		postTxn.Read("memory", testutil.InputItemList[i].Value, &res)
+		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
+	}
+
+	err = postTxn.Commit()
+	assert.NoError(t, err)
+
 }

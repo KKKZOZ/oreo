@@ -212,7 +212,16 @@ Abort 情况分为两种：
   + 需要测试本数据源上所有曾经写入的 record 是不是都没生效
 + conditionalUpdate 时发生冲突 (TestTxnAbortCausedByWriteConflict)
   + 事务还在 Prepare 阶段，需要**自行**把数据源上已经写入的数据 rollback
-+ conditionalUpdate 时线程终止
++ conditionalUpdate 时线程终止(或者之前写的 record 的 lease time 已经过期) 
+  + 单数据源-1：*TestSlowTransactionRecordExpiredWhenPrepare*
+    + 表现为：写入一连串的数据的途中，速度较慢，一开始写的数据 least time 过期，新事务对这一串数据进行修改，发现 lease time 已经过期并且没有对应的 TSR，认定为该事务出现问题，于是 rollback 对应的事务，并且标记该事务的 TSR 状态为 ABORTED
+    + 错误提示为 "prepare phase failed: write conflicted"
+  + 单数据源-2：*TestSlowTransactionRecordExpiredWhenWriteTSR*
+    + 表现情况同上
+    + 错误提示为 "transaction is aborted by other transaction" 
+  + 多数据源：
+    + 表现为：本事务在执行第二个数据源时速度过慢，导致第一个数据源写入的数据租约时间到期，新事物对第一个数据源中修改过的数据进行 rollback，并且标记对应的 TSR 为 ABORTED，导致本事务最后无法正常提交
+    + 错误提示为 "transaction is aborted by other transaction"
   + 由下一个读到相关 record 的事务来进行 rollback
 + commit 阶段时线程终止
   + 由下一个读到相关 record 的事务来进行 roll forward
@@ -276,14 +285,17 @@ Lock manager 也可以修改配置：
 
 由于每次新建一个 Transaction 都需要设置其相关的 Datastore 等设定，所以可以设置一个 Factory 类来帮助完成初始化
 
+使用 Factory 类有个问题：datastore 类不是 Thread-safe 的，如果让多个并发的 Transaction 使用同一个 datastore，TestConcurrentTransactionCreatedByFactory 这个测试通过不了，目前正在考虑两个可行的方案：
+
++ 将 Datastore 类变为 Thread-safe，这意味着对应的 transaction, datastore, connection 的逻辑都要跟着发生变化
++ 在 Datastore 类中再实现一个方法，`Copy()`，即返回一个参数与自己一模一样的新 Object
+    + 这种方法的问题是会复用底层的 Connection，如果对应的 Connection 不支持复用，也会出现一些潜在的 Bug
+    + MemoryConnection 是可以复用的，因为下层使用的是无状态的 Http 协议
+    + 对于其他 Connection 来说，情况就不一定了
+
 
 ### TODO
 
 Transaction: State 可以用 StateMachine 来管理状态
 
-#### 12.22
-
-+ Pass all tests
 + TransactionFactory
-+ TransactionFactory.config
-+ More tests

@@ -53,6 +53,8 @@ type Datastore interface {
 
 	// DeleteTSR deletes the transaction state record (TSR) for a transaction.
 	DeleteTSR(txnId string) error
+
+	Copy() Datastore
 }
 
 // BaseDataStore represents a base data store with a name and a transaction.

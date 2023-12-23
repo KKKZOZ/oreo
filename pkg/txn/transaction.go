@@ -253,11 +253,11 @@ func (t *Transaction) GetTSRState(txnId string) (config.State, error) {
 }
 
 // SetGlobalTimeSource sets the global time source for the transaction.
-// It takes the address and port of the time source server as parameters.
-// The time source is set to GLOBAL and the time URL is constructed using the provided address and port.
-func (t *Transaction) SetGlobalTimeSource(address string, port int) {
+// It takes a URL as a parameter and assigns it to the transaction's oracleURL field.
+// The timeSource field is set to GLOBAL.
+func (t *Transaction) SetGlobalTimeSource(url string) {
 	t.timeSource = GLOBAL
-	t.oracleURL = fmt.Sprintf("http://%s:%d", address, port)
+	t.oracleURL = url
 }
 
 // getTime returns the current time based on the time source configured in the Transaction.
