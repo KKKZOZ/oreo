@@ -1,6 +1,10 @@
 # Oreo - An Easy-to-use Distributed Transaciotn Framework
 
+<div align="center">
+
 ![Logo](./assets/img/logo.png)
+</div>
+
 
 Oreo is an open source implementation of Cherry Garcia protocol written in Go, it aims to provide an easy-to-use interface for enabling efficient multi-item transactions across heterogeneous key-value store.
 
@@ -28,7 +32,7 @@ It supports:
 
 ## Getting Started
 
-> Full example is in `examples/oreo_memory_basic`
+> Full example is in `examples/oreo_basic_with_memory_datastore`
 
 ```go
 func insertTwoUsers(txn *txn.Transaction) {
