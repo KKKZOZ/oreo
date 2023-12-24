@@ -10,21 +10,18 @@
   + 如果 readCache 中有对应的 key，则 `item.Version = readCache[key].Version`
 + 如果 writeCache 中已经有数据了，直接替换 value 即可
 
-
 在执行 delete 操作时：
 
 + 如果 writeCache 中有这项数据，说明版本号有对应，直接修改 `isDeleted` 即可
 + 如果 readCache 中有这项数据，说明版本号也有对应并且该数据还未修改过，直接修改 `isDeleted` 即可
 + 如果 writeCache 和 readCache 中都没有这个数据，说明是根据业务逻辑直接删除，需要执行一次 txn read 来确定版本号，否则会在 conditionalUpdate 时出错(没有正确的版本): TestDeleteWithoutRead
 
-
-
 ### Transaction
 
 整个事务的提交操作应该由 Transaction 来决定，所以 Transaction 至少要知道以下信息：
 
 + 本次事务中涉及到的 datastore
-+ 本次事务中的 globalDataStore 
++ 本次事务中的 globalDataStore
 
 在事务开始时，暂且认定 globalDataStore 也会参与该事务
 
@@ -58,7 +55,6 @@ Transaction Read:
       + if the record's $T_{lease\_time}$ has **not** expired (indicates that the transaction is running, for example, is executing another datastore's `conditionalUpdate`): read fails
       + if the record's $T_{lease\_time}$ has expired: rollback the record
 
-
 #### Transaction Commit
 
 两个阶段：
@@ -85,7 +81,6 @@ Prepare：
   + postTxn 需要检查 1，2 处于原状态，3，4，5 处于 fastTxn 修改后的状态
 
 如果慢事务此时进入 commit 阶段，打算提交，就会进入数据不一致的情况: TestSlowTransactionRecordExpiredConsistency
-
 
 ### Abstraction
 
@@ -118,6 +113,7 @@ conditionalUpdate 需要保障**对单个记录读写**的原子性和隔离性�
 这样很容易想到 race condition:
 
 在 Prepare Phase 的执行过程中：
+
 1. txn2 读 item1
 2. txn1 读 item1
 3. txn2 发现版本号一致，写入新的 item1
@@ -145,7 +141,6 @@ conditionalUpdate 需要保障**对单个记录读写**的原子性和隔离性�
   + 这样相当于组件中多了一个分布式锁
     + 需要考虑对应的 NPC 问题
 
-
 ### 关于 delete
 
 delete 操作在执行第二次时暂时默认为报错
@@ -157,7 +152,6 @@ delete 操作在论文中的描述是 "will only happen in the data store after 
 + `isDeleted`
 
 在 Transaction Read 中，只需要在知道可见性后进行一步额外的处理就行
-
 
 ### 关于 record 的版本维护
 
@@ -174,7 +168,6 @@ delete 操作在论文中的描述是 "will only happen in the data store after 
 
 + WriteTSR(key string)
 + DeleteTSR(key string)
-
 
 ### Test Case
 
@@ -202,7 +195,6 @@ delete 操作在论文中的描述是 "will only happen in the data store after 
 + 在本事务读某个数据时，对应的并发事务已经修改了该数据并且已经提交
   + TestRepeatableReadWhenAnotherCommitted
 
-
 Abort 情况分为两种：
 
 单数据源：
@@ -212,21 +204,31 @@ Abort 情况分为两种：
   + 需要测试本数据源上所有曾经写入的 record 是不是都没生效
 + conditionalUpdate 时发生冲突 (TestTxnAbortCausedByWriteConflict)
   + 事务还在 Prepare 阶段，需要**自行**把数据源上已经写入的数据 rollback
-+ conditionalUpdate 时线程终止(或者之前写的 record 的 lease time 已经过期) 
++ conditionalUpdate 时线程终止(或者之前写的 record 的 lease time 已经过期)
   + 单数据源-1：*TestSlowTransactionRecordExpiredWhenPrepare*
     + 表现为：写入一连串的数据的途中，速度较慢，一开始写的数据 least time 过期，新事务对这一串数据进行修改，发现 lease time 已经过期并且没有对应的 TSR，认定为该事务出现问题，于是 rollback 对应的事务，并且标记该事务的 TSR 状态为 ABORTED
     + 错误提示为 "prepare phase failed: write conflicted"
   + 单数据源-2：*TestSlowTransactionRecordExpiredWhenWriteTSR*
     + 表现情况同上
-    + 错误提示为 "transaction is aborted by other transaction" 
-  + 多数据源：
-    + 表现为：本事务在执行第二个数据源时速度过慢，导致第一个数据源写入的数据租约时间到期，新事物对第一个数据源中修改过的数据进行 rollback，并且标记对应的 TSR 为 ABORTED，导致本事务最后无法正常提交
     + 错误提示为 "transaction is aborted by other transaction"
-  + 由下一个读到相关 record 的事务来进行 rollback
++ writeTSR 时出错：*TestTransactionAbortWhenWritingTSR*
+  + 数据被 rollback
 + commit 阶段时线程终止
   + 由下一个读到相关 record 的事务来进行 roll forward
 
-多数据源同理
+多数据源:
+
++ conditionalUpdate 时出现冲突：
+  + 特指在第一个 datastore 完成 `Prepare()` 后，在其他 datastore 发生的冲突
+  + 这种情况下第一个 datastore 需要 rollback，后续的 datastore 需要 rollback 或者 clear the cache
++ conditionalUpdate 时线程终止(或者之前写的 record 的 lease time 已经过期)
+  + 多数据源：
+    + 表现为：本事务在执行第二个数据源时速度过慢，导致第一个数据源写入的数据租约时间到期，新事务对第一个数据源中修改过的数据进行 rollback，并且标记对应的 TSR 为 ABORTED，导致本事务最后无法正常提交
+    + 错误提示为 "transaction is aborted by other transaction"
+    + 由下一个读到相关 record 的事务来进行 rollback
++ commit 阶段时线程终止
+  + 由下一个读到相关 record 的事务来进行 roll forward
+
 
 ### ConditionalUpdate 时的状态分析
 
@@ -239,7 +241,6 @@ Abort 情况分为两种：
 + 版本号不一致
   + 检测到写写冲突（对方已提交），事务终止
 
-
 如果 oldItem 的状态为 Prepared:
 
 + 如果有对应的 TSR
@@ -248,13 +249,12 @@ Abort 情况分为两种：
   + $T_{least\_time}$ has **not** expired: 无法确定对方事务状态(可能还在进行中)，事务终止
   + $T_{least\_time}$ has expired: 无法确定对方事务状态，事务终止
 
-### Time Oracle 
+### Time Oracle
 
 提供以下两个功能：
 
 + 全局时间戳
 + 轻量级的锁管理
-
 
 ### Lock Manager
 
@@ -264,7 +264,6 @@ Lock manager 也可以修改配置：
 + GLOBAL
 
 如果设置为 LOCAL，就需要每个 Transaction 都去设置相同的 Locker
-
 
 锁：
 
@@ -279,7 +278,8 @@ Lock manager 也可以修改配置：
 + 如果客户端应用程序是单体架构，那么 TimeSource 和 LockerSource 都使用本地的就行，足够处理单个客户端的并发使用了
 + 如果客户端应用程序是分布式架构，那么 TimeSource 和 LockerSource 都必须使用全局的
 
-所以可以分情况讨论: 
+所以可以分情况讨论:
+
 + TimeSource 为全局的情况下，LockerSource 也必须为全局
 + TimeSource 为本地的情况下，LockerSource 可以为任意一种情况
 
@@ -289,10 +289,9 @@ Lock manager 也可以修改配置：
 
 + 将 Datastore 类变为 Thread-safe，这意味着对应的 transaction, datastore, connection 的逻辑都要跟着发生变化
 + 在 Datastore 类中再实现一个方法，`Copy()`，即返回一个参数与自己一模一样的新 Object
-    + 这种方法的问题是会复用底层的 Connection，如果对应的 Connection 不支持复用，也会出现一些潜在的 Bug
-    + MemoryConnection 是可以复用的，因为下层使用的是无状态的 Http 协议
-    + 对于其他 Connection 来说，情况就不一定了
-
+  + 这种方法的问题是会复用底层的 Connection，如果对应的 Connection 不支持复用，也会出现一些潜在的 Bug
+  + MemoryConnection 是可以复用的，因为下层使用的是无状态的 Http 协议
+  + 对于其他 Connection 来说，情况就不一定了
 
 ### TODO
 

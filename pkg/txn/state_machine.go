@@ -56,3 +56,7 @@ func (st *StateMachine) CheckState(state config.State) error {
 	}
 	return nil
 }
+
+func (st *StateMachine) GetState() config.State {
+	return st.state
+}

@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -691,6 +692,81 @@ func TestConcurrentTransaction(t *testing.T) {
 	assert.Equal(t, 1, successNum)
 }
 
+// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired memory item.
+// It creates a new memory database instance, inserts a memory item with an expired lease and a prepared memory item.
+// Then, it starts a transaction, reads the memory item, and verifies that the read item matches the expected value.
+// Finally, it commits the transaction and checks that the memory item has been updated to the committed state.
+func TestSimpleExpiredRead(t *testing.T) {
+	// Create a new memory database instance
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	tarMemItem := memory.MemoryItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
+		TxnId:    "99",
+		TxnState: config.COMMITTED,
+		TValid:   time.Now().Add(-10 * time.Second),
+		TLease:   time.Now().Add(-9 * time.Second),
+		Version:  1,
+	}
+
+	curMemItem := memory.MemoryItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		TxnId:    "100",
+		TxnState: config.PREPARED,
+		TValid:   time.Now().Add(-5 * time.Second),
+		TLease:   time.Now().Add(-4 * time.Second),
+		Prev:     util.ToJSONString(tarMemItem),
+		Version:  2,
+	}
+
+	conn := memory.NewMemoryConnection("localhost", 8321)
+	conn.Put("item1", &curMemItem)
+
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	var item testutil.TestItem
+	txn.Read("memory", "item1", &item)
+	assert.Equal(t, testutil.NewTestItem("item1"), item)
+	err := txn.Commit()
+	assert.NoError(t, err)
+	var actual memory.MemoryItem
+	conn.Get("item1", &actual)
+	assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
+}
+
+// A complex test
+// preTxn writes data to the memory database
+// slowTxn read all data and write all data, but it will block when conditionalUpdate item3 (sleep 4s)
+// so when slowTxn blocks, the internal state of memory database:
+// item1-slow PREPARED
+// item2-slow PREPARED
+// item3 COMMITTED
+// item4 COMMITTED
+// item5 COMMITTED
+// fastTxn read item3, item4, item5 and write them, then commit
+// the internal state of memory database:
+// item1-slow PREPARED
+// item2-slow PREPARED
+// item3-fast COMMITTED
+// item4-fast COMMITTED
+// item5-fast COMMITTED
+// Note: slowTxn blocks at item3 with the lock, but the lock will expire 100ms later
+// so fastTxn can acquire the lock and commit
+// then, slowTxn unblocks, it put item3-slow PREPARED to memory database (**This is **this is a NPC problem for distributed locks)
+// and slowTxn starts to conditionalUpdate item4,but it detects a write conflict,and it aborts(with rolling back all changes)
+// postTxn reads all data and verify them
+// so the final internal state of memory database:
+// item1 rollback to COMMITTED
+// item2 rollback to COMMITTED
+// item3 rollback to COMMITTED
+// item4-fast COMMITTED
+// item5-fast COMMITTED
 func TestSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	// run a memory database
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
@@ -709,7 +785,7 @@ func TestSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	go func() {
 		slowTxn := txn.NewTransaction()
 		conn := memory.NewMockMemoryConnection("localhost", 8321, 2, false,
-			func() error { time.Sleep(3 * time.Second); return nil })
+			func() error { time.Sleep(4 * time.Second); return nil })
 		mds := memory.NewMemoryDatastore("memory", conn)
 		slowTxn.AddDatastore(mds)
 		slowTxn.SetGlobalDatastore(mds)
@@ -722,10 +798,11 @@ func TestSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 			slowTxn.Write("memory", item.Value, result)
 		}
 		err := slowTxn.Commit()
-		assert.EqualError(t, err, "prepare phase failed: write conflicted")
+		assert.EqualError(t, err, "prepare phase failed: write conflicted: the record has been modified by others")
 	}()
 	time.Sleep(2 * time.Second)
 
+	// ensure the internal state of memory database
 	testConn := memory.NewMemoryConnection("localhost", 8321)
 	testConn.Connect()
 	var memItem1 memory.MemoryItem
@@ -754,6 +831,8 @@ func TestSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	err := fastTxn.Commit()
 	assert.NoError(t, err)
 
+	// wait for slowTxn to complete
+	time.Sleep(4 * time.Second)
 	postTxn := NewTransactionWithSetup()
 	postTxn.Start()
 
@@ -765,7 +844,11 @@ func TestSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	postTxn.Read("memory", testutil.InputItemList[1].Value, &res2)
 	assert.Equal(t, testutil.InputItemList[1], res2)
 
-	for i := 2; i <= 4; i++ {
+	var res3 testutil.TestItem
+	postTxn.Read("memory", testutil.InputItemList[2].Value, &res3)
+	assert.Equal(t, testutil.InputItemList[2], res3)
+
+	for i := 3; i <= 4; i++ {
 		var res testutil.TestItem
 		postTxn.Read("memory", testutil.InputItemList[i].Value, &res)
 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
@@ -776,6 +859,35 @@ func TestSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 
 }
 
+// A complex test
+// preTxn writes data to the memory database
+// slowTxn read all data and write all data, but it will block when conditionalUpdate item5 (sleep 5s)
+// so when slowTxn blocks, the internal state of memory database:
+// item1-slow PREPARED
+// item2-slow PREPARED
+// item3-slow PREPARED
+// item4-slow PREPARED
+// item5 COMMITTED
+// fastTxn read item3, item4, item5 and write them, then commit
+// (fastTxn realize item3 and item4 are expired, so it will first rollback, and write the TSR with ABORTED)
+// the internal state of memory database:
+// item1-slow PREPARED
+// item2-slow PREPARED
+// item3-fast COMMITTED
+// item4-fast COMMITTED
+// item5-fast COMMITTED
+// Note: slowTxn blocks at item5 with the lock, but the lock will expire 100ms later
+// so fastTxn can acquire the lock and commit
+// then, slowTxn unblocks, it put item5-slow PREPARED to memory database (**This is **this is a NPC problem for distributed locks)
+// and slowTxn checks whether there is a corresponding TSR with ABORTED, and yes!
+// so slowTxn will abort(with rolling back all changes)
+// postTxn reads all data and verify them
+// so the final internal state of memory database:
+// item1 rollback to COMMITTED
+// item2 rollback to COMMITTED
+// item3-fast COMMITTED
+// item4-fast COMMITTED
+// item5 rollback to COMMITTED
 func TestSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	// run a memory database
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
@@ -789,12 +901,13 @@ func TestSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	for _, item := range testutil.InputItemList {
 		preTxn.Write("memory", item.Value, item)
 	}
-	preTxn.Commit()
+	err := preTxn.Commit()
+	assert.NoError(t, err)
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := memory.NewMockMemoryConnection("localhost", 8321, 5, false,
-			func() error { time.Sleep(3 * time.Second); return nil })
+		conn := memory.NewMockMemoryConnection("localhost", 8321, 4, false,
+			func() error { time.Sleep(5 * time.Second); return nil })
 		mds := memory.NewMemoryDatastore("memory", conn)
 		slowTxn.AddDatastore(mds)
 		slowTxn.SetGlobalDatastore(mds)
@@ -809,31 +922,39 @@ func TestSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 		err := slowTxn.Commit()
 		assert.EqualError(t, err, "transaction is aborted by other transaction")
 	}()
-	time.Sleep(2 * time.Second)
 
+	time.Sleep(2 * time.Second)
 	testConn := memory.NewMemoryConnection("localhost", 8321)
 	testConn.Connect()
 
-	// all records should be PREPARED state
+	// all records should be PREPARED state except item5
 	for _, item := range testutil.InputItemList {
 		var memItem memory.MemoryItem
 		testConn.Get(item.Value, &memItem)
+		if item.Value == "item5" {
+			assert.Equal(t, util.ToJSONString(testutil.NewTestItem(item.Value)), memItem.Value)
+			assert.Equal(t, memItem.TxnState, config.COMMITTED)
+			continue
+		}
 		itemValue := item.Value + "-slow"
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem(itemValue)), memItem.Value)
 		assert.Equal(t, memItem.TxnState, config.PREPARED)
 	}
 
 	fastTxn := NewTransactionWithSetup()
-	fastTxn.Start()
+	err = fastTxn.Start()
+	assert.NoError(t, err)
 	for i := 2; i <= 4; i++ {
 		var result testutil.TestItem
 		fastTxn.Read("memory", testutil.InputItemList[i].Value, &result)
 		result.Value = testutil.InputItemList[i].Value + "-fast"
 		fastTxn.Write("memory", testutil.InputItemList[i].Value, result)
 	}
-	err := fastTxn.Commit()
+	err = fastTxn.Commit()
 	assert.NoError(t, err)
 
+	// wait for slowTxn to complete
+	time.Sleep(5 * time.Second)
 	postTxn := NewTransactionWithSetup()
 	postTxn.Start()
 
@@ -845,13 +966,104 @@ func TestSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	postTxn.Read("memory", testutil.InputItemList[1].Value, &res2)
 	assert.Equal(t, testutil.InputItemList[1], res2)
 
-	for i := 2; i <= 4; i++ {
+	for i := 2; i <= 3; i++ {
 		var res testutil.TestItem
 		postTxn.Read("memory", testutil.InputItemList[i].Value, &res)
 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
 	}
 
+	var res5 testutil.TestItem
+	postTxn.Read("memory", testutil.InputItemList[4].Value, &res5)
+	assert.Equal(t, testutil.InputItemList[4].Value, res5.Value)
+
 	err = postTxn.Commit()
 	assert.NoError(t, err)
 
+	// for debug only
+	// time.Sleep(10 * time.Second)
+}
+
+// A complex test
+// preTxn writes data to the memory database
+// slowTxn read all data and write all data, but it will block for 3s and **fail** when writing the TSR
+// so when slowTxn blocks, the internal state of memory database:
+// item1-slow PREPARED
+// item2-slow PREPARED
+// item3-slow PREPARED
+// item4-slow PREPARED
+// item5-slow PREPARED
+// testTxn read item1,item2,item3, item4
+// (testTxn realize item1,item2,item3, item4 are expired, so it will first rollback, and write the TSR with ABORTED)
+// the internal state of memory database:
+// item1 rollback to COMMITTED
+// item2 rollback to COMMITTED
+// item3 rollback to COMMITTED
+// item4 rollback to COMMITTED
+// item5-slow PREPARED
+// then, slowTxn unblocks, it fails to write the TSR, and it aborts(it tries to rollback all the items)
+// so slowTxn will abort(with rolling back all changes)
+// postTxn reads all data and verify them
+// so the final internal state of memory database:
+// item1 rollback to COMMITTED
+// item2 rollback to COMMITTED
+// item3 rollback to COMMITTED
+// item4 rollback to COMMITTED
+// item5 rollback to COMMITTED
+func TestTransactionAbortWhenWritingTSR(t *testing.T) {
+	// run a memory database
+	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	preTxn := NewTransactionWithSetup()
+	preTxn.Start()
+	for _, item := range testutil.InputItemList {
+		preTxn.Write("memory", item.Value, item)
+	}
+	err := preTxn.Commit()
+	if err != nil {
+		t.Errorf("preTxn commit err: %s", err)
+	}
+
+	txn := txn.NewTransaction()
+	conn := memory.NewMockMemoryConnection("localhost", 8321, 5, true,
+		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
+	mds := memory.NewMemoryDatastore("memory", conn)
+	txn.AddDatastore(mds)
+	txn.SetGlobalDatastore(mds)
+
+	txn.Start()
+	for _, item := range testutil.InputItemList {
+		var result testutil.TestItem
+		txn.Read("memory", item.Value, &result)
+		result.Value = item.Value + "-slow"
+		txn.Write("memory", item.Value, result)
+	}
+	err = txn.Commit()
+	assert.EqualError(t, err, "fail to write TSR")
+
+	testTxn := NewTransactionWithSetup()
+	testTxn.Start()
+
+	for i := 0; i <= 3; i++ {
+		item := testutil.InputItemList[i]
+		var memItem testutil.TestItem
+		testTxn.Read("memory", item.Value, &memItem)
+	}
+	err = testTxn.Commit()
+	assert.NoError(t, err)
+	postTxn := NewTransactionWithSetup()
+	postTxn.Start()
+	for i := 0; i <= 3; i++ {
+		item := testutil.InputItemList[i]
+		var memItem testutil.TestItem
+		postTxn.Read("memory", item.Value, &memItem)
+		assert.Equal(t, item.Value, memItem.Value)
+	}
+	var memItem memory.MemoryItem
+	conn.Get("item5", &memItem)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
+	assert.Equal(t, config.COMMITTED, memItem.TxnState)
 }

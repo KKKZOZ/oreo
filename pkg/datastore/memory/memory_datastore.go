@@ -97,6 +97,8 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		// we should rollback the record
 		// because the transaction that modified the record has been aborted
 		if item.TLease.Before(m.Txn.TxnStartTime) {
+			// the corresponding transaction is considered ABORTED
+			m.Txn.WriteTSR(item.TxnId, config.ABORTED)
 			item, err := m.rollback(item)
 			if err != nil {
 				return err
@@ -359,6 +361,10 @@ func (m *MemoryDatastore) rollback(item MemoryItem) (MemoryItem, error) {
 		return MemoryItem{}, err
 	}
 	err = m.conn.Put(item.Key, newItem)
+	if err != nil {
+		return MemoryItem{}, err
+	}
+
 	return newItem, err
 }
 

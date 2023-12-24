@@ -29,8 +29,10 @@ type Transaction struct {
 	TxnStartTime time.Time
 	// TxnCommitTime is the timestamp when the transaction was committed.
 	TxnCommitTime time.Time
-	// globalDataStore is the shared datastore for all transactions.
-	globalDataStore Datastore
+
+	// tsrMaintainer is used to maintain the TSR (Transaction Status Record)
+	// TSRMaintainer is responsible for handling and updating the status of transactions.
+	tsrMaintainer TSRMaintainer
 	// dataStoreMap is a map of transaction-specific datastores.
 	dataStoreMap map[string]Datastore
 	// timeSource represents the source of time for the transaction.
@@ -68,7 +70,7 @@ func (t *Transaction) Start() error {
 	}
 
 	// check nessary datastores are added
-	if t.globalDataStore == nil {
+	if t.tsrMaintainer == nil {
 		return errors.New("global datastore not set")
 	}
 	if len(t.dataStoreMap) == 0 {
@@ -104,7 +106,7 @@ func (t *Transaction) AddDatastore(ds Datastore) error {
 // SetGlobalDatastore sets the global datastore for the transaction.
 // It takes a Datastore parameter and assigns it to the globalDataStore field of the Transaction struct.
 func (t *Transaction) SetGlobalDatastore(ds Datastore) {
-	t.globalDataStore = ds
+	t.tsrMaintainer = ds.(TSRMaintainer)
 }
 
 // Read reads the value associated with the given key from the specified datastore.
@@ -179,9 +181,7 @@ func (t *Transaction) Commit() error {
 		}
 	}
 	if !success {
-		for _, ds := range t.dataStoreMap {
-			ds.Abort(true)
-		}
+		t.Abort()
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
@@ -193,8 +193,9 @@ func (t *Transaction) Commit() error {
 		return errors.New("transaction is aborted by other transaction")
 	}
 
-	err = t.WriteTSR(config.COMMITTED)
+	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
+		t.Abort()
 		return err
 	}
 
@@ -213,32 +214,40 @@ func (t *Transaction) Commit() error {
 // If the transaction is in a valid state, it sets the transaction state to ABORTED and calls the Abort method on each data store associated with the transaction.
 // Returns an error if any of the data store's Abort method returns an error, otherwise returns nil.
 func (t *Transaction) Abort() error {
+	lastState := t.GetState()
 	err := t.SetState(config.ABORTED)
 	if err != nil {
 		return err
 	}
+
+	hasCommitted := false
+	if lastState == config.COMMITTED {
+		hasCommitted = true
+	}
 	for _, ds := range t.dataStoreMap {
-		ds.Abort(false)
+		ds.Abort(hasCommitted)
 	}
 	return nil
 }
 
-// WriteTSR writes the transaction state record (TSR) for the given transaction.
-// It takes the transaction state as an argument and returns an error if any.
-// The TSR is written to the global data store using the transaction's ID.
-func (t *Transaction) WriteTSR(txnState config.State) error {
-	return t.globalDataStore.WriteTSR(t.TxnId, txnState)
+// WriteTSR writes the Transaction State Record (TSR) for the given transaction ID and state.
+// It uses the global data store to persist the TSR.
+// The txnId parameter specifies the ID of the transaction.
+// The txnState parameter specifies the state of the transaction.
+// Returns an error if there was a problem writing the TSR.
+func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
+	return t.tsrMaintainer.WriteTSR(txnId, txnState)
 }
 
 // DeleteTSR deletes the Transaction Status Record (TSR) associated with the Transaction.
 // It calls the DeleteTSR method of the globalDataStore to perform the deletion.
 // It returns an error if the deletion operation fails.
 func (t *Transaction) DeleteTSR() error {
-	return t.globalDataStore.DeleteTSR(t.TxnId)
+	return t.tsrMaintainer.DeleteTSR(t.TxnId)
 }
 
 func (t *Transaction) GetTSRState(txnId string) (config.State, error) {
-	return t.globalDataStore.ReadTSR(txnId)
+	return t.tsrMaintainer.ReadTSR(txnId)
 }
 
 // SetGlobalTimeSource sets the global time source for the transaction.
