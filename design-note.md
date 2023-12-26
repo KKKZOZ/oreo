@@ -295,6 +295,4 @@ Lock manager 也可以修改配置：
 
 ### TODO
 
-Transaction: State 可以用 StateMachine 来管理状态
-
 + TransactionFactory
