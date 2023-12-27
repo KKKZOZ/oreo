@@ -16,7 +16,3 @@ func NewMockMemoryDatastore(name string, conn *MemoryConnection) *MockMemoryData
 		},
 	}
 }
-
-func (m *MockMemoryDatastore) conditionalUpdate(item txn.Item) bool {
-	return true
-}

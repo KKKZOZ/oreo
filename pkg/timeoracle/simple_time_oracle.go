@@ -153,8 +153,9 @@ func (s *SimpleTimeOracle) WaitForStartUp(timeout time.Duration) error {
 // It shuts down the server and sends a message to the MsgChan indicating that the Simple Time Oracle has stopped.
 // It returns an error if there was an issue shutting down the server.
 func (s *SimpleTimeOracle) Stop() error {
-	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
 	s.server.Shutdown(ctx)
-	s.MsgChan <- "Simple Time Oracle stopped"
+	go func() { s.MsgChan <- "Simple Time Oracle stopped" }()
 	return nil
 }

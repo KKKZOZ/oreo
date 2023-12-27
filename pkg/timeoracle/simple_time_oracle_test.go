@@ -75,7 +75,7 @@ func TestSimpleTimeOracle_ServeUnlock(t *testing.T) {
 	// Lock the key before unlocking
 	err := oracle.locker.Lock("key", "id1", 2*time.Second)
 	if err != nil {
-		t.Fatal(fmt.Sprintf("Lock failed: %v", err))
+		t.Fatalf(fmt.Sprintf("Lock failed: %v", err))
 	}
 
 	req, err := http.NewRequest("GET", oracle.baseURL+"/unlock?"+data.Encode(), nil)

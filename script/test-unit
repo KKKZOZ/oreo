@@ -1,29 +1,38 @@
 #!/usr/bin/env bash
 set -e
 
-RED=$'\033[31m'
-GREEN=$'\033[32m'
-TEXTRESET=$'\033[0m' # reset the foreground colour
+RED=$'\e[1;31m'     # bold red text
+GREEN=$'\e[1;32m'   # bold green text
+YELLOW=$'\e[1;33m'  # bold yellow text
+WHITE=$'\e[1;37m'   # bold white text
+TEXTRESET=$'\e[0m'  # reset the foreground colour
 
 # -failfast -timeout=5m
 TESTFLAGS=(-cover "-coverprofile=cover.out" "${TESTFLAGS}")
 
 if [ -n "${VERBOSE}" ]; then
     TESTFLAGS+=(-v)
+    echo "${YELLOW}Verbose mode is on.${TEXTRESET}"
 elif [ -n "${VERBOSE_UNIT}" ]; then
     TESTFLAGS+=(-v)
+    echo "${YELLOW}Verbose unit mode is on.${TEXTRESET}"
 fi
 
-set +e
+echo "${WHITE}Starting tests...${TEXTRESET}"
 
+set +e
 # shellcheck disable=SC2086
 # shellcheck disable=SC2048
 go test ${TESTFLAGS[*]} ./pkg/...
-
 CODE=$?
+
+echo ""
+
 if [ ${CODE} != 0 ]; then
     echo "${RED}Tests failed [code ${CODE}].${TEXTRESET}"
     exit ${CODE}
 else
-    echo "${GREEN}Tests succeed.${TEXTRESET}"
+    echo "${GREEN}Tests succeed!${TEXTRESET}"
+    go tool cover -html=cover.out -o cover.html 
+    echo "${GREEN}Coverage report generated.${TEXTRESET}"
 fi

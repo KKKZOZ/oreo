@@ -104,7 +104,8 @@ func (m *MemoryDatabase) Start() error {
 }
 
 func (m *MemoryDatabase) Stop() {
-	ctx, _ := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
 	m.server.Shutdown(ctx)
 	go func() { m.MsgChan <- "Memory database stopped" }()
 }
