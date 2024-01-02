@@ -2,6 +2,7 @@ package txn
 
 import "github.com/kkkzoz/oreo/pkg/config"
 
+//go:generate mockery --name Datastore
 type TSRMaintainer interface {
 	// ReadTSR reads the transaction state record (TSR) for a transaction.
 	ReadTSR(txnId string) (config.State, error)

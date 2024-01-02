@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -112,8 +114,9 @@ func TestRedisConnection_GetItemNotFound(t *testing.T) {
 	assert.EqualError(t, err, fmt.Sprintf("key not found: %s", key))
 }
 
-func TestRedisConnectionPutAndGet(t *testing.T) {
+func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
 	conn := NewRedisConnection(nil)
+	conn.Delete("test_key")
 
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
@@ -140,7 +143,7 @@ func TestRedisConnectionPutAndGet(t *testing.T) {
 	}
 }
 
-func TestRedisConnectionReplaceAndGet(t *testing.T) {
+func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 	conn := NewRedisConnection(nil)
 
 	key := "test_key"
@@ -363,4 +366,126 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 	if item.TxnId != strconv.Itoa(globalId) {
 		t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId)
 	}
+}
+
+func TestRedisConnectionPutAndGet(t *testing.T) {
+	conn := NewRedisConnection(nil)
+	se := serializer.NewJSONSerializer()
+
+	key := "test_key"
+	person := testutil.NewDefaultPerson()
+	item := RedisItem{
+		Key:       key,
+		Value:     util.ToJSONString(person),
+		TxnId:     "1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-3 * time.Second),
+		TLease:    time.Now().Add(-2 * time.Second),
+		Prev:      "",
+		IsDeleted: false,
+		Version:   2,
+	}
+	bs, err := se.Serialize(item)
+	assert.NoError(t, err)
+	err = conn.Put(key, bs)
+	assert.NoError(t, err)
+
+	str, err := conn.Get(key)
+	assert.NoError(t, err)
+	var actualItem RedisItem
+	err = se.Deserialize([]byte(str), &actualItem)
+	assert.NoError(t, err)
+	if !actualItem.Equal(item) {
+		t.Errorf("\nexpect: \n%v, \nactual: \n%v", item, actualItem)
+	}
+}
+
+func TestRedisConnectionReplaceAndGet(t *testing.T) {
+	conn := NewRedisConnection(nil)
+	se := serializer.NewJSONSerializer()
+
+	key := "test_key"
+	person := testutil.NewDefaultPerson()
+	item := RedisItem{
+		Key:       key,
+		Value:     util.ToJSONString(person),
+		TxnId:     "1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-3 * time.Second),
+		TLease:    time.Now().Add(-2 * time.Second),
+		Prev:      "",
+		IsDeleted: false,
+		Version:   2,
+	}
+	bs, err := se.Serialize(item)
+	assert.NoError(t, err)
+	err = conn.Put(key, bs)
+	assert.NoError(t, err)
+
+	item.Version++
+	bs, _ = se.Serialize(item)
+	err = conn.Put(key, bs)
+	assert.NoError(t, err)
+
+	str, err := conn.Get(key)
+	assert.NoError(t, err)
+	var actualItem RedisItem
+	err = se.Deserialize([]byte(str), &actualItem)
+	assert.NoError(t, err)
+	if !actualItem.Equal(item) {
+		t.Errorf("\nexpect: \n%v, \nactual: \n%v", item, actualItem)
+	}
+}
+
+func TestRedisConnectionGetNoExist(t *testing.T) {
+	conn := NewRedisConnection(nil)
+
+	key := "test_key"
+	conn.Delete(key)
+
+	_, err := conn.Get(key)
+	assert.EqualError(t, err, fmt.Sprintf("key not found: %s", key))
+}
+
+func TestRedisConnectionPutDirectItem(t *testing.T) {
+	conn := NewRedisConnection(nil)
+
+	key := "test_key"
+	conn.Delete(key)
+
+	person := testutil.NewDefaultPerson()
+	item := RedisItem{
+		Key:       key,
+		Value:     util.ToJSONString(person),
+		TxnId:     "1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-3 * time.Second),
+		TLease:    time.Now().Add(-2 * time.Second),
+		Prev:      "",
+		IsDeleted: false,
+		Version:   2,
+	}
+
+	err := conn.Put(key, item)
+	assert.NoError(t, err)
+
+	// post check
+	str, err := conn.Get(key)
+	assert.NoError(t, err)
+	var actualItem RedisItem
+	err = json.Unmarshal([]byte(str), &actualItem)
+	assert.NoError(t, err)
+	if !actualItem.Equal(item) {
+		t.Errorf("\nexpect: \n%v, \nactual: \n%v", item, actualItem)
+	}
+}
+
+func TestRedisConnectionDeleteTwice(t *testing.T) {
+
+	conn := NewRedisConnection(nil)
+	conn.Put("test_key", "test_value")
+	err := conn.Delete("test_key")
+	assert.NoError(t, err)
+	err = conn.Delete("test_key")
+	assert.NoError(t, err)
 }

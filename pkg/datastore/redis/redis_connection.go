@@ -21,6 +21,13 @@ type ConnectionOptions struct {
 	se       serializer.Serializer
 }
 
+// NewRedisConnection creates a new Redis connection using the provided configuration options.
+// If the config parameter is nil, default values will be used.
+// The Redis connection is established using the specified address and password.
+// The address format should be in the form "host:port".
+// The se parameter is used for data serialization and deserialization.
+// If se is nil, a default JSON serializer will be used.
+// Returns a pointer to the created RedisConnection.
 func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
 	if config == nil {
 		config = &ConnectionOptions{
@@ -45,11 +52,14 @@ func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
 	}
 }
 
+// Connect establishes a connection to the Redis server.
+// It returns an error if the connection cannot be established.
 func (r *RedisConnection) Connect() error {
 	return nil
 }
 
-// GetItem retrieves the RedisItem for the given key.
+// GetItem retrieves a RedisItem from the Redis database based on the specified key.
+// If the key is not found, it returns an empty RedisItem and an error.
 func (r *RedisConnection) GetItem(key string) (RedisItem, error) {
 	var value RedisItem
 	err := r.rdb.HGetAll(context.Background(), key).Scan(&value)
@@ -63,6 +73,9 @@ func (r *RedisConnection) GetItem(key string) (RedisItem, error) {
 	return value, nil
 }
 
+// PutItem puts an item into the Redis database with the specified key and value.
+// It sets various fields of the RedisItem struct as hash fields in the Redis hash.
+// The function returns an error if there was a problem executing the Redis commands.
 func (r *RedisConnection) PutItem(key string, value RedisItem) error {
 	ctx := context.Background()
 	_, err := r.rdb.Pipelined(ctx, func(rdb redis.Pipeliner) error {
@@ -84,6 +97,10 @@ func (r *RedisConnection) PutItem(key string, value RedisItem) error {
 	return nil
 }
 
+// ConditionalUpdate updates the value of a Redis item if the version matches the provided value.
+// It takes a key string and a RedisItem value as parameters.
+// If the item does not exist or the version does not match, it returns a version mismatch error.
+// Otherwise, it updates the item with the provided values and returns the updated item.
 func (r *RedisConnection) ConditionalUpdate(key string, value RedisItem) error {
 	ctx := context.Background()
 	sha, err := r.rdb.ScriptLoad(ctx, `
@@ -114,14 +131,30 @@ end
 	return nil
 }
 
+// Get retrieves the value associated with the given key from the Redis database.
+// If the key is not found, it returns an empty string and an error indicating the key was not found.
+// If an error occurs during the retrieval, it returns an empty string and the error.
+// Otherwise, it returns the retrieved value and nil error.
 func (r *RedisConnection) Get(name string) (string, error) {
-	return r.rdb.Get(context.Background(), name).Result()
+	str, err := r.rdb.Get(context.Background(), name).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return "", fmt.Errorf("key not found: %s", name)
+		}
+		return "", err
+	}
+	return str, nil
 }
 
+// Put stores the given value with the specified name in the Redis database.
+// It will overwrite the value if the key already exists.
+// It returns an error if the operation fails.
 func (r *RedisConnection) Put(name string, value any) error {
 	return r.rdb.Set(context.Background(), name, value, 0).Err()
 }
 
+// Delete removes the specified key from Redis.
+// It allows for the deletion of a key that does not exist.
 func (r *RedisConnection) Delete(name string) error {
 	return r.rdb.Del(context.Background(), name).Err()
 }

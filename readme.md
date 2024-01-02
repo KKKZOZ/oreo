@@ -16,6 +16,13 @@ It supports:
 + MongoDB
 + CouchDB
 
+It provides:
+
++ Unified `Read(key string)`, `Write(key string, value any)`, `Delete(key string)` interfaces
++ ACID distributed transactions
+  + Snapshot Isolation
+  + Serializable
+
 > ***It is currently alpha***.
 
 ## Main Features
@@ -48,7 +55,9 @@ func insertTwoUsers(txn *txn.Transaction) {
 	}
 
 	txn.Start()
+	// write to memory datastore 1
 	txn.Write("mem1", "user1", user1)
+	// write to memory datastore 2
 	txn.Write("mem2", "user2", user2)
 	err := txn.Commit()
 	if err != nil {

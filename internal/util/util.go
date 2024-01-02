@@ -28,7 +28,7 @@ func GetBodyString(response *http.Response) string {
 func ToJSONString(value any) string {
 	jsonString, err := json.Marshal(value)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("ToJSONString error: %v\n", err)
 	}
 	return string(jsonString)
 }

@@ -328,6 +328,7 @@ func (m *MemoryDatastore) Commit() error {
 // If hasCommitted is true, it rolls back the changes made by the current transaction.
 // It returns an error if there is any issue during the rollback process.
 func (m *MemoryDatastore) Abort(hasCommitted bool) error {
+
 	if !hasCommitted {
 		m.writeCache = make(map[string]MemoryItem)
 		return nil
@@ -345,6 +346,7 @@ func (m *MemoryDatastore) Abort(hasCommitted bool) error {
 			m.rollback(item)
 		}
 	}
+	m.readCache = make(map[string]MemoryItem)
 	m.writeCache = make(map[string]MemoryItem)
 	return nil
 }
@@ -410,6 +412,8 @@ func (m *MemoryDatastore) DeleteTSR(txnId string) error {
 	return m.conn.Delete(txnId)
 }
 
+// Copy returns a new instance of MemoryDatastore that is a copy of the current datastore.
+// The copy shares the same name and connection as the original datastore.
 func (m *MemoryDatastore) Copy() txn.Datastore {
 	return NewMemoryDatastore(m.Name, m.conn)
 }

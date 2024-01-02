@@ -14,14 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMemory_TxnWrite(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
-
-	txn1 := NewTransactionWithSetup(MEMORY)
+func TestRedisTxnWrite(t *testing.T) {
+	txn1 := NewTransactionWithSetup(REDIS)
 
 	expected := testutil.NewDefaultPerson()
 
@@ -30,7 +24,7 @@ func TestMemory_TxnWrite(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
-	err = txn1.Write("memory", "John", expected)
+	err = txn1.Write(REDIS, "John", expected)
 	if err != nil {
 		t.Errorf("Error writing record: %s", err)
 	}
@@ -39,7 +33,7 @@ func TestMemory_TxnWrite(t *testing.T) {
 		t.Errorf("Error committing transaction: %s", err)
 	}
 
-	txn2 := NewTransactionWithSetup(MEMORY)
+	txn2 := NewTransactionWithSetup(REDIS)
 
 	// Txn2 reads the record
 	err = txn2.Start()
@@ -47,7 +41,7 @@ func TestMemory_TxnWrite(t *testing.T) {
 		t.Errorf("Error starting transaction: %s", err)
 	}
 	var actual testutil.Person
-	err = txn2.Read("memory", "John", &actual)
+	err = txn2.Read(REDIS, "John", &actual)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
@@ -62,20 +56,20 @@ func TestMemory_TxnWrite(t *testing.T) {
 	}
 }
 
-func TestMemory_ReadOwnWrite(t *testing.T) {
+func TestRedisReadOwnWrite(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Write(REDIS, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(MEMORY)
+	txn := NewTransactionWithSetup(REDIS)
 
 	// Txn reads the record
 	err := txn.Start()
@@ -83,17 +77,17 @@ func TestMemory_ReadOwnWrite(t *testing.T) {
 		t.Errorf("Error starting transaction: %s", err)
 	}
 	var person testutil.Person
-	err = txn.Read("memory", "John", &person)
+	err = txn.Read(REDIS, "John", &person)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
 
 	expected := person
 	expected.Age = 31
-	txn.Write("memory", "John", expected)
+	txn.Write(REDIS, "John", expected)
 
 	var actual testutil.Person
-	err = txn.Read("memory", "John", &actual)
+	err = txn.Read(REDIS, "John", &actual)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
@@ -108,72 +102,72 @@ func TestMemory_ReadOwnWrite(t *testing.T) {
 
 }
 
-func TestMemory_SingleKeyWriteConflict(t *testing.T) {
+func TestRedisSingleKeyWriteConflict(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Write(REDIS, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(MEMORY)
+	txn := NewTransactionWithSetup(REDIS)
 	txn.Start()
 	var person testutil.Person
-	txn.Read("memory", "John", &person)
+	txn.Read(REDIS, "John", &person)
 	person.Age = 31
-	txn.Write("memory", "John", person)
+	txn.Write(REDIS, "John", person)
 	var anotherPerson testutil.Person
-	txn.Read("memory", "John", &anotherPerson)
+	txn.Read(REDIS, "John", &anotherPerson)
 
 	if person != anotherPerson {
 		t.Errorf("Expected two read to be the same")
 	}
 	txn.Commit()
 
-	postTxn := NewTransactionWithSetup(MEMORY)
+	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 	var postPerson testutil.Person
-	postTxn.Read("memory", "John", &postPerson)
+	postTxn.Read(REDIS, "John", &postPerson)
 	if postPerson != person {
 		t.Errorf("got %v want %v", postPerson, person)
 	}
 
 }
 
-func TestMemory_MultileKeyWriteConflict(t *testing.T) {
+func TestRedisMultileKeyWriteConflict(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	item1 := testutil.NewTestItem("item1")
 	item2 := testutil.NewTestItem("item2")
 	preTxn.Start()
-	preTxn.Write("memory", "item1", item1)
-	preTxn.Write("memory", "item2", item2)
+	preTxn.Write(REDIS, "item1", item1)
+	preTxn.Write(REDIS, "item2", item2)
 	err := preTxn.Commit()
 	assert.Nil(t, err)
 
 	resChan := make(chan bool)
 
 	go func() {
-		txn1 := NewTransactionWithSetup(MEMORY)
+		txn1 := NewTransactionWithSetup(REDIS)
 		txn1.Start()
 		var item testutil.TestItem
-		txn1.Read("memory", "item1", &item)
+		txn1.Read(REDIS, "item1", &item)
 		item.Value = "item1-updated-by-txn1"
-		txn1.Write("memory", "item1", item)
+		txn1.Write(REDIS, "item1", item)
 
-		txn1.Read("memory", "item2", &item)
+		txn1.Read(REDIS, "item2", &item)
 		item.Value = "item2-updated-by-txn1"
-		txn1.Write("memory", "item2", item)
+		txn1.Write(REDIS, "item2", item)
 
 		err := txn1.Commit()
 		if err != nil {
@@ -185,16 +179,16 @@ func TestMemory_MultileKeyWriteConflict(t *testing.T) {
 	}()
 
 	go func() {
-		txn2 := NewTransactionWithSetup(MEMORY)
+		txn2 := NewTransactionWithSetup(REDIS)
 		txn2.Start()
 		var item testutil.TestItem
-		txn2.Read("memory", "item2", &item)
+		txn2.Read(REDIS, "item2", &item)
 		item.Value = "item2-updated-by-txn2"
-		txn2.Write("memory", "item2", item)
+		txn2.Write(REDIS, "item2", item)
 
-		txn2.Read("memory", "item1", &item)
+		txn2.Read(REDIS, "item1", &item)
 		item.Value = "item1-updated-by-txn2"
-		txn2.Write("memory", "item1", item)
+		txn2.Write(REDIS, "item1", item)
 
 		err := txn2.Commit()
 		if err != nil {
@@ -212,44 +206,44 @@ func TestMemory_MultileKeyWriteConflict(t *testing.T) {
 	if res1 == res2 {
 		t.Logf("res1: %v, res2: %v", res1, res2)
 		t.Errorf("Expected only one transaction to succeed")
-		postTxn := NewTransactionWithSetup(MEMORY)
+		postTxn := NewTransactionWithSetup(REDIS)
 		postTxn.Start()
 		var item testutil.TestItem
-		postTxn.Read("memory", "item1", &item)
+		postTxn.Read(REDIS, "item1", &item)
 		t.Logf("item1: %v", item)
-		postTxn.Read("memory", "item2", &item)
+		postTxn.Read(REDIS, "item2", &item)
 		t.Logf("item2: %v", item)
 		postTxn.Commit()
 	}
 }
 
-func TestMemory_RepeatableReadWhenRecordDeleted(t *testing.T) {
+func TestRedisRepeatableReadWhenRecordDeleted(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Write(REDIS, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(MEMORY)
-	manualTxn := NewTransactionWithSetup(MEMORY)
+	txn := NewTransactionWithSetup(REDIS)
+	manualTxn := NewTransactionWithSetup(REDIS)
 	txn.Start()
 	manualTxn.Start()
 
 	var person1 testutil.Person
-	txn.Read("memory", "John", &person1)
+	txn.Read(REDIS, "John", &person1)
 
 	// manualTxn deletes John and commits
 	manualTxn.Delete("memory", "John")
 	manualTxn.Commit()
 
 	var person2 testutil.Person
-	txn.Read("memory", "John", &person2)
+	txn.Read(REDIS, "John", &person2)
 
 	// two read in txn should be the same
 	if person1 != person2 {
@@ -257,45 +251,45 @@ func TestMemory_RepeatableReadWhenRecordDeleted(t *testing.T) {
 	}
 }
 
-func TestMemory_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
+func TestRedisRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Write(REDIS, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(MEMORY)
-	manualTxn1 := NewTransactionWithSetup(MEMORY)
+	txn := NewTransactionWithSetup(REDIS)
+	manualTxn1 := NewTransactionWithSetup(REDIS)
 	txn.Start()
 	manualTxn1.Start()
 
 	var person1 testutil.Person
-	txn.Read("memory", "John", &person1)
+	txn.Read(REDIS, "John", &person1)
 
 	// manualTxn1 updates John and commits
 	var manualPerson1 testutil.Person
-	manualTxn1.Read("memory", "John", &manualPerson1)
+	manualTxn1.Read(REDIS, "John", &manualPerson1)
 	manualPerson1.Age = 31
-	manualTxn1.Write("memory", "John", manualPerson1)
+	manualTxn1.Write(REDIS, "John", manualPerson1)
 	manualTxn1.Commit()
 
-	manualTxn2 := NewTransactionWithSetup(MEMORY)
+	manualTxn2 := NewTransactionWithSetup(REDIS)
 	manualTxn2.Start()
 	// manualTxn updates John again and commits
 	var manualPerson2 testutil.Person
-	manualTxn2.Read("memory", "John", &manualPerson2)
+	manualTxn2.Read(REDIS, "John", &manualPerson2)
 	manualPerson2.Age = 32
-	manualTxn2.Write("memory", "John", manualPerson2)
+	manualTxn2.Write(REDIS, "John", manualPerson2)
 	manualTxn2.Commit()
 
 	var person2 testutil.Person
-	err := txn.Read("memory", "John", &person2)
+	err := txn.Read(REDIS, "John", &person2)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
@@ -312,31 +306,31 @@ func TestMemory_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 // txn1 writes John
 // txn2 read John again
 // two read in txn2 should be the same
-func TestMemory_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
+func TestRedisRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Write(REDIS, "John", dataPerson)
 	preTxn.Commit()
 
 	resChan := make(chan bool)
 
 	go func() {
-		txn1 := NewTransactionWithSetup(MEMORY)
+		txn1 := NewTransactionWithSetup(REDIS)
 		txn1.Start()
 		var person testutil.Person
-		txn1.Read("memory", "John", &person)
+		txn1.Read(REDIS, "John", &person)
 		time.Sleep(50 * time.Millisecond)
 
 		// txn1 writes John
 		person.Age = 31
-		txn1.Write("memory", "John", person)
+		txn1.Write(REDIS, "John", person)
 
 		// wait for txn2 to read John
 		time.Sleep(100 * time.Millisecond)
@@ -349,16 +343,16 @@ func TestMemory_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	}()
 
 	go func() {
-		txn2 := NewTransactionWithSetup(MEMORY)
+		txn2 := NewTransactionWithSetup(REDIS)
 		txn2.Start()
 		var person1 testutil.Person
 		// txn2 reads John
-		txn2.Read("memory", "John", &person1)
+		txn2.Read(REDIS, "John", &person1)
 		time.Sleep(100 * time.Millisecond)
 
 		var person2 testutil.Person
 		// txn2 reads John again
-		txn2.Read("memory", "John", &person2)
+		txn2.Read(REDIS, "John", &person2)
 
 		// two read in txn2 should be the same
 		if person1 != person2 {
@@ -389,31 +383,31 @@ func TestMemory_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 // txn1 commits
 // txn2 read John again
 // two read in txn2 should be the same
-func TestMemory_RepeatableReadWhenAnotherCommitted(t *testing.T) {
+func TestRedisRepeatableReadWhenAnotherCommitted(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write("memory", "John", dataPerson)
+	preTxn.Write(REDIS, "John", dataPerson)
 	preTxn.Commit()
 
 	resChan := make(chan bool)
 
 	go func() {
-		txn1 := NewTransactionWithSetup(MEMORY)
+		txn1 := NewTransactionWithSetup(REDIS)
 		txn1.Start()
 		var person testutil.Person
-		txn1.Read("memory", "John", &person)
+		txn1.Read(REDIS, "John", &person)
 		time.Sleep(50 * time.Millisecond)
 
 		// txn1 writes John
 		person.Age = 31
-		txn1.Write("memory", "John", person)
+		txn1.Write(REDIS, "John", person)
 
 		err := txn1.Commit()
 		if err != nil {
@@ -424,16 +418,16 @@ func TestMemory_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 	}()
 
 	go func() {
-		txn2 := NewTransactionWithSetup(MEMORY)
+		txn2 := NewTransactionWithSetup(REDIS)
 		txn2.Start()
 		var person1 testutil.Person
 		// txn2 reads John
-		txn2.Read("memory", "John", &person1)
+		txn2.Read(REDIS, "John", &person1)
 		time.Sleep(100 * time.Millisecond)
 
 		var person2 testutil.Person
 		// txn2 reads John again
-		txn2.Read("memory", "John", &person2)
+		txn2.Read(REDIS, "John", &person2)
 
 		// two read in txn2 should be the same
 		if person1 != person2 {
@@ -457,31 +451,31 @@ func TestMemory_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 	}
 }
 
-func TestMemory_TxnAbort(t *testing.T) {
+func TestRedisTxnAbort(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	expected := testutil.NewDefaultPerson()
-	preTxn.Write("memory", "John", expected)
+	preTxn.Write(REDIS, "John", expected)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(MEMORY)
+	txn := NewTransactionWithSetup(REDIS)
 	var person testutil.Person
 	txn.Start()
-	txn.Read("memory", "John", &person)
+	txn.Read(REDIS, "John", &person)
 	person.Age = 31
-	txn.Write("memory", "John", person)
+	txn.Write(REDIS, "John", person)
 	txn.Abort()
 
-	postTxn := NewTransactionWithSetup(MEMORY)
+	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 	var postPerson testutil.Person
-	postTxn.Read("memory", "John", &postPerson)
+	postTxn.Read(REDIS, "John", &postPerson)
 	postTxn.Commit()
 	if postPerson != expected {
 		t.Errorf("got %v want %v", postPerson, expected)
@@ -489,7 +483,7 @@ func TestMemory_TxnAbort(t *testing.T) {
 }
 
 // TODO: WTF why this test failed when using CLI
-func TestMemory_TxnAbortCausedByWriteConflict(t *testing.T) {
+func TestRedisTxnAbortCausedByWriteConflict(t *testing.T) {
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
@@ -497,32 +491,32 @@ func TestMemory_TxnAbortCausedByWriteConflict(t *testing.T) {
 	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
 	assert.Nil(t, err)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write("memory", item.Value, item)
+		preTxn.Write(REDIS, item.Value, item)
 	}
 	err = preTxn.Commit()
 	assert.Nil(t, err)
 
-	txn := NewTransactionWithSetup(MEMORY)
-	manualTxn := NewTransactionWithSetup(MEMORY)
+	txn := NewTransactionWithSetup(REDIS)
+	manualTxn := NewTransactionWithSetup(REDIS)
 	txn.Start()
 	manualTxn.Start()
 
 	// txn reads all items and modify them
 	for _, item := range testutil.InputItemList {
 		var actual testutil.TestItem
-		txn.Read("memory", item.Value, &actual)
+		txn.Read(REDIS, item.Value, &actual)
 		actual.Value = item.Value + "updated"
-		txn.Write("memory", item.Value, actual)
+		txn.Write(REDIS, item.Value, actual)
 	}
 
 	// manualTxn reads one item and modify it
 	var manualItem testutil.TestItem
-	manualTxn.Read("memory", "item4", &manualItem)
+	manualTxn.Read(REDIS, "item4", &manualItem)
 	manualItem.Value = "item4updated"
-	manualTxn.Write("memory", "item4", manualItem)
+	manualTxn.Write(REDIS, "item4", manualItem)
 	err = manualTxn.Commit()
 	assert.Nil(t, err)
 
@@ -531,11 +525,11 @@ func TestMemory_TxnAbortCausedByWriteConflict(t *testing.T) {
 		t.Errorf("Expected error committing transaction")
 	}
 
-	postTxn := NewTransactionWithSetup(MEMORY)
+	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 	for _, item := range testutil.InputItemList {
 		var actual testutil.TestItem
-		postTxn.Read("memory", item.Value, &actual)
+		postTxn.Read(REDIS, item.Value, &actual)
 		if item.Value != "item4" {
 			assert.Equal(t, item, actual)
 		} else {
@@ -546,7 +540,7 @@ func TestMemory_TxnAbortCausedByWriteConflict(t *testing.T) {
 }
 
 // TODO: Dangetous test due to use of an unstable version of TransactionFactory
-func TestMemory_ConcurrentTransaction(t *testing.T) {
+func TestRedisConcurrentTransaction(t *testing.T) {
 	// Create a new memory database instance
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
@@ -578,12 +572,12 @@ func TestMemory_ConcurrentTransaction(t *testing.T) {
 
 	for i := 1; i <= conNum; i++ {
 		go func(id int) {
-			txn := NewTransactionWithSetup(MEMORY)
+			txn := NewTransactionWithSetup(REDIS)
 			txn.Start()
 			var person testutil.Person
-			txn.Read("memory", "John", &person)
+			txn.Read(REDIS, "John", &person)
 			person.Age = person.Age + id
-			txn.Write("memory", "John", person)
+			txn.Write(REDIS, "John", person)
 			err = txn.Commit()
 			if err != nil {
 				resChan <- false
@@ -607,7 +601,7 @@ func TestMemory_ConcurrentTransaction(t *testing.T) {
 // It creates a new memory database instance, inserts a memory item with an expired lease and a prepared memory item.
 // Then, it starts a transaction, reads the memory item, and verifies that the read item matches the expected value.
 // Finally, it commits the transaction and checks that the memory item has been updated to the committed state.
-func TestMemory_SimpleExpiredRead(t *testing.T) {
+func TestRedisSimpleExpiredRead(t *testing.T) {
 	// Create a new memory database instance
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
@@ -639,10 +633,10 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 	conn := memory.NewMemoryConnection("localhost", 8321)
 	conn.Put("item1", &curMemItem)
 
-	txn := NewTransactionWithSetup(MEMORY)
+	txn := NewTransactionWithSetup(REDIS)
 	txn.Start()
 	var item testutil.TestItem
-	txn.Read("memory", "item1", &item)
+	txn.Read(REDIS, "item1", &item)
 	assert.Equal(t, testutil.NewTestItem("item1"), item)
 	err := txn.Commit()
 	assert.NoError(t, err)
@@ -678,7 +672,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 // item3 rollback to COMMITTED
 // item4-fast COMMITTED
 // item5-fast COMMITTED
-func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
+func TestRedisSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	// run a memory database
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
@@ -686,10 +680,10 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write("memory", item.Value, item)
+		preTxn.Write(REDIS, item.Value, item)
 	}
 	preTxn.Commit()
 
@@ -704,9 +698,9 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
-			slowTxn.Read("memory", item.Value, &result)
+			slowTxn.Read(REDIS, item.Value, &result)
 			result.Value = item.Value + "-slow"
-			slowTxn.Write("memory", item.Value, result)
+			slowTxn.Write(REDIS, item.Value, result)
 		}
 		err := slowTxn.Commit()
 		assert.EqualError(t, err, "prepare phase failed: write conflicted: the record has been modified by others")
@@ -731,37 +725,37 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value)
 	assert.Equal(t, memItem3.TxnState, config.COMMITTED)
 
-	fastTxn := NewTransactionWithSetup(MEMORY)
+	fastTxn := NewTransactionWithSetup(REDIS)
 	fastTxn.Start()
 	for i := 2; i <= 4; i++ {
 		var result testutil.TestItem
-		fastTxn.Read("memory", testutil.InputItemList[i].Value, &result)
+		fastTxn.Read(REDIS, testutil.InputItemList[i].Value, &result)
 		result.Value = testutil.InputItemList[i].Value + "-fast"
-		fastTxn.Write("memory", testutil.InputItemList[i].Value, result)
+		fastTxn.Write(REDIS, testutil.InputItemList[i].Value, result)
 	}
 	err := fastTxn.Commit()
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
 	time.Sleep(4 * time.Second)
-	postTxn := NewTransactionWithSetup(MEMORY)
+	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 
 	var res1 testutil.TestItem
-	postTxn.Read("memory", testutil.InputItemList[0].Value, &res1)
+	postTxn.Read(REDIS, testutil.InputItemList[0].Value, &res1)
 	assert.Equal(t, testutil.InputItemList[0], res1)
 
 	var res2 testutil.TestItem
-	postTxn.Read("memory", testutil.InputItemList[1].Value, &res2)
+	postTxn.Read(REDIS, testutil.InputItemList[1].Value, &res2)
 	assert.Equal(t, testutil.InputItemList[1], res2)
 
 	var res3 testutil.TestItem
-	postTxn.Read("memory", testutil.InputItemList[2].Value, &res3)
+	postTxn.Read(REDIS, testutil.InputItemList[2].Value, &res3)
 	assert.Equal(t, testutil.InputItemList[2], res3)
 
 	for i := 3; i <= 4; i++ {
 		var res testutil.TestItem
-		postTxn.Read("memory", testutil.InputItemList[i].Value, &res)
+		postTxn.Read(REDIS, testutil.InputItemList[i].Value, &res)
 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
 	}
 
@@ -799,7 +793,7 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 // item3-fast COMMITTED
 // item4-fast COMMITTED
 // item5 rollback to COMMITTED
-func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
+func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	// run a memory database
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
@@ -807,10 +801,10 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write("memory", item.Value, item)
+		preTxn.Write(REDIS, item.Value, item)
 	}
 	err := preTxn.Commit()
 	assert.NoError(t, err)
@@ -826,9 +820,9 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
-			slowTxn.Read("memory", item.Value, &result)
+			slowTxn.Read(REDIS, item.Value, &result)
 			result.Value = item.Value + "-slow"
-			slowTxn.Write("memory", item.Value, result)
+			slowTxn.Write(REDIS, item.Value, result)
 		}
 		err := slowTxn.Commit()
 		assert.EqualError(t, err, "transaction is aborted by other transaction")
@@ -852,39 +846,39 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 		assert.Equal(t, memItem.TxnState, config.PREPARED)
 	}
 
-	fastTxn := NewTransactionWithSetup(MEMORY)
+	fastTxn := NewTransactionWithSetup(REDIS)
 	err = fastTxn.Start()
 	assert.NoError(t, err)
 	for i := 2; i <= 4; i++ {
 		var result testutil.TestItem
-		fastTxn.Read("memory", testutil.InputItemList[i].Value, &result)
+		fastTxn.Read(REDIS, testutil.InputItemList[i].Value, &result)
 		result.Value = testutil.InputItemList[i].Value + "-fast"
-		fastTxn.Write("memory", testutil.InputItemList[i].Value, result)
+		fastTxn.Write(REDIS, testutil.InputItemList[i].Value, result)
 	}
 	err = fastTxn.Commit()
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
 	time.Sleep(5 * time.Second)
-	postTxn := NewTransactionWithSetup(MEMORY)
+	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 
 	var res1 testutil.TestItem
-	postTxn.Read("memory", testutil.InputItemList[0].Value, &res1)
+	postTxn.Read(REDIS, testutil.InputItemList[0].Value, &res1)
 	assert.Equal(t, testutil.InputItemList[0], res1)
 
 	var res2 testutil.TestItem
-	postTxn.Read("memory", testutil.InputItemList[1].Value, &res2)
+	postTxn.Read(REDIS, testutil.InputItemList[1].Value, &res2)
 	assert.Equal(t, testutil.InputItemList[1], res2)
 
 	for i := 2; i <= 3; i++ {
 		var res testutil.TestItem
-		postTxn.Read("memory", testutil.InputItemList[i].Value, &res)
+		postTxn.Read(REDIS, testutil.InputItemList[i].Value, &res)
 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
 	}
 
 	var res5 testutil.TestItem
-	postTxn.Read("memory", testutil.InputItemList[4].Value, &res5)
+	postTxn.Read(REDIS, testutil.InputItemList[4].Value, &res5)
 	assert.Equal(t, testutil.InputItemList[4].Value, res5.Value)
 
 	err = postTxn.Commit()
@@ -920,7 +914,7 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 // item3 rollback to COMMITTED
 // item4 rollback to COMMITTED
 // item5 rollback to COMMITTED
-func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
+func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
 	// run a memory database
 	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
 	go memoryDatabase.Start()
@@ -928,10 +922,10 @@ func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
 	defer func() { go memoryDatabase.Stop() }()
 	time.Sleep(100 * time.Millisecond)
 
-	preTxn := NewTransactionWithSetup(MEMORY)
+	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write("memory", item.Value, item)
+		preTxn.Write(REDIS, item.Value, item)
 	}
 	err := preTxn.Commit()
 	if err != nil {
@@ -948,29 +942,29 @@ func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
-		txn.Read("memory", item.Value, &result)
+		txn.Read(REDIS, item.Value, &result)
 		result.Value = item.Value + "-slow"
-		txn.Write("memory", item.Value, result)
+		txn.Write(REDIS, item.Value, result)
 	}
 	err = txn.Commit()
 	assert.EqualError(t, err, "fail to write TSR")
 
-	testTxn := NewTransactionWithSetup(MEMORY)
+	testTxn := NewTransactionWithSetup(REDIS)
 	testTxn.Start()
 
 	for i := 0; i <= 3; i++ {
 		item := testutil.InputItemList[i]
 		var memItem testutil.TestItem
-		testTxn.Read("memory", item.Value, &memItem)
+		testTxn.Read(REDIS, item.Value, &memItem)
 	}
 	err = testTxn.Commit()
 	assert.NoError(t, err)
-	postTxn := NewTransactionWithSetup(MEMORY)
+	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 	for i := 0; i <= 3; i++ {
 		item := testutil.InputItemList[i]
 		var memItem testutil.TestItem
-		postTxn.Read("memory", item.Value, &memItem)
+		postTxn.Read(REDIS, item.Value, &memItem)
 		assert.Equal(t, item.Value, memItem.Value)
 	}
 	var memItem memory.MemoryItem

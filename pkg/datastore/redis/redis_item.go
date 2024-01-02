@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -50,4 +51,8 @@ func (r *RedisItem) Equal(other RedisItem) bool {
 		r.Prev == other.Prev &&
 		r.IsDeleted == other.IsDeleted &&
 		r.Version == other.Version
+}
+
+func (r RedisItem) MarshalBinary() (data []byte, err error) {
+	return json.Marshal(r)
 }
