@@ -262,8 +262,9 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 	}
 }
 
-func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
-	// Create a new redis datastore
+// TestSimpleReadWhenPreparedWithTSRInCOMMITTED tests the scenario where a simple read operation is performed
+// on a record which is in PREPARED state and has a TSR in COMMITTED state.
+func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
@@ -312,6 +313,66 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 
 	// Delete the TSR
 	conn.Delete("100")
+}
+
+// TestSimpleReadWhenPreparedWithTSRInABORTED tests the scenario where a simple read operation is performed
+// on a record which is in PREPARED state and has a TSR in ABORTED state.
+func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
+	conn := NewRedisConnection(&ConnectionOptions{
+		Address: "localhost:6379",
+	})
+	rds := NewRedisDatastore("redis", conn)
+	txn := txn.NewTransaction()
+	txn.AddDatastore(rds)
+	txn.SetGlobalDatastore(rds)
+
+	// initialize the redis database
+	tarMemItem := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
+		TxnId:    "99",
+		TxnState: config.COMMITTED,
+		TValid:   time.Now().Add(-10 * time.Second),
+		TLease:   time.Now().Add(-9 * time.Second),
+		Version:  1,
+	}
+
+	curMemItem := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		TxnId:    "TestSimpleReadWhenPreparedWithTSRInABORTED",
+		TxnState: config.PREPARED,
+		TValid:   time.Now().Add(-5 * time.Second),
+		TLease:   time.Now().Add(-4 * time.Second),
+		Prev:     util.ToJSONString(tarMemItem),
+		Version:  2,
+	}
+
+	key := "John"
+	conn.PutItem(key, curMemItem)
+
+	// Write the TSR
+	conn.Put("TestSimpleReadWhenPreparedWithTSRInABORTED", config.ABORTED)
+
+	// Start the transaction
+	err := txn.Start()
+	if err != nil {
+		t.Errorf("Error starting transaction: %s", err)
+	}
+
+	// Read the value
+	var result testutil.TestItem
+	err = txn.Read("redis", key, &result)
+	if err != nil {
+		t.Errorf("Error reading from redis datastore: %s", err)
+	}
+	expected := testutil.NewTestItem("item1")
+	if result != expected {
+		t.Errorf("got %v want %v", result, expected)
+	}
+
+	// Delete the TSR
+	conn.Delete("TestSimpleReadWhenPreparedWithTSRInABORTED")
 }
 
 func TestSimpleReadWhenPrepareExpired(t *testing.T) {
@@ -421,6 +482,69 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 	if err.Error() != errors.New("dirty Read").Error() {
 		t.Errorf("Error reading from redis datastore: %s", err)
 	}
+}
+
+func TestSimpleWriteAndRead(t *testing.T) {
+
+	// Start the transaction
+	txn := NewTransactionWithSetup()
+	err := txn.Start()
+	if err != nil {
+		t.Errorf("Error starting transaction: %s", err)
+	}
+
+	// Write the value
+	key := "John"
+	person := testutil.Person{
+		Name: "John",
+		Age:  30,
+	}
+	err = txn.Write("redis", key, person)
+	if err != nil {
+		t.Errorf("Error writing to redis datastore: %s", err)
+	}
+
+	// Read the value
+	var result testutil.Person
+	err = txn.Read("redis", key, &result)
+	if err != nil {
+		t.Errorf("Error reading from redis datastore: %s", err)
+	}
+
+	// Check the result
+	if result != person {
+		t.Errorf("got %v want %v", result, person)
+	}
+}
+
+func TestSimpleDirectWrite(t *testing.T) {
+
+	preTxn := NewTransactionWithSetup()
+	preTxn.Start()
+	key := "John"
+	prePerson := testutil.NewPerson("John-pre")
+	preTxn.Write("redis", key, prePerson)
+	err := preTxn.Commit()
+	assert.NoError(t, err)
+
+	// Start the transaction
+	txn := NewTransactionWithSetup()
+	err = txn.Start()
+	if err != nil {
+		t.Errorf("Error starting transaction: %s", err)
+	}
+
+	// Write the value
+	person := testutil.Person{
+		Name: "John",
+		Age:  30,
+	}
+	err = txn.Write("redis", key, person)
+	if err != nil {
+		t.Errorf("Error writing to redis datastore: %s", err)
+	}
+	err = txn.Commit()
+	assert.NoError(t, err)
 }
 
 func TestSimpleWriteAndReadLocal(t *testing.T) {
@@ -890,7 +1014,6 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 		go func(id int) {
 			txn := NewTransactionWithSetup()
 			txn.Start()
-			time.Sleep(100 * time.Millisecond)
 			for _, item := range testutil.InputItemList {
 				var res testutil.TestItem
 				txn.Read("redis", item.Value, &res)
@@ -898,6 +1021,7 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 				txn.Write("redis", item.Value, res)
 			}
 
+			time.Sleep(100 * time.Millisecond)
 			err := txn.Commit()
 			if err != nil {
 				if err.Error() != "prepare phase failed: write conflicted: the record is in PREPARED state" &&

@@ -510,6 +510,50 @@ func TestSimpleWriteAndRead(t *testing.T) {
 	}
 }
 
+func TestSimpleDirectWrite(t *testing.T) {
+	// run a memory database
+	memoryDatabase := NewMemoryDatabase("localhost", 8321)
+	go memoryDatabase.Start()
+	defer func() { <-memoryDatabase.MsgChan }()
+	defer func() { go memoryDatabase.Stop() }()
+	time.Sleep(100 * time.Millisecond)
+
+	// Create a new transaction
+	txn := txn.NewTransaction()
+
+	// Create a new memory datastore
+	conn := NewMemoryConnection("localhost", 8321)
+	mds := NewMemoryDatastore("memory", conn)
+	txn.AddDatastore(mds)
+	txn.SetGlobalDatastore(mds)
+
+	preTxn := NewTransactionWithSetup()
+	preTxn.Start()
+	key := "John"
+	prePerson := testutil.NewPerson("John-pre")
+	preTxn.Write("memory", key, prePerson)
+	err := preTxn.Commit()
+	assert.NoError(t, err)
+
+	// Start the transaction
+	err = txn.Start()
+	if err != nil {
+		t.Errorf("Error starting transaction: %s", err)
+	}
+
+	// Write the value
+	person := testutil.Person{
+		Name: "John",
+		Age:  30,
+	}
+	err = txn.Write("memory", key, person)
+	if err != nil {
+		t.Errorf("Error writing to memory datastore: %s", err)
+	}
+	err = txn.Commit()
+	assert.NoError(t, err)
+}
+
 func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 	// run a memory database
 	memoryDatabase := NewMemoryDatabase("localhost", 8321)

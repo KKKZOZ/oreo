@@ -326,7 +326,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 	assert.NoError(t, err)
 
 	resChan := make(chan bool)
-	currentNum := 100
+	currentNum := 300
 	globalId := 0
 	for i := 1; i <= currentNum; i++ {
 		go func(id int) {

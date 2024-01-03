@@ -14,13 +14,13 @@ import (
 
 type RedisDatastore struct {
 	txn.BaseDataStore
-	conn       *RedisConnection
+	conn       RedisConnectionInterface
 	readCache  map[string]RedisItem
 	writeCache map[string]RedisItem
 	se         serializer.Serializer
 }
 
-func NewRedisDatastore(name string, conn *RedisConnection) *RedisDatastore {
+func NewRedisDatastore(name string, conn RedisConnectionInterface) *RedisDatastore {
 	return &RedisDatastore{
 		BaseDataStore: txn.BaseDataStore{Name: name},
 		conn:          conn,
@@ -60,20 +60,31 @@ func (r *RedisDatastore) Read(key string, value any) error {
 		return r.readAsCommitted(item, value)
 	}
 	if item.TxnState == config.PREPARED {
-		_, err := r.Txn.GetTSRState(item.TxnId)
+		state, err := r.Txn.GetTSRState(item.TxnId)
 		if err == nil {
-			// if TSR exists
+			switch state {
+			// if TSR exists and the TSR is in COMMITTED state
 			// roll forward the record
-			item, err = r.rollForward(item)
-			if err != nil {
-				return err
+			case config.COMMITTED:
+				item, err = r.rollForward(item)
+				if err != nil {
+					return err
+				}
+				return r.readAsCommitted(item, value)
+			// if TSR exists and the TSR is in ABORTED state
+			// we should rollback the record
+			// because the transaction that modified the record has been aborted
+			case config.ABORTED:
+				item, err := r.rollback(item)
+				if err != nil {
+					return err
+				}
+				return r.readAsCommitted(item, value)
 			}
-			return r.readAsCommitted(item, value)
 		}
 		// if TSR does not exist
 		// and if t_lease has expired
 		// we should rollback the record
-		// because the transaction that modified the record has been aborted
 		if item.TLease.Before(r.Txn.TxnStartTime) {
 			// the corresponding transaction is considered ABORTED
 			err := r.Txn.WriteTSR(item.TxnId, config.ABORTED)
@@ -144,7 +155,12 @@ func (r *RedisDatastore) Write(key string, value any) error {
 	if item, ok := r.readCache[key]; ok {
 		version = item.Version
 	} else {
-		version = 1
+		oldItem, err := r.conn.GetItem(key)
+		if err != nil {
+			version = 0
+		} else {
+			version = oldItem.Version
+		}
 	}
 	// else Write a record to the cache
 	r.writeCache[key] = RedisItem{
@@ -325,7 +341,7 @@ func (r *RedisDatastore) rollback(item RedisItem) (RedisItem, error) {
 	var newItem RedisItem
 	err := r.se.Deserialize([]byte(item.Prev), &newItem)
 	if err != nil {
-		return RedisItem{}, err
+		return RedisItem{}, errors.Join(errors.New("rollback failed"), err)
 	}
 	err = r.conn.PutItem(item.Key, newItem)
 	if err != nil {
@@ -365,13 +381,13 @@ func (r *RedisDatastore) ReadTSR(txnId string) (config.State, error) {
 	return txnState, nil
 }
 
-// WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the memory datastore.
+// WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the redis datastore.
 // It returns an error if the write operation fails.
 func (r *RedisDatastore) WriteTSR(txnId string, txnState config.State) error {
 	return r.conn.Put(txnId, util.ToString(txnState))
 }
 
-// DeleteTSR deletes a transaction with the given transaction ID from the memory datastore.
+// DeleteTSR deletes a transaction with the given transaction ID from the redis datastore.
 // It returns an error if the deletion operation fails.
 func (r *RedisDatastore) DeleteTSR(txnId string) error {
 	return r.conn.Delete(txnId)

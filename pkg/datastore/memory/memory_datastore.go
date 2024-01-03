@@ -80,17 +80,27 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		return m.readAsCommitted(item, value)
 	}
 	if item.TxnState == config.PREPARED {
-
-		//TODO: what if the state is ABORTED
-		_, err := m.Txn.GetTSRState(item.TxnId)
+		state, err := m.Txn.GetTSRState(item.TxnId)
 		if err == nil {
-			// if TSR exists
-			// roll forward the record
-			item, err = m.rollForward(item)
-			if err != nil {
-				return err
+			// if TSR exists and the TSR is in COMMITTED state
+			if state == config.COMMITTED {
+				// roll forward the record
+				item, err = m.rollForward(item)
+				if err != nil {
+					return err
+				}
+				return m.readAsCommitted(item, value)
 			}
-			return m.readAsCommitted(item, value)
+			if state == config.ABORTED {
+				// if TSR exists and the TSR is in ABORTED state
+				// we should rollback the record
+				// because the transaction that modified the record has been aborted
+				item, err := m.rollback(item)
+				if err != nil {
+					return err
+				}
+				return m.readAsCommitted(item, value)
+			}
 		}
 		// if TSR does not exist
 		// and if t_lease has expired
@@ -156,10 +166,17 @@ func (m *MemoryDatastore) Write(key string, value any) error {
 	}
 
 	var version int
+	// if the record is in the readCache
 	if item, ok := m.readCache[key]; ok {
 		version = item.Version
 	} else {
-		version = 1
+		var oldItem MemoryItem
+		err := m.conn.Get(key, &oldItem)
+		if err != nil {
+			version = 0
+		} else {
+			version = oldItem.Version
+		}
 	}
 	// else Write a record to the cache
 	m.writeCache[key] = MemoryItem{

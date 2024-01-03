@@ -6,8 +6,11 @@
 在执行 write 操作时：
 
 + 如果 writeCache 中没有该数据，说明是第一次写入，从 readCache 中获取：
-  + 如果 readCache 中没有对应的 key，说明这个数据是新创建的，把 version 设为 1
   + 如果 readCache 中有对应的 key，则 `item.Version = readCache[key].Version`
+  + 如果 readCache 中没有对应的 key，可能有两个情况
+    + 该记录为直接逻辑写，需要向数据库中读对应可见版本来确定版本号：
+      + 如果有可见的合法数据，确定版本号
+      + 如果没有可见的合法数据，即认为该记录为新建数据，把 version 设为 1
 + 如果 writeCache 中已经有数据了，直接替换 value 即可
 
 在执行 delete 操作时：
@@ -50,10 +53,12 @@ Transaction Read:
     + else go to previous one(by unmarshal the `Prev` field)
     + **abort** if it can not find a corresponding one
   + if the record is in PREPARED:
-    + if TSR (Transaction Status Record) exists (indicates that the transaction did commit): the record is considerer COMMITTED(*roll forward*)
+    + if TSR (Transaction Status Record) exists:
+      + if the TSR is in COMMITTED (indicates that the transaction did commit): the record is considered COMMITTED(*roll forward*)
+      + if the TSR is in ABORTED (indicates that the transaction is aborted by another transcation probably due to lease time expire): *rollback the record*
     + if there is no TSR:
       + if the record's $T_{lease\_time}$ has **not** expired (indicates that the transaction is running, for example, is executing another datastore's `conditionalUpdate`): read fails
-      + if the record's $T_{lease\_time}$ has expired: rollback the record
+      + if the record's $T_{lease\_time}$ has expired: *rollback the record*
 
 #### Transaction Commit
 
@@ -180,7 +185,7 @@ delete 操作在论文中的描述是 "will only happen in the data store after 
 
 + 两个并行的 Transaction 之间的情况
   + 写冲突(TestSingleKeyWriteConflict)：读同一个数据，然后同时写，应该有一个成功有一个失败
-  + 全局有序的写冲突(TestMultiKeyWriteConflict)：读两个数据，然后同时写，按照 AB 和 BA 的顺序执行写，只有一个事物能成功
+  + 全局有序的写冲突(TestMultiKeyWriteConflict)：读两个数据，然后同时写，按照 AB 和 BA 的顺序执行写，只有一个事务能成功
 
 可以按照 Postgres 的可见性检查来写测试样例：
 
@@ -205,10 +210,10 @@ Abort 情况分为两种：
 + conditionalUpdate 时发生冲突 (TestTxnAbortCausedByWriteConflict)
   + 事务还在 Prepare 阶段，需要**自行**把数据源上已经写入的数据 rollback
 + conditionalUpdate 时线程终止(或者之前写的 record 的 lease time 已经过期)
-  + 单数据源-1：*TestSlowTransactionRecordExpiredWhenPrepare*
+  + 单数据源-1：*TestSlowTransactionRecordExpiredWhenPrepare_Conflict*
     + 表现为：写入一连串的数据的途中，速度较慢，一开始写的数据 least time 过期，新事务对这一串数据进行修改，发现 lease time 已经过期并且没有对应的 TSR，认定为该事务出现问题，于是 rollback 对应的事务，并且标记该事务的 TSR 状态为 ABORTED
     + 错误提示为 "prepare phase failed: write conflicted"
-  + 单数据源-2：*TestSlowTransactionRecordExpiredWhenWriteTSR*
+  + 单数据源-2：*TestSlowTransactionRecordExpiredWhenPrepare_NoConflict*
     + 表现情况同上
     + 错误提示为 "transaction is aborted by other transaction"
 + writeTSR 时出错：*TestTransactionAbortWhenWritingTSR*

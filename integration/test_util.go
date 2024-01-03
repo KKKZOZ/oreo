@@ -11,6 +11,12 @@ const (
 	REDIS  = "redis"
 )
 
+func NewRedisConnection() *redis.RedisConnection {
+	return redis.NewRedisConnection(&redis.ConnectionOptions{
+		Address: "localhost:6379",
+	})
+}
+
 func NewTransactionWithSetup(tp string) *txn.Transaction {
 	txn := txn.NewTransaction()
 	if tp == "memory" {

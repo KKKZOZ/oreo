@@ -8,16 +8,20 @@ import (
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/datastore/memory"
+	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/factory"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRedisTxnWrite(t *testing.T) {
-	txn1 := NewTransactionWithSetup(REDIS)
 
+	txn1 := NewTransactionWithSetup(REDIS)
 	expected := testutil.NewDefaultPerson()
+
+	// clear the data
+	conn := NewRedisConnection()
+	conn.Delete("John")
 
 	// Txn1 writes the record
 	err := txn1.Start()
@@ -57,11 +61,6 @@ func TestRedisTxnWrite(t *testing.T) {
 }
 
 func TestRedisReadOwnWrite(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
@@ -103,11 +102,6 @@ func TestRedisReadOwnWrite(t *testing.T) {
 }
 
 func TestRedisSingleKeyWriteConflict(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
@@ -140,11 +134,11 @@ func TestRedisSingleKeyWriteConflict(t *testing.T) {
 }
 
 func TestRedisMultileKeyWriteConflict(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
+
+	// clear the data
+	conn := NewRedisConnection()
+	conn.Delete("item1")
+	conn.Delete("item2")
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	item1 := testutil.NewTestItem("item1")
@@ -218,11 +212,6 @@ func TestRedisMultileKeyWriteConflict(t *testing.T) {
 }
 
 func TestRedisRepeatableReadWhenRecordDeleted(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
@@ -252,11 +241,6 @@ func TestRedisRepeatableReadWhenRecordDeleted(t *testing.T) {
 }
 
 func TestRedisRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
@@ -307,11 +291,6 @@ func TestRedisRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 // txn2 read John again
 // two read in txn2 should be the same
 func TestRedisRepeatableReadWhenAnotherUncommitted(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
@@ -384,11 +363,6 @@ func TestRedisRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 // txn2 read John again
 // two read in txn2 should be the same
 func TestRedisRepeatableReadWhenAnotherCommitted(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
@@ -452,11 +426,6 @@ func TestRedisRepeatableReadWhenAnotherCommitted(t *testing.T) {
 }
 
 func TestRedisTxnAbort(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
@@ -484,19 +453,13 @@ func TestRedisTxnAbort(t *testing.T) {
 
 // TODO: WTF why this test failed when using CLI
 func TestRedisTxnAbortCausedByWriteConflict(t *testing.T) {
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
-	assert.Nil(t, err)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
 		preTxn.Write(REDIS, item.Value, item)
 	}
-	err = preTxn.Commit()
+	err := preTxn.Commit()
 	assert.Nil(t, err)
 
 	txn := NewTransactionWithSetup(REDIS)
@@ -539,21 +502,14 @@ func TestRedisTxnAbortCausedByWriteConflict(t *testing.T) {
 	postTxn.Commit()
 }
 
-// TODO: Dangetous test due to use of an unstable version of TransactionFactory
 func TestRedisConcurrentTransaction(t *testing.T) {
-	// Create a new memory database instance
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
-	// Create a new memory datastore instance
-	memDst1 := memory.NewMemoryDatastore("mem1", memory.NewMemoryConnection("localhost", 8321))
+	// Create a new redis datastore instance
+	redisDst1 := redis.NewRedisDatastore("redis1", NewRedisConnection())
 
 	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
-		DatastoreList:    []txn.Datastore{memDst1},
-		GlobalDatastore:  memDst1,
+		DatastoreList:    []txn.Datastore{redisDst1},
+		GlobalDatastore:  redisDst1,
 		TimeOracleSource: txn.LOCAL,
 		LockerSource:     txn.LOCAL,
 	})
@@ -562,22 +518,27 @@ func TestRedisConcurrentTransaction(t *testing.T) {
 	preTxn := txnFactory.NewTransaction()
 	preTxn.Start()
 	person := testutil.NewDefaultPerson()
-	preTxn.Write("mem1", "John", person)
+	preTxn.Write(REDIS, "John", person)
 	err = preTxn.Commit()
 	assert.NoError(t, err)
 
 	resChan := make(chan bool)
+	conNum := 100
 
-	conNum := 10
+	conn := NewRedisConnection()
 
 	for i := 1; i <= conNum; i++ {
 		go func(id int) {
-			txn := NewTransactionWithSetup(REDIS)
+			txn := txn.NewTransaction()
+			rds := redis.NewRedisDatastore("redis", conn)
+			txn.AddDatastore(rds)
+			txn.SetGlobalDatastore(rds)
 			txn.Start()
 			var person testutil.Person
 			txn.Read(REDIS, "John", &person)
 			person.Age = person.Age + id
 			txn.Write(REDIS, "John", person)
+			time.Sleep(1000 * time.Millisecond)
 			err = txn.Commit()
 			if err != nil {
 				resChan <- false
@@ -597,19 +558,14 @@ func TestRedisConcurrentTransaction(t *testing.T) {
 	assert.Equal(t, 1, successNum)
 }
 
-// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired memory item.
-// It creates a new memory database instance, inserts a memory item with an expired lease and a prepared memory item.
-// Then, it starts a transaction, reads the memory item, and verifies that the read item matches the expected value.
-// Finally, it commits the transaction and checks that the memory item has been updated to the committed state.
+// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired redis item.
+// It inserts a redis item with an expired lease and a PREPARED state
+// Then, it starts a transaction, reads the redis item,
+// and verifies that the read item matches the expected value.
+// Finally, it commits the transaction and checks that
+// the redis item has been updated to the committed state.
 func TestRedisSimpleExpiredRead(t *testing.T) {
-	// Create a new memory database instance
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
-
-	tarMemItem := memory.MemoryItem{
+	tarMemItem := redis.RedisItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "99",
@@ -619,10 +575,10 @@ func TestRedisSimpleExpiredRead(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := memory.MemoryItem{
+	curMemItem := redis.RedisItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		TxnId:    "100",
+		TxnId:    "TestRedisSimpleExpiredRead",
 		TxnState: config.PREPARED,
 		TValid:   time.Now().Add(-5 * time.Second),
 		TLease:   time.Now().Add(-4 * time.Second),
@@ -630,55 +586,49 @@ func TestRedisSimpleExpiredRead(t *testing.T) {
 		Version:  2,
 	}
 
-	conn := memory.NewMemoryConnection("localhost", 8321)
-	conn.Put("item1", &curMemItem)
+	conn := redis.NewRedisConnection(nil)
+	conn.PutItem("item1", curMemItem)
 
 	txn := NewTransactionWithSetup(REDIS)
 	txn.Start()
+
 	var item testutil.TestItem
 	txn.Read(REDIS, "item1", &item)
 	assert.Equal(t, testutil.NewTestItem("item1"), item)
 	err := txn.Commit()
 	assert.NoError(t, err)
-	var actual memory.MemoryItem
-	conn.Get("item1", &actual)
+	actual, err := conn.GetItem("item1")
+	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
+
 }
 
 // A complex test
-// preTxn writes data to the memory database
+// preTxn writes data to the redis database
 // slowTxn read all data and write all data, but it will block when conditionalUpdate item3 (sleep 4s)
-// so when slowTxn blocks, the internal state of memory database:
+// so when slowTxn blocks, the internal state of redis database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3 COMMITTED
 // item4 COMMITTED
 // item5 COMMITTED
 // fastTxn read item3, item4, item5 and write them, then commit
-// the internal state of memory database:
+// the internal state of redis database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-fast COMMITTED
 // item4-fast COMMITTED
 // item5-fast COMMITTED
-// Note: slowTxn blocks at item3 with the lock, but the lock will expire 100ms later
-// so fastTxn can acquire the lock and commit
-// then, slowTxn unblocks, it put item3-slow PREPARED to memory database (**This is **this is a NPC problem for distributed locks)
-// and slowTxn starts to conditionalUpdate item4,but it detects a write conflict,and it aborts(with rolling back all changes)
+// then, slowTxn unblocks, it starts to conditionalUpdate item3
+// and it detects a version mismatch,so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of memory database:
+// so the final internal state of redis database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
-// item3 rollback to COMMITTED
+// item3-fast COMMITTED
 // item4-fast COMMITTED
 // item5-fast COMMITTED
-func TestRedisSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
-	// run a memory database
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
+func TestRedisSlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
@@ -689,11 +639,11 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := memory.NewMockMemoryConnection("localhost", 8321, 2, false,
-			func() error { time.Sleep(4 * time.Second); return nil })
-		mds := memory.NewMemoryDatastore("memory", conn)
-		slowTxn.AddDatastore(mds)
-		slowTxn.SetGlobalDatastore(mds)
+		conn := redis.NewMockRedisConnection("localhost", 6379, 2, false,
+			func() error { time.Sleep(2 * time.Second); return nil })
+		rds := redis.NewRedisDatastore("redis", conn)
+		slowTxn.AddDatastore(rds)
+		slowTxn.SetGlobalDatastore(rds)
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -705,23 +655,22 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 		err := slowTxn.Commit()
 		assert.EqualError(t, err, "prepare phase failed: write conflicted: the record has been modified by others")
 	}()
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 
-	// ensure the internal state of memory database
-	testConn := memory.NewMemoryConnection("localhost", 8321)
+	// ensure the internal state of redis database
+	testConn := redis.NewRedisConnection(&redis.ConnectionOptions{
+		Address: "localhost:6379",
+	})
 	testConn.Connect()
-	var memItem1 memory.MemoryItem
-	testConn.Get("item1", &memItem1)
+	memItem1, _ := testConn.GetItem("item1")
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value)
 	assert.Equal(t, memItem1.TxnState, config.PREPARED)
 
-	var memItem2 memory.MemoryItem
-	testConn.Get("item2", &memItem2)
+	memItem2, _ := testConn.GetItem("item2")
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item2-slow")), memItem2.Value)
 	assert.Equal(t, memItem2.TxnState, config.PREPARED)
 
-	var memItem3 memory.MemoryItem
-	testConn.Get("item3", &memItem3)
+	memItem3, _ := testConn.GetItem("item3")
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value)
 	assert.Equal(t, memItem3.TxnState, config.COMMITTED)
 
@@ -737,7 +686,7 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
-	time.Sleep(4 * time.Second)
+	time.Sleep(1 * time.Second)
 	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 
@@ -749,11 +698,7 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	postTxn.Read(REDIS, testutil.InputItemList[1].Value, &res2)
 	assert.Equal(t, testutil.InputItemList[1], res2)
 
-	var res3 testutil.TestItem
-	postTxn.Read(REDIS, testutil.InputItemList[2].Value, &res3)
-	assert.Equal(t, testutil.InputItemList[2], res3)
-
-	for i := 3; i <= 4; i++ {
+	for i := 2; i <= 4; i++ {
 		var res testutil.TestItem
 		postTxn.Read(REDIS, testutil.InputItemList[i].Value, &res)
 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
@@ -765,41 +710,33 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 }
 
 // A complex test
-// preTxn writes data to the memory database
-// slowTxn read all data and write all data, but it will block when conditionalUpdate item5 (sleep 5s)
-// so when slowTxn blocks, the internal state of memory database:
+// preTxn writes data to the redis database
+// slowTxn read all data and write all data,
+// but it will block when conditionalUpdate item5 (sleep 5s)
+// so when slowTxn blocks, the internal state of redis database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-slow PREPARED
 // item4-slow PREPARED
 // item5 COMMITTED
-// fastTxn read item3, item4, item5 and write them, then commit
+// fastTxn read item3, item4 and write them, then commit
 // (fastTxn realize item3 and item4 are expired, so it will first rollback, and write the TSR with ABORTED)
-// the internal state of memory database:
+// the internal state of redis database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-fast COMMITTED
 // item4-fast COMMITTED
-// item5-fast COMMITTED
-// Note: slowTxn blocks at item5 with the lock, but the lock will expire 100ms later
-// so fastTxn can acquire the lock and commit
-// then, slowTxn unblocks, it put item5-slow PREPARED to memory database (**This is **this is a NPC problem for distributed locks)
-// and slowTxn checks whether there is a corresponding TSR with ABORTED, and yes!
-// so slowTxn will abort(with rolling back all changes)
+// item5 COMMITTED
+// then, slowTxn unblocks, it conditionalUpdate item5 then check the TSR state
+// the TSR is marked as ABORTED, so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of memory database:
+// so the final internal state of redis database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
 // item3-fast COMMITTED
 // item4-fast COMMITTED
-// item5 rollback to COMMITTED
-func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
-	// run a memory database
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
+// item5 COMMITTED
+func TestRedisSlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
@@ -811,11 +748,11 @@ func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := memory.NewMockMemoryConnection("localhost", 8321, 4, false,
-			func() error { time.Sleep(5 * time.Second); return nil })
-		mds := memory.NewMemoryDatastore("memory", conn)
-		slowTxn.AddDatastore(mds)
-		slowTxn.SetGlobalDatastore(mds)
+		conn := redis.NewMockRedisConnection("localhost", 6379, 4, false,
+			func() error { time.Sleep(2 * time.Second); return nil })
+		rds := redis.NewRedisDatastore("redis", conn)
+		slowTxn.AddDatastore(rds)
+		slowTxn.SetGlobalDatastore(rds)
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -828,14 +765,16 @@ func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 		assert.EqualError(t, err, "transaction is aborted by other transaction")
 	}()
 
-	time.Sleep(2 * time.Second)
-	testConn := memory.NewMemoryConnection("localhost", 8321)
+	time.Sleep(1 * time.Second)
+	testConn := redis.NewRedisConnection(&redis.ConnectionOptions{
+		Address: "localhost:6379",
+	})
 	testConn.Connect()
 
 	// all records should be PREPARED state except item5
 	for _, item := range testutil.InputItemList {
-		var memItem memory.MemoryItem
-		testConn.Get(item.Value, &memItem)
+		memItem, err := testConn.GetItem(item.Value)
+		assert.NoError(t, err)
 		if item.Value == "item5" {
 			assert.Equal(t, util.ToJSONString(testutil.NewTestItem(item.Value)), memItem.Value)
 			assert.Equal(t, memItem.TxnState, config.COMMITTED)
@@ -849,7 +788,7 @@ func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	fastTxn := NewTransactionWithSetup(REDIS)
 	err = fastTxn.Start()
 	assert.NoError(t, err)
-	for i := 2; i <= 4; i++ {
+	for i := 2; i <= 3; i++ {
 		var result testutil.TestItem
 		fastTxn.Read(REDIS, testutil.InputItemList[i].Value, &result)
 		result.Value = testutil.InputItemList[i].Value + "-fast"
@@ -859,7 +798,7 @@ func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 	postTxn := NewTransactionWithSetup(REDIS)
 	postTxn.Start()
 
@@ -889,9 +828,10 @@ func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 }
 
 // A complex test
-// preTxn writes data to the memory database
-// slowTxn read all data and write all data, but it will block for 3s and **fail** when writing the TSR
-// so when slowTxn blocks, the internal state of memory database:
+// preTxn writes data to the redis database
+// slowTxn read all data and write all data,
+// but it will block for 3s and **fail** when writing the TSR
+// so when slowTxn blocks, the internal state of redis database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-slow PREPARED
@@ -899,7 +839,7 @@ func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 // item5-slow PREPARED
 // testTxn read item1,item2,item3, item4
 // (testTxn realize item1,item2,item3, item4 are expired, so it will first rollback, and write the TSR with ABORTED)
-// the internal state of memory database:
+// the internal state of redis database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
 // item3 rollback to COMMITTED
@@ -908,19 +848,13 @@ func TestRedisSlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 // then, slowTxn unblocks, it fails to write the TSR, and it aborts(it tries to rollback all the items)
 // so slowTxn will abort(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of memory database:
+// so the final internal state of redis database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
 // item3 rollback to COMMITTED
 // item4 rollback to COMMITTED
 // item5 rollback to COMMITTED
 func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
-	// run a memory database
-	memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
-	go memoryDatabase.Start()
-	defer func() { <-memoryDatabase.MsgChan }()
-	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
 
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
@@ -933,9 +867,9 @@ func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
 	}
 
 	txn := txn.NewTransaction()
-	conn := memory.NewMockMemoryConnection("localhost", 8321, 5, true,
+	conn := redis.NewMockRedisConnection("localhost", 6379, 5, true,
 		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
-	mds := memory.NewMemoryDatastore("memory", conn)
+	mds := redis.NewRedisDatastore("redis", conn)
 	txn.AddDatastore(mds)
 	txn.SetGlobalDatastore(mds)
 
@@ -967,8 +901,9 @@ func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
 		postTxn.Read(REDIS, item.Value, &memItem)
 		assert.Equal(t, item.Value, memItem.Value)
 	}
-	var memItem memory.MemoryItem
-	conn.Get("item5", &memItem)
+
+	memItem, err := conn.GetItem("item5")
+	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)
 }
