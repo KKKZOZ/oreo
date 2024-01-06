@@ -2,6 +2,7 @@ package locker
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -261,7 +262,7 @@ func TestMemoryLocker_MultipleConcurrentHolds(t *testing.T) {
 		go func(locker *MemoryLocker, id int) {
 			err := locker.Lock("key16", fmt.Sprintf("id%d", id), time.Duration(id)*time.Millisecond)
 			if err != nil {
-				t.Fatalf("Failed to acquire the lock: %v", err)
+				log.Fatalf("Failed to acquire the lock: %v", err)
 			}
 
 			atomic.AddInt32(&count, 1)
@@ -269,7 +270,7 @@ func TestMemoryLocker_MultipleConcurrentHolds(t *testing.T) {
 
 			err = locker.Unlock("key16", fmt.Sprintf("id%d", id))
 			if err != nil {
-				t.Fatalf("Failed to release the lock: %v", err)
+				log.Fatalf("Failed to release the lock: %v", err)
 			}
 
 			atomic.AddInt32(&count, -1)

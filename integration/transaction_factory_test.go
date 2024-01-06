@@ -161,6 +161,7 @@ func TestConcurrentTransactionCreatedByFactory(t *testing.T) {
 			txn.Read("mem1", "John", &person)
 			person.Age = person.Age + id
 			txn.Write("mem1", "John", person)
+			time.Sleep(1000 * time.Millisecond)
 			err = txn.Commit()
 			if err != nil {
 				resChan <- false

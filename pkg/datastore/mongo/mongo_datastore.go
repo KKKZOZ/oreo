@@ -1,4 +1,4 @@
-package redis
+package mongo
 
 import (
 	"cmp"
@@ -12,29 +12,29 @@ import (
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
-type RedisDatastore struct {
+type MongoDatastore struct {
 	txn.BaseDataStore
-	conn       RedisConnectionInterface
-	readCache  map[string]RedisItem
-	writeCache map[string]RedisItem
+	conn       MongoConnectionInterface
+	readCache  map[string]MongoItem
+	writeCache map[string]MongoItem
 	se         serializer.Serializer
 }
 
-func NewRedisDatastore(name string, conn RedisConnectionInterface) *RedisDatastore {
-	return &RedisDatastore{
+func NewMongoDatastore(name string, conn MongoConnectionInterface) *MongoDatastore {
+	return &MongoDatastore{
 		BaseDataStore: txn.BaseDataStore{Name: name},
 		conn:          conn,
-		readCache:     make(map[string]RedisItem),
-		writeCache:    make(map[string]RedisItem),
+		readCache:     make(map[string]MongoItem),
+		writeCache:    make(map[string]MongoItem),
 		se:            serializer.NewJSONSerializer(),
 	}
 }
 
-func (r *RedisDatastore) Start() error {
+func (r *MongoDatastore) Start() error {
 	return r.conn.Connect()
 }
 
-func (r *RedisDatastore) Read(key string, value any) error {
+func (r *MongoDatastore) Read(key string, value any) error {
 
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
@@ -103,7 +103,7 @@ func (r *RedisDatastore) Read(key string, value any) error {
 
 }
 
-func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
+func (r *MongoDatastore) readAsCommitted(item MongoItem, value any) error {
 	if item.TValid.Before(r.Txn.TxnStartTime) {
 		// if the record has been deleted
 		if item.IsDeleted {
@@ -116,7 +116,7 @@ func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
 		r.readCache[item.Key] = item
 		return nil
 	}
-	var preItem RedisItem
+	var preItem MongoItem
 	err := r.se.Deserialize([]byte(item.Prev), &preItem)
 	if err != nil {
 		// The transaction needs to be aborted
@@ -138,7 +138,7 @@ func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
 	}
 }
 
-func (r *RedisDatastore) Write(key string, value any) error {
+func (r *MongoDatastore) Write(key string, value any) error {
 	bs, err := r.se.Serialize(value)
 	if err != nil {
 		return err
@@ -163,7 +163,7 @@ func (r *RedisDatastore) Write(key string, value any) error {
 		}
 	}
 	// else Write a record to the cache
-	r.writeCache[key] = RedisItem{
+	r.writeCache[key] = MongoItem{
 		Key:       key,
 		Value:     str,
 		TxnId:     r.Txn.TxnId,
@@ -175,12 +175,12 @@ func (r *RedisDatastore) Write(key string, value any) error {
 	return nil
 }
 
-func (r *RedisDatastore) Prev(key string, record string) {
+func (r *MongoDatastore) Prev(key string, record string) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (r *RedisDatastore) Delete(key string) error {
+func (r *MongoDatastore) Delete(key string) error {
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
 		if item.IsDeleted {
@@ -207,7 +207,7 @@ func (r *RedisDatastore) Delete(key string) error {
 		version = item.Version
 	}
 
-	r.writeCache[key] = RedisItem{
+	r.writeCache[key] = MongoItem{
 		Key:       key,
 		IsDeleted: true,
 		TxnId:     r.Txn.TxnId,
@@ -219,12 +219,12 @@ func (r *RedisDatastore) Delete(key string) error {
 	return nil
 }
 
-func (r *RedisDatastore) conditionalUpdate(item txn.Item) error {
-	memItem := item.(RedisItem)
+func (r *MongoDatastore) conditionalUpdate(item txn.Item) error {
+	memItem := item.(MongoItem)
 	oldItem, err := r.conn.GetItem(memItem.Key)
 	if err != nil {
 		// this is a new record
-		newItem, _ := r.updateMetadata(memItem, RedisItem{})
+		newItem, _ := r.updateMetadata(memItem, MongoItem{})
 		// Write the new item to the data store
 		return r.conn.PutItem(newItem.Key, newItem)
 	}
@@ -239,7 +239,7 @@ func (r *RedisDatastore) conditionalUpdate(item txn.Item) error {
 	return nil
 }
 
-func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (RedisItem, error) {
+func (r *MongoDatastore) updateMetadata(newItem MongoItem, oldItem MongoItem) (MongoItem, error) {
 	// clear the Prev field of the old item
 	oldItem.Prev = ""
 	// update record's metadata
@@ -254,15 +254,15 @@ func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (R
 	return newItem, nil
 }
 
-func (r *RedisDatastore) Prepare() error {
-	records := make([]RedisItem, 0, len(r.writeCache))
+func (r *MongoDatastore) Prepare() error {
+	records := make([]MongoItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
 		records = append(records, v)
 	}
 	// sort records by key
 	// TODO: global consistent hash order
 	slices.SortFunc(
-		records, func(i, j RedisItem) int {
+		records, func(i, j MongoItem) int {
 			return cmp.Compare(i.Key, j.Key)
 		},
 	)
@@ -279,7 +279,7 @@ func (r *RedisDatastore) Prepare() error {
 // It iterates over the write cache and updates each record's state to COMMITTED.
 // After updating the records, it clears the write cache.
 // Returns an error if there is any issue updating the records or clearing the cache.
-func (r *RedisDatastore) Commit() error {
+func (r *MongoDatastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
 	for _, v := range r.writeCache {
 		item, err := r.conn.GetItem(v.Key)
@@ -293,8 +293,8 @@ func (r *RedisDatastore) Commit() error {
 		}
 	}
 	// clear the cache
-	r.writeCache = make(map[string]RedisItem)
-	r.readCache = make(map[string]RedisItem)
+	r.writeCache = make(map[string]MongoItem)
+	r.readCache = make(map[string]MongoItem)
 	return nil
 }
 
@@ -302,10 +302,10 @@ func (r *RedisDatastore) Commit() error {
 // If hasCommitted is false, it clears the write cache.
 // If hasCommitted is true, it rolls back the changes made by the current transaction.
 // It returns an error if there is any issue during the rollback process.
-func (r *RedisDatastore) Abort(hasCommitted bool) error {
+func (r *MongoDatastore) Abort(hasCommitted bool) error {
 
 	if !hasCommitted {
-		r.writeCache = make(map[string]RedisItem)
+		r.writeCache = make(map[string]MongoItem)
 		return nil
 	}
 
@@ -320,34 +320,34 @@ func (r *RedisDatastore) Abort(hasCommitted bool) error {
 			r.rollback(item)
 		}
 	}
-	r.readCache = make(map[string]RedisItem)
-	r.writeCache = make(map[string]RedisItem)
+	r.readCache = make(map[string]MongoItem)
+	r.writeCache = make(map[string]MongoItem)
 	return nil
 }
 
-func (r *RedisDatastore) Recover(key string) {
+func (r *MongoDatastore) Recover(key string) {
 	//TODO implement me
 	panic("implement me")
 }
 
 // rollback overwrites the record with the application data and metadata that found in field Prev
-func (r *RedisDatastore) rollback(item RedisItem) (RedisItem, error) {
-	var newItem RedisItem
+func (r *MongoDatastore) rollback(item MongoItem) (MongoItem, error) {
+	var newItem MongoItem
 	err := r.se.Deserialize([]byte(item.Prev), &newItem)
 	if err != nil {
-		return RedisItem{}, errors.Join(errors.New("rollback failed"), err)
+		return MongoItem{}, errors.Join(errors.New("rollback failed"), err)
 	}
 	err = r.conn.PutItem(item.Key, newItem)
 	if err != nil {
-		return RedisItem{}, err
+		return MongoItem{}, err
 	}
 
 	return newItem, err
 }
 
 // rollForward makes the record metadata with COMMITTED state
-func (r *RedisDatastore) rollForward(item RedisItem) (RedisItem, error) {
-	// var oldItem RedisItem
+func (r *MongoDatastore) rollForward(item MongoItem) (MongoItem, error) {
+	// var oldItem MongoItem
 	// r.conn.Get(item.Key, &oldItem)
 	item.TxnState = config.COMMITTED
 	err := r.conn.PutItem(item.Key, item)
@@ -355,17 +355,17 @@ func (r *RedisDatastore) rollForward(item RedisItem) (RedisItem, error) {
 }
 
 // GetName returns the name of the MemoryDatastore.
-func (r *RedisDatastore) GetName() string {
+func (r *MongoDatastore) GetName() string {
 	return r.Name
 }
 
 // SetTxn sets the transaction for the MemoryDatastore.
 // It takes a pointer to a Transaction as input and assigns it to the Txn field of the MemoryDatastore.
-func (r *RedisDatastore) SetTxn(txn *txn.Transaction) {
+func (r *MongoDatastore) SetTxn(txn *txn.Transaction) {
 	r.Txn = txn
 }
 
-func (r *RedisDatastore) ReadTSR(txnId string) (config.State, error) {
+func (r *MongoDatastore) ReadTSR(txnId string) (config.State, error) {
 	var txnState config.State
 	state, err := r.conn.Get(txnId)
 	if err != nil {
@@ -375,20 +375,20 @@ func (r *RedisDatastore) ReadTSR(txnId string) (config.State, error) {
 	return txnState, nil
 }
 
-// WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the Redis datastore.
+// WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the Mongo datastore.
 // It returns an error if the write operation fails.
-func (r *RedisDatastore) WriteTSR(txnId string, txnState config.State) error {
+func (r *MongoDatastore) WriteTSR(txnId string, txnState config.State) error {
 	return r.conn.Put(txnId, util.ToString(txnState))
 }
 
-// DeleteTSR deletes a transaction with the given transaction ID from the Redis datastore.
+// DeleteTSR deletes a transaction with the given transaction ID from the Mongo datastore.
 // It returns an error if the deletion operation fails.
-func (r *RedisDatastore) DeleteTSR(txnId string) error {
+func (r *MongoDatastore) DeleteTSR(txnId string) error {
 	return r.conn.Delete(txnId)
 }
 
-// Copy returns a new instance of RedisDatastore with the same name and connection.
-// It is used to create a copy of the RedisDatastore object.
-func (r *RedisDatastore) Copy() txn.Datastore {
-	return NewRedisDatastore(r.Name, r.conn)
+// Copy returns a new instance of MongoDatastore with the same name and connection.
+// It is used to create a copy of the MongoDatastore object.
+func (r *MongoDatastore) Copy() txn.Datastore {
+	return NewMongoDatastore(r.Name, r.conn)
 }

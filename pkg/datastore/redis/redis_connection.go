@@ -99,7 +99,7 @@ func (r *RedisConnection) PutItem(key string, value RedisItem) error {
 
 // ConditionalUpdate updates the value of a Redis item if the version matches the provided value.
 // It takes a key string and a RedisItem value as parameters.
-// If the item does not exist or the version does not match, it returns a version mismatch error.
+// If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
 func (r *RedisConnection) ConditionalUpdate(key string, value RedisItem) error {
 	ctx := context.Background()

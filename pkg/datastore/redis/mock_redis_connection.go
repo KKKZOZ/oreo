@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// MockMemoryConnection is a mock of MemoryConnection
+// MockRedisConnection is a mock of RedisConnection
 // When Put is called, it will return error when debugCounter is 0
 // Semantically, it means `Put()` call will succeed X times
 type MockRedisConnection struct {

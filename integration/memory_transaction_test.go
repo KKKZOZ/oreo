@@ -613,7 +613,8 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
+	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+	assert.NoError(t, err)
 
 	tarMemItem := memory.MemoryItem{
 		Key:      "item1",
@@ -644,7 +645,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 	var item testutil.TestItem
 	txn.Read("memory", "item1", &item)
 	assert.Equal(t, testutil.NewTestItem("item1"), item)
-	err := txn.Commit()
+	err = txn.Commit()
 	assert.NoError(t, err)
 	var actual memory.MemoryItem
 	conn.Get("item1", &actual)
@@ -684,7 +685,8 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
+	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+	assert.NoError(t, err)
 
 	preTxn := NewTransactionWithSetup(MEMORY)
 	preTxn.Start()
@@ -739,7 +741,7 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 		result.Value = testutil.InputItemList[i].Value + "-fast"
 		fastTxn.Write("memory", testutil.InputItemList[i].Value, result)
 	}
-	err := fastTxn.Commit()
+	err = fastTxn.Commit()
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
@@ -805,14 +807,15 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
+	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+	assert.NoError(t, err)
 
 	preTxn := NewTransactionWithSetup(MEMORY)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
 		preTxn.Write("memory", item.Value, item)
 	}
-	err := preTxn.Commit()
+	err = preTxn.Commit()
 	assert.NoError(t, err)
 
 	go func() {
@@ -926,14 +929,15 @@ func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
 	go memoryDatabase.Start()
 	defer func() { <-memoryDatabase.MsgChan }()
 	defer func() { go memoryDatabase.Stop() }()
-	time.Sleep(100 * time.Millisecond)
+	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+	assert.NoError(t, err)
 
 	preTxn := NewTransactionWithSetup(MEMORY)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
 		preTxn.Write("memory", item.Value, item)
 	}
-	err := preTxn.Commit()
+	err = preTxn.Commit()
 	if err != nil {
 		t.Errorf("preTxn commit err: %s", err)
 	}

@@ -90,6 +90,8 @@ func ToString(value interface{}) string {
 		return string(v)
 	case string:
 		return v
+	case []byte:
+		return string(v)
 	case config.State:
 		return strconv.Itoa(int(v))
 	default:

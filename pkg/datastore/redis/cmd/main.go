@@ -17,8 +17,8 @@ type User struct {
 
 func main() {
 	conn := red.NewRedisConnection(&red.ConnectionOptions{
-		Address:  "redis-17297.c294.ap-northeast-1-2.ec2.cloud.redislabs.com:17297",
-		Password: "57xr6sTv8FLL0QCJtPExr3ULWpoSj5Z6",
+		Address:  "localhost:6666",
+		Password: "",
 	})
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
@@ -39,7 +39,7 @@ func main() {
 	}
 	fmt.Println("Put success")
 
-	item, err := conn.GetItem("123123")
+	item, err := conn.GetItem("test_key")
 	if err != nil {
 		fmt.Println(err)
 		return

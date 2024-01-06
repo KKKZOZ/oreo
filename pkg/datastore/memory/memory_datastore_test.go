@@ -1113,7 +1113,6 @@ func TestMemoryDatastore_ConcurrentWriteConflicts(t *testing.T) {
 		go func(id int) {
 			txn := NewTransactionWithSetup()
 			txn.Start()
-			time.Sleep(100 * time.Millisecond)
 			for _, item := range testutil.InputItemList {
 				var res testutil.TestItem
 				txn.Read("memory", item.Value, &res)
@@ -1121,6 +1120,7 @@ func TestMemoryDatastore_ConcurrentWriteConflicts(t *testing.T) {
 				txn.Write("memory", item.Value, res)
 			}
 
+			time.Sleep(100 * time.Millisecond)
 			err := txn.Commit()
 			if err != nil {
 				if err.Error() != "prepare phase failed: write conflicted: the record is in PREPARED state" &&

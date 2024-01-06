@@ -40,7 +40,6 @@
 + 把读集和写集分离
 
 + 在读一个数据时，应该先从写集里面查找，再从读集里面查找
-
 + 在写一个数据时，先查找 writeCache 中是否已经有记录。
 
 Transaction Read:
@@ -59,6 +58,14 @@ Transaction Read:
     + if there is no TSR:
       + if the record's $T_{lease\_time}$ has **not** expired (indicates that the transaction is running, for example, is executing another datastore's `conditionalUpdate`): read fails
       + if the record's $T_{lease\_time}$ has expired: *rollback the record*
+
+#### Transaction Delete
+
+考虑以下的几个 Case:
+
++ DirectDelete
++ DirectDeleteThenRead
++ DirectDeleteThenWrite
 
 #### Transaction Commit
 

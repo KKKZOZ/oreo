@@ -13,6 +13,7 @@ It supports:
 
 + A simple MemoryDatabase(for test only)
 + Redis
++ Kvrocks
 + MongoDB
 + CouchDB
 
@@ -78,6 +79,5 @@ A client coordinated transaction protocol to enable efficient multi-item transac
 
 ## Roadmap
 
-- [ ] Support Redis
 - [ ] Support MongoDB
 - [ ] Support CouchDB
