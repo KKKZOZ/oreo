@@ -184,7 +184,7 @@ func (m *MemoryDatastore) Write(key string, value any) error {
 		Value:     jsonString,
 		TxnId:     m.Txn.TxnId,
 		TValid:    time.Now(),
-		TLease:    time.Now().Add(config.LeastTime * time.Millisecond),
+		TLease:    time.Now().Add(config.DefaultConfig.LeaseTime),
 		Version:   version,
 		isDeleted: false,
 	}
@@ -290,7 +290,7 @@ func (m *MemoryDatastore) updateMetadata(newItem MemoryItem, oldItem MemoryItem)
 	newItem.Version++
 	newItem.TxnState = config.PREPARED
 	newItem.TValid = m.Txn.TxnCommitTime
-	newItem.TLease = m.Txn.TxnCommitTime.Add(config.LeastTime * time.Millisecond)
+	newItem.TLease = m.Txn.TxnCommitTime.Add(config.DefaultConfig.LeaseTime)
 
 	return newItem
 }

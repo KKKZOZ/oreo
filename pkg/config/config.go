@@ -1,6 +1,9 @@
 package config
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 type DataStoreType string
 
@@ -8,7 +11,18 @@ const (
 	MEMORY DataStoreType = "memory"
 )
 
-const LeastTime = 1000
+
+type Config struct {
+	LeaseTime time.Duration
+	MaxRecordLength int
+}
+
+var DefaultConfig = Config{
+	LeaseTime:       1000*time.Millisecond,
+	MaxRecordLength: 2,
+}	
+
+
 
 type State int
 

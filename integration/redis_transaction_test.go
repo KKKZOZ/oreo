@@ -907,3 +907,42 @@ func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)
 }
+
+
+func TestRedisReadFailDueToFastCommit(t *testing.T){
+
+	preTxn:= NewTransactionWithSetup(REDIS)
+	preTxn.Start()
+	person:= testutil.NewDefaultPerson()
+	preTxn.Write(REDIS,"John",person)
+	preTxn.Commit()
+
+
+	slowTxn:= NewTransactionWithSetup(REDIS)
+	fastTxn1:= NewTransactionWithSetup(REDIS)
+	fastTxn2:= NewTransactionWithSetup(REDIS)
+
+	slowTxn.Start()
+	fastTxn1.Start()
+	var p1 testutil.Person
+	fastTxn1.Read(REDIS,"John",&p1)
+	p1.Age = 31
+	fastTxn1.Write(REDIS,"John",p1)
+	fastTxn1.Commit()
+
+
+	fastTxn2.Start()
+	var p2 testutil.Person
+	fastTxn2.Read(REDIS,"John",&p2)
+	assert.Equal(t,31,p2.Age)
+	p2.Age = 32
+	fastTxn2.Write(REDIS,"John",p2)
+	fastTxn2.Commit()
+
+	// slowTxn should fail to read John
+	// because it can not find a corresponding version
+	var p0 testutil.Person
+	err:=slowTxn.Read(REDIS,"John",&p0)
+	assert.EqualError(t,err,"key not found")
+
+}

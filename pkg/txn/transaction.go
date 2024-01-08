@@ -31,7 +31,7 @@ type Transaction struct {
 	TxnCommitTime time.Time
 
 	// tsrMaintainer is used to maintain the TSR (Transaction Status Record)
-	// TSRMaintainer is responsible for handling and updating the status of transactions.
+	// tsrMaintainer is responsible for handling and updating the status of transactions.
 	tsrMaintainer TSRMaintainer
 	// dataStoreMap is a map of transaction-specific datastores.
 	dataStoreMap map[string]Datastore

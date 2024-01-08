@@ -168,7 +168,7 @@ func (r *RedisDatastore) Write(key string, value any) error {
 		Value:     str,
 		TxnId:     r.Txn.TxnId,
 		TValid:    time.Now(),
-		TLease:    time.Now().Add(config.LeastTime * time.Millisecond),
+		TLease:    time.Now().Add(config.DefaultConfig.LeaseTime),
 		Version:   version,
 		IsDeleted: false,
 	}
@@ -250,7 +250,7 @@ func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (R
 	newItem.Prev = string(bs)
 	newItem.TxnState = config.PREPARED
 	newItem.TValid = r.Txn.TxnCommitTime
-	newItem.TLease = r.Txn.TxnCommitTime.Add(config.LeastTime * time.Millisecond)
+	newItem.TLease = r.Txn.TxnCommitTime.Add(config.DefaultConfig.LeaseTime)
 	return newItem, nil
 }
 
