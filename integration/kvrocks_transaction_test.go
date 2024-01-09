@@ -295,7 +295,8 @@ func TestKvrocks_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write(KVROCKS, "John", dataPerson)
-	preTxn.Commit()
+	err := preTxn.Commit()
+	assert.NoError(t, err)
 
 	resChan := make(chan bool)
 
@@ -325,7 +326,8 @@ func TestKvrocks_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 		txn2.Start()
 		var person1 testutil.Person
 		// txn2 reads John
-		txn2.Read(KVROCKS, "John", &person1)
+		err := txn2.Read(KVROCKS, "John", &person1)
+		assert.NoError(t, err)
 		time.Sleep(100 * time.Millisecond)
 
 		var person2 testutil.Person
@@ -335,9 +337,10 @@ func TestKvrocks_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 		// two read in txn2 should be the same
 		if person1 != person2 {
 			t.Errorf("Expected two read in txn2 to be the same")
+			t.Errorf("person1: %v\n person2: %v\n", person1, person2)
 		}
 
-		err := txn2.Commit()
+		err = txn2.Commit()
 		if err != nil {
 			resChan <- false
 		} else {
@@ -907,7 +910,7 @@ func TestKvrocks_LinkedRecord(t *testing.T) {
 		slowTxn := NewTransactionWithSetup(KVROCKS)
 		slowTxn.Start()
 
-		config.DefaultConfig.MaxRecordLength = 4
+		config.Config.MaxRecordLength = 4
 		// 1+2=3 < 4, including origin
 		commitTime := 2
 		for i := 1; i <= commitTime; i++ {
@@ -939,7 +942,7 @@ func TestKvrocks_LinkedRecord(t *testing.T) {
 		slowTxn := NewTransactionWithSetup(KVROCKS)
 		slowTxn.Start()
 
-		config.DefaultConfig.MaxRecordLength = 4
+		config.Config.MaxRecordLength = 4
 		// 1+3=4 == 4, including origin
 		commitTime := 3
 		for i := 1; i <= commitTime; i++ {
@@ -971,7 +974,7 @@ func TestKvrocks_LinkedRecord(t *testing.T) {
 		slowTxn := NewTransactionWithSetup(KVROCKS)
 		slowTxn.Start()
 
-		config.DefaultConfig.MaxRecordLength = 4
+		config.Config.MaxRecordLength = 4
 		// 1+4=5 > 4, including origin
 		commitTime := 4
 		for i := 1; i <= commitTime; i++ {

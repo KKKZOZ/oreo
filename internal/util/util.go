@@ -2,10 +2,12 @@ package util
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/kkkzoz/oreo/pkg/config"
 )
@@ -33,6 +35,11 @@ func ToJSONString(value any) string {
 	return string(jsonString)
 }
 
+// ToInt converts a value of any type to an int64.
+// If the value is a string, it attempts to parse it as an int64 using strconv.ParseInt.
+// If the value is an int, int64, float64, float32, uint, uint32, uint64, byte, or rune, it converts it to int64.
+// If the value is of any other type, it logs a fatal error.
+// Returns the converted int64 value.
 func ToInt(value any) int64 {
 	switch v := value.(type) {
 	case string:
@@ -66,6 +73,10 @@ func ToInt(value any) int64 {
 	return 0
 }
 
+// ToString converts a value to its string representation.
+// It supports conversion for various types including int, int64, float32, float64, bool, uint, uint32, uint64, byte, rune, string, []byte, and config.State.
+// If the value is of an unsupported type, it will log a fatal error.
+// The function returns the string representation of the value.
 func ToString(value interface{}) string {
 	switch v := value.(type) {
 	case int:
@@ -98,4 +109,16 @@ func ToString(value interface{}) string {
 		log.Fatalf("ToString: Unsupported type: %T", v)
 	}
 	return ""
+}
+
+func RetryHelper(maxRetryTimes int, retryInterval time.Duration, fn func() error) error {
+	var err error
+	for i := 0; i < maxRetryTimes; i++ {
+		err = fn()
+		if err == nil {
+			return nil
+		}
+		time.Sleep(retryInterval)
+	}
+	return errors.New("reached maximum retry limit, last error: " + err.Error())
 }

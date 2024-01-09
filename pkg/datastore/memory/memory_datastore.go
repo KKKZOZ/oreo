@@ -125,7 +125,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 func (m *MemoryDatastore) readAsCommitted(item MemoryItem, value any) error {
 
 	curItem := item
-	for i := 1; i <= config.DefaultConfig.MaxRecordLength; i++ {
+	for i := 1; i <= config.Config.MaxRecordLength; i++ {
 
 		if curItem.TValid.Before(m.Txn.TxnStartTime) {
 			// if the record has been deleted
@@ -139,7 +139,7 @@ func (m *MemoryDatastore) readAsCommitted(item MemoryItem, value any) error {
 			m.readCache[curItem.Key] = curItem
 			return nil
 		}
-		if i == config.DefaultConfig.MaxRecordLength {
+		if i == config.Config.MaxRecordLength {
 			break
 		}
 		// get the previous record
@@ -183,7 +183,7 @@ func (m *MemoryDatastore) Write(key string, value any) error {
 		Value:     jsonString,
 		TxnId:     m.Txn.TxnId,
 		TValid:    time.Now(),
-		TLease:    time.Now().Add(config.DefaultConfig.LeaseTime),
+		TLease:    time.Now().Add(config.Config.LeaseTime),
 		Version:   version,
 		isDeleted: false,
 	}
@@ -288,7 +288,7 @@ func (m *MemoryDatastore) conditionalUpdate(item txn.Item) error {
 }
 
 func (m *MemoryDatastore) truncate(newItem *MemoryItem) (MemoryItem, error) {
-	maxLen := config.DefaultConfig.MaxRecordLength
+	maxLen := config.Config.MaxRecordLength
 
 	if newItem.LinkedLen > maxLen {
 		stack := util.NewStack[MemoryItem]()
@@ -344,7 +344,7 @@ func (m *MemoryDatastore) updateMetadata(newItem MemoryItem, oldItem MemoryItem)
 	newItem.Version++
 	newItem.TxnState = config.PREPARED
 	newItem.TValid = m.Txn.TxnCommitTime
-	newItem.TLease = m.Txn.TxnCommitTime.Add(config.DefaultConfig.LeaseTime)
+	newItem.TLease = m.Txn.TxnCommitTime.Add(config.Config.LeaseTime)
 
 	return newItem, nil
 }

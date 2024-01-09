@@ -16,6 +16,7 @@ type User struct {
 }
 
 func main() {
+
 	conn := red.NewRedisConnection(&red.ConnectionOptions{
 		Address:  "localhost:6666",
 		Password: "",
@@ -37,13 +38,21 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("Put success")
+	// testutil.Log.Info("Put success")
+	testutil.Debug(testutil.DTest, "Put success of Debug")
+	// testutil.Log.Debugw("Put success of Debugf", "Topic", testutil.DTest)
 
 	item, err := conn.GetItem("test_key")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println("Get success")
-	fmt.Println(item)
+	testutil.Log.Infow("Get success", "item.Value", item.Value)
+	// testutil.Log.Infow("failed to fetch URL",
+	// 	// Structured context as loosely typed key-value pairs.
+	// 	"url", 12313123,
+	// 	"attempt", 3,
+	// 	"backoff", time.Second,
+	// )
+	// log.Infow("Get item", "item", item)
 }

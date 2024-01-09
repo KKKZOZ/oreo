@@ -1005,7 +1005,7 @@ func TestMemoryLinkedRecord(t *testing.T) {
 		slowTxn := NewTransactionWithSetup(MEMORY)
 		slowTxn.Start()
 
-		config.DefaultConfig.MaxRecordLength = 4
+		config.Config.MaxRecordLength = 4
 		// 1+2=3 < 4, including origin
 		commitTime := 2
 		for i := 1; i <= commitTime; i++ {
@@ -1044,7 +1044,7 @@ func TestMemoryLinkedRecord(t *testing.T) {
 		slowTxn := NewTransactionWithSetup(MEMORY)
 		slowTxn.Start()
 
-		config.DefaultConfig.MaxRecordLength = 4
+		config.Config.MaxRecordLength = 4
 		// 1+3=4 == 4, including origin
 		commitTime := 3
 		for i := 1; i <= commitTime; i++ {
@@ -1083,7 +1083,7 @@ func TestMemoryLinkedRecord(t *testing.T) {
 		slowTxn := NewTransactionWithSetup(MEMORY)
 		slowTxn.Start()
 
-		config.DefaultConfig.MaxRecordLength = 4
+		config.Config.MaxRecordLength = 4
 		// 1+4=5 > 4, including origin
 		commitTime := 4
 		for i := 1; i <= commitTime; i++ {

@@ -105,7 +105,7 @@ func (r *RedisDatastore) Read(key string, value any) error {
 
 func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
 	curItem := item
-	for i := 1; i <= config.DefaultConfig.MaxRecordLength; i++ {
+	for i := 1; i <= config.Config.MaxRecordLength; i++ {
 
 		if curItem.TValid.Before(r.Txn.TxnStartTime) {
 			// if the record has been deleted
@@ -119,7 +119,7 @@ func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
 			r.readCache[curItem.Key] = curItem
 			return nil
 		}
-		if i == config.DefaultConfig.MaxRecordLength {
+		if i == config.Config.MaxRecordLength {
 			break
 		}
 		// get the previous record
@@ -165,7 +165,7 @@ func (r *RedisDatastore) Write(key string, value any) error {
 		Value:     str,
 		TxnId:     r.Txn.TxnId,
 		TValid:    time.Now(),
-		TLease:    time.Now().Add(config.DefaultConfig.LeaseTime),
+		TLease:    time.Now().Add(config.Config.LeaseTime),
 		Version:   version,
 		IsDeleted: false,
 	}
@@ -237,7 +237,7 @@ func (r *RedisDatastore) conditionalUpdate(item txn.Item) error {
 }
 
 func (r *RedisDatastore) truncate(newItem *RedisItem) (RedisItem, error) {
-	maxLen := config.DefaultConfig.MaxRecordLength
+	maxLen := config.Config.MaxRecordLength
 
 	if newItem.LinkedLen > maxLen {
 		stack := util.NewStack[RedisItem]()
@@ -299,7 +299,7 @@ func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (R
 
 	newItem.TxnState = config.PREPARED
 	newItem.TValid = r.Txn.TxnCommitTime
-	newItem.TLease = r.Txn.TxnCommitTime.Add(config.DefaultConfig.LeaseTime)
+	newItem.TLease = r.Txn.TxnCommitTime.Add(config.Config.LeaseTime)
 	return newItem, nil
 }
 

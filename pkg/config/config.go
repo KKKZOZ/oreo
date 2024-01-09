@@ -11,18 +11,17 @@ const (
 	MEMORY DataStoreType = "memory"
 )
 
-
-type Config struct {
-	LeaseTime time.Duration
+type config struct {
+	LeaseTime       time.Duration
 	MaxRecordLength int
+	IdGenerator     IdGenerator
 }
 
-var DefaultConfig = Config{
-	LeaseTime:       1000*time.Millisecond,
+var Config = config{
+	LeaseTime:       1000 * time.Millisecond,
 	MaxRecordLength: 2,
-}	
-
-
+	IdGenerator:     NewIncrementalGenerator(),
+}
 
 type State int
 

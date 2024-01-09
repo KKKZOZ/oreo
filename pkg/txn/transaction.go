@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/locker"
 )
@@ -76,7 +76,7 @@ func (t *Transaction) Start() error {
 	if len(t.dataStoreMap) == 0 {
 		return errors.New("no datastores added")
 	}
-	t.TxnId = uuid.NewString()
+	t.TxnId = config.Config.IdGenerator.GenerateId()
 	t.TxnStartTime, err = t.getTime()
 	if err != nil {
 		return err
@@ -117,6 +117,7 @@ func (t *Transaction) Read(dsName string, key string, value any) error {
 		return err
 	}
 
+	t.debug(testutil.DRead, "read in %v: [Key: %v]", dsName, key)
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Read(key, value)
 	}
@@ -130,7 +131,7 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 	if err != nil {
 		return err
 	}
-
+	t.debug(testutil.DWrite, "write in %v: [Key: %v]", dsName, key)
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Write(key, value)
 	}
@@ -145,6 +146,7 @@ func (t *Transaction) Delete(dsName string, key string) error {
 		return err
 	}
 
+	t.debug(testutil.DDelete, "delete in %v: [Key: %v]", dsName, key)
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Delete(key)
 	}
@@ -170,6 +172,7 @@ func (t *Transaction) Commit() error {
 		return err
 	}
 
+	t.debug(testutil.DPrepare, "starts prepare phase")
 	success := true
 	var cause error
 	for _, ds := range t.dataStoreMap {
@@ -177,6 +180,7 @@ func (t *Transaction) Commit() error {
 		if err != nil {
 			success = false
 			cause = err
+			t.debug(testutil.DPrepare, "prepare phase failed(ds:%v): %v", ds.GetName(), err)
 			break
 		}
 	}
@@ -193,12 +197,14 @@ func (t *Transaction) Commit() error {
 		return errors.New("transaction is aborted by other transaction")
 	}
 
+	t.debug(testutil.DTSR, "writing TSR")
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
 		t.Abort()
 		return err
 	}
 
+	t.debug(testutil.DCommit, "starts commit phase")
 	for _, ds := range t.dataStoreMap {
 		// TODO: do not allow abort after Commit
 		// try indefinitely until success
@@ -303,4 +309,9 @@ func (t *Transaction) Unlock(key string, id string) error {
 		return errors.New("locker not set")
 	}
 	return t.locker.Unlock(key, id)
+}
+
+func (t *Transaction) debug(topic testutil.TxnTopic, format string, a ...interface{}) {
+	prefix := fmt.Sprintf("%v ", t.TxnId)
+	testutil.Debug(topic, prefix+format, a...)
 }

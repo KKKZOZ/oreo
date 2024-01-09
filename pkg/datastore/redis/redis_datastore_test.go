@@ -1147,7 +1147,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		err := conn.PutItem("item1", memItem1_3)
 		assert.NoError(t, err)
 
-		config.DefaultConfig.MaxRecordLength = 2
+		config.Config.MaxRecordLength = 2
 		txn := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
@@ -1162,7 +1162,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		})
 		conn.PutItem("item1", memItem1_3)
 
-		config.DefaultConfig.MaxRecordLength = 3
+		config.Config.MaxRecordLength = 3
 		txn := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
@@ -1179,7 +1179,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		})
 		conn.PutItem("item1", memItem1_3)
 
-		config.DefaultConfig.MaxRecordLength = 3 + 1
+		config.Config.MaxRecordLength = 3 + 1
 		txn := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
@@ -1194,7 +1194,7 @@ func TestLinkedTruncate(t *testing.T) {
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 2", func(t *testing.T) {
 
-		config.DefaultConfig.MaxRecordLength = 2
+		config.Config.MaxRecordLength = 2
 		for i := 1; i <= 4; i++ {
 			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
 			txn := NewTransactionWithSetup()
@@ -1211,10 +1211,10 @@ func TestLinkedTruncate(t *testing.T) {
 		conn.Connect()
 		item, err := conn.GetItem("item1")
 		assert.NoError(t, err)
-		assert.Equal(t, config.DefaultConfig.MaxRecordLength, item.LinkedLen)
+		assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
 
 		tarItem := item
-		for i := 1; i <= config.DefaultConfig.MaxRecordLength-1; i++ {
+		for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
 			var preItem RedisItem
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
@@ -1228,7 +1228,7 @@ func TestLinkedTruncate(t *testing.T) {
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 4", func(t *testing.T) {
 
-		config.DefaultConfig.MaxRecordLength = 4
+		config.Config.MaxRecordLength = 4
 		for i := 1; i <= 4; i++ {
 			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
 			txn := NewTransactionWithSetup()
@@ -1245,11 +1245,11 @@ func TestLinkedTruncate(t *testing.T) {
 		conn.Connect()
 		item, err := conn.GetItem("item1")
 		assert.NoError(t, err)
-		assert.Equal(t, config.DefaultConfig.MaxRecordLength, item.LinkedLen)
+		assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
 		t.Logf("item: %+v", item)
 
 		tarItem := item
-		for i := 1; i <= config.DefaultConfig.MaxRecordLength-1; i++ {
+		for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
 			var preItem RedisItem
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
@@ -1263,8 +1263,8 @@ func TestLinkedTruncate(t *testing.T) {
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 5", func(t *testing.T) {
 
-		config.DefaultConfig.MaxRecordLength = 5
-		expectedLen := min(4, config.DefaultConfig.MaxRecordLength)
+		config.Config.MaxRecordLength = 5
+		expectedLen := min(4, config.Config.MaxRecordLength)
 		for i := 1; i <= 4; i++ {
 			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
 			txn := NewTransactionWithSetup()
