@@ -542,12 +542,12 @@ func TestMongo_ConcurrentTransaction(t *testing.T) {
 	assert.Equal(t, 1, successNum)
 }
 
-// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired redis item.
-// It inserts a redis item with an expired lease and a PREPARED state
-// Then, it starts a transaction, reads the redis item,
+// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired mongo item.
+// It inserts a mongo item with an expired lease and a PREPARED state
+// Then, it starts a transaction, reads the mongo item,
 // and verifies that the read item matches the expected value.
 // Finally, it commits the transaction and checks that
-// the redis item has been updated to the committed state.
+// the mongo item has been updated to the committed state.
 func TestMongo_SimpleExpiredRead(t *testing.T) {
 	tarMemItem := mongo.MongoItem{
 		Key:      "item1",
@@ -594,16 +594,16 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 }
 
 // A complex test
-// preTxn writes data to the redis database
+// preTxn writes data to the mongo database
 // slowTxn read all data and write all data, but it will block when conditionalUpdate item3 (sleep 4s)
-// so when slowTxn blocks, the internal state of redis database:
+// so when slowTxn blocks, the internal state of mongo database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3 COMMITTED
 // item4 COMMITTED
 // item5 COMMITTED
 // fastTxn read item3, item4, item5 and write them, then commit
-// the internal state of redis database:
+// the internal state of mongo database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-fast COMMITTED
@@ -612,7 +612,7 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 // then, slowTxn unblocks, it starts to conditionalUpdate item3
 // and it detects a version mismatch,so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of redis database:
+// so the final internal state of mongo database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
 // item3-fast COMMITTED
@@ -647,7 +647,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 	}()
 	time.Sleep(1 * time.Second)
 
-	// ensure the internal state of redis database
+	// ensure the internal state of mongo database
 	testConn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 		Address:        "mongodb://localhost:27017",
 		DBName:         "oreo",
@@ -702,10 +702,10 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 }
 
 // A complex test
-// preTxn writes data to the redis database
+// preTxn writes data to the mongo database
 // slowTxn read all data and write all data,
 // but it will block when conditionalUpdate item5 (sleep 5s)
-// so when slowTxn blocks, the internal state of redis database:
+// so when slowTxn blocks, the internal state of mongo database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-slow PREPARED
@@ -713,7 +713,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 // item5 COMMITTED
 // fastTxn read item3, item4 and write them, then commit
 // (fastTxn realize item3 and item4 are expired, so it will first rollback, and write the TSR with ABORTED)
-// the internal state of redis database:
+// the internal state of mongo database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-fast COMMITTED
@@ -722,7 +722,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 // then, slowTxn unblocks, it conditionalUpdate item5 then check the TSR state
 // the TSR is marked as ABORTED, so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of redis database:
+// so the final internal state of mongo database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
 // item3-fast COMMITTED
@@ -822,10 +822,10 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 }
 
 // A complex test
-// preTxn writes data to the redis database
+// preTxn writes data to the mongo database
 // slowTxn read all data and write all data,
 // but it will block for 3s and **fail** when writing the TSR
-// so when slowTxn blocks, the internal state of redis database:
+// so when slowTxn blocks, the internal state of mongo database:
 // item1-slow PREPARED
 // item2-slow PREPARED
 // item3-slow PREPARED
@@ -833,7 +833,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 // item5-slow PREPARED
 // testTxn read item1,item2,item3, item4
 // (testTxn realize item1,item2,item3, item4 are expired, so it will first rollback, and write the TSR with ABORTED)
-// the internal state of redis database:
+// the internal state of mongo database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
 // item3 rollback to COMMITTED
@@ -842,7 +842,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 // then, slowTxn unblocks, it fails to write the TSR, and it aborts(it tries to rollback all the items)
 // so slowTxn will abort(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of redis database:
+// so the final internal state of mongo database:
 // item1 rollback to COMMITTED
 // item2 rollback to COMMITTED
 // item3 rollback to COMMITTED
@@ -900,4 +900,102 @@ func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)
+}
+
+func TestMongo_LinkedRecord(t *testing.T) {
+
+	t.Run("commit time less than MaxLen", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(MONGO, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(MONGO)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+2=3 < 4, including origin
+		commitTime := 2
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(MONGO)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(MONGO, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(MONGO, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(MONGO, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
+
+	t.Run("commit time equals MaxLen", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(MONGO, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(MONGO)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+3=4 == 4, including origin
+		commitTime := 3
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(MONGO)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(MONGO, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(MONGO, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(MONGO, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
+
+	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(MONGO, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(MONGO)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+4=5 > 4, including origin
+		commitTime := 4
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(MONGO)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(MONGO, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(MONGO, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(MONGO, "John", &p)
+		assert.EqualError(t, err, "key not found")
+	})
 }

@@ -892,3 +892,101 @@ func TestKvrocks_TransactionAbortWhenWritingTSR(t *testing.T) {
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)
 }
+
+func TestKvrocks_LinkedRecord(t *testing.T) {
+
+	t.Run("commit time less than MaxLen", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(KVROCKS, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(KVROCKS)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+2=3 < 4, including origin
+		commitTime := 2
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(KVROCKS)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(KVROCKS, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(KVROCKS, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(KVROCKS, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
+
+	t.Run("commit time equals MaxLen", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(KVROCKS, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(KVROCKS)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+3=4 == 4, including origin
+		commitTime := 3
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(KVROCKS)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(KVROCKS, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(KVROCKS, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(KVROCKS, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
+
+	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(KVROCKS, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(KVROCKS)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+4=5 > 4, including origin
+		commitTime := 4
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(KVROCKS)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(KVROCKS, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(KVROCKS, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(KVROCKS, "John", &p)
+		assert.EqualError(t, err, "key not found")
+	})
+}

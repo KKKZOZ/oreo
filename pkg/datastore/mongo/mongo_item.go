@@ -19,6 +19,7 @@ type MongoItem struct {
 	TValid    time.Time    `bson:"TValid"`
 	TLease    time.Time    `bson:"TLease"`
 	Prev      string       `bson:"Prev"`
+	LinkedLen int          `bson:"LinkedLen"`
 	IsDeleted bool         `bson:"IsDeleted"`
 	Version   int          `bson:"Version"`
 }
@@ -36,11 +37,12 @@ func (r MongoItem) String() string {
     TValid:    %s,
     TLease:    %s,
     Prev:      %s,
+	LinkedLen: %d,
     IsDeleted: %v,
     Version:   %d,
 }`, r.Key, r.Value, r.TxnId, util.ToString(r.TxnState),
 		r.TValid.Format(time.RFC3339), r.TLease.Format(time.RFC3339),
-		r.Prev, r.IsDeleted, r.Version)
+		r.Prev, r.LinkedLen, r.IsDeleted, r.Version)
 }
 
 func (r *MongoItem) Equal(other MongoItem) bool {
@@ -51,6 +53,7 @@ func (r *MongoItem) Equal(other MongoItem) bool {
 		r.TValid.Equal(other.TValid) &&
 		r.TLease.Equal(other.TLease) &&
 		r.Prev == other.Prev &&
+		r.LinkedLen == other.LinkedLen &&
 		r.IsDeleted == other.IsDeleted &&
 		r.Version == other.Version
 }
@@ -68,6 +71,7 @@ func (mi MongoItem) MarshalBSONValue() (bsontype.Type, []byte, error) {
 		"TValid":    mi.TValid.Format(time.RFC3339Nano),
 		"TLease":    mi.TLease.Format(time.RFC3339Nano),
 		"Prev":      mi.Prev,
+		"LinkedLen": mi.LinkedLen,
 		"IsDeleted": mi.IsDeleted,
 		"Version":   mi.Version,
 	}
@@ -108,6 +112,9 @@ func (mi *MongoItem) UnmarshalBSONValue(t bsontype.Type, raw []byte) error {
 	}
 	if value, ok := m["Prev"]; ok {
 		mi.Prev = value.(string)
+	}
+	if value, ok := m["LinkedLen"]; ok {
+		mi.LinkedLen = int(value.(int32))
 	}
 	if value, ok := m["IsDeleted"]; ok {
 		mi.IsDeleted = value.(bool)

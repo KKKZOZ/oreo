@@ -17,6 +17,7 @@ type RedisItem struct {
 	TValid    time.Time    `redis:"TValid"`
 	TLease    time.Time    `redis:"TLease"`
 	Prev      string       `redis:"Prev"`
+	LinkedLen int          `redis:"LinkedLen"`
 	IsDeleted bool         `redis:"IsDeleted"`
 	Version   int          `redis:"Version"`
 }
@@ -34,11 +35,12 @@ func (r RedisItem) String() string {
     TValid:    %s,
     TLease:    %s,
     Prev:      %s,
+	LinkedLen: %d,
     IsDeleted: %v,
     Version:   %d,
 }`, r.Key, r.Value, r.TxnId, util.ToString(r.TxnState),
 		r.TValid.Format(time.RFC3339), r.TLease.Format(time.RFC3339),
-		r.Prev, r.IsDeleted, r.Version)
+		r.Prev, r.LinkedLen, r.IsDeleted, r.Version)
 }
 
 func (r *RedisItem) Equal(other RedisItem) bool {
@@ -49,6 +51,7 @@ func (r *RedisItem) Equal(other RedisItem) bool {
 		r.TValid.Equal(other.TValid) &&
 		r.TLease.Equal(other.TLease) &&
 		r.Prev == other.Prev &&
+		r.LinkedLen == other.LinkedLen &&
 		r.IsDeleted == other.IsDeleted &&
 		r.Version == other.Version
 }

@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"testing"
@@ -1094,4 +1095,204 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 	postTxn.Read("redis", "item2", &resItem)
 	assert.Equal(t, "item2_new", resItem.Value)
 
+}
+
+// ---|---------|--------|---------|------> time
+// item1_1  T_Start   item1_2   item1_3
+func TestLinkedReadAsCommitted(t *testing.T) {
+
+	item1_1 := testutil.NewTestItem("item1_1")
+	memItem1_1 := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(item1_1),
+		TxnId:     "txn1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-10 * time.Second),
+		TLease:    time.Now().Add(-9 * time.Second),
+		Version:   1,
+		LinkedLen: 1,
+	}
+
+	item1_2 := testutil.NewTestItem("item1_2")
+	memItem1_2 := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(item1_2),
+		TxnId:     "txn2",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(5 * time.Second),
+		TLease:    time.Now().Add(6 * time.Second),
+		Version:   2,
+		Prev:      util.ToJSONString(memItem1_1),
+		LinkedLen: 2,
+	}
+
+	item1_3 := testutil.NewTestItem("item1_3")
+	memItem1_3 := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(item1_3),
+		TxnId:     "txn3",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(10 * time.Second),
+		TLease:    time.Now().Add(11 * time.Second),
+		Version:   3,
+		Prev:      util.ToJSONString(memItem1_2),
+		LinkedLen: 3,
+	}
+
+	t.Run("read will fail due to MaxRecordLength=2", func(t *testing.T) {
+
+		conn := NewRedisConnection(&ConnectionOptions{
+			Address: "localhost:6379",
+		})
+		err := conn.PutItem("item1", memItem1_3)
+		assert.NoError(t, err)
+
+		config.DefaultConfig.MaxRecordLength = 2
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		var item testutil.TestItem
+		err = txn.Read("redis", "item1", &item)
+		assert.EqualError(t, err, "key not found")
+	})
+
+	t.Run("read will success due to MaxRecordLength=3", func(t *testing.T) {
+
+		conn := NewRedisConnection(&ConnectionOptions{
+			Address: "localhost:6379",
+		})
+		conn.PutItem("item1", memItem1_3)
+
+		config.DefaultConfig.MaxRecordLength = 3
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		var item testutil.TestItem
+		err := txn.Read("redis", "item1", &item)
+		assert.Nil(t, err)
+
+		assert.Equal(t, "item1_1", item.Value)
+	})
+
+	t.Run("read will success due to MaxRecordLength > 3", func(t *testing.T) {
+
+		conn := NewRedisConnection(&ConnectionOptions{
+			Address: "localhost:6379",
+		})
+		conn.PutItem("item1", memItem1_3)
+
+		config.DefaultConfig.MaxRecordLength = 3 + 1
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		var item testutil.TestItem
+		err := txn.Read("redis", "item1", &item)
+		assert.Nil(t, err)
+
+		assert.Equal(t, "item1_1", item.Value)
+	})
+}
+
+func TestLinkedTruncate(t *testing.T) {
+
+	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 2", func(t *testing.T) {
+
+		config.DefaultConfig.MaxRecordLength = 2
+		for i := 1; i <= 4; i++ {
+			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
+			txn := NewTransactionWithSetup()
+			txn.Start()
+			txn.Write("redis", "item1", item)
+			err := txn.Commit()
+			assert.Nil(t, err)
+		}
+
+		// check the linked record length
+		conn := NewRedisConnection(&ConnectionOptions{
+			Address: "localhost:6379",
+		})
+		conn.Connect()
+		item, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, config.DefaultConfig.MaxRecordLength, item.LinkedLen)
+
+		tarItem := item
+		for i := 1; i <= config.DefaultConfig.MaxRecordLength-1; i++ {
+			var preItem RedisItem
+			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
+			assert.Nil(t, err)
+			tarItem = preItem
+		}
+		assert.Equal(t, "", tarItem.Prev)
+
+		err = conn.Delete("item1")
+		assert.NoError(t, err)
+	})
+
+	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 4", func(t *testing.T) {
+
+		config.DefaultConfig.MaxRecordLength = 4
+		for i := 1; i <= 4; i++ {
+			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
+			txn := NewTransactionWithSetup()
+			txn.Start()
+			txn.Write("redis", "item1", item)
+			err := txn.Commit()
+			assert.Nil(t, err)
+		}
+
+		// check the linked record length
+		conn := NewRedisConnection(&ConnectionOptions{
+			Address: "localhost:6379",
+		})
+		conn.Connect()
+		item, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, config.DefaultConfig.MaxRecordLength, item.LinkedLen)
+		t.Logf("item: %+v", item)
+
+		tarItem := item
+		for i := 1; i <= config.DefaultConfig.MaxRecordLength-1; i++ {
+			var preItem RedisItem
+			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
+			assert.Nil(t, err)
+			tarItem = preItem
+		}
+		assert.Equal(t, "", tarItem.Prev)
+
+		err = conn.Delete("item1")
+		assert.NoError(t, err)
+	})
+
+	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 5", func(t *testing.T) {
+
+		config.DefaultConfig.MaxRecordLength = 5
+		expectedLen := min(4, config.DefaultConfig.MaxRecordLength)
+		for i := 1; i <= 4; i++ {
+			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
+			txn := NewTransactionWithSetup()
+			txn.Start()
+			txn.Write("redis", "item1", item)
+			err := txn.Commit()
+			assert.Nil(t, err)
+		}
+
+		// check the linked record length
+		conn := NewRedisConnection(&ConnectionOptions{
+			Address: "localhost:6379",
+		})
+		conn.Connect()
+		item, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedLen, item.LinkedLen)
+
+		tarItem := item
+		for i := 1; i <= expectedLen-1; i++ {
+			var preItem RedisItem
+			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
+			assert.Nil(t, err)
+			tarItem = preItem
+		}
+		assert.Equal(t, "", tarItem.Prev)
+
+		err = conn.Delete("item1")
+		assert.NoError(t, err)
+	})
 }

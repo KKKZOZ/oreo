@@ -86,6 +86,7 @@ func (r *RedisConnection) PutItem(key string, value RedisItem) error {
 		rdb.HSet(ctx, key, "TValid", value.TValid.Format(time.RFC3339Nano))
 		rdb.HSet(ctx, key, "TLease", value.TLease.Format(time.RFC3339Nano))
 		rdb.HSet(ctx, key, "Prev", value.Prev)
+		rdb.HSet(ctx, key, "LinkedLen", value.LinkedLen)
 		rdb.HSet(ctx, key, "IsDeleted", value.IsDeleted)
 		rdb.HSet(ctx, key, "Version", value.Version)
 		return nil
@@ -113,6 +114,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value RedisItem) error {
 	redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
 	redis.call('HSET', KEYS[1], 'Version', ARGV[8])
 	redis.call('HSET', KEYS[1], 'Prev', ARGV[9])
+	redis.call('HSET', KEYS[1], 'LinkedLen', ARGV[10])
 	return redis.call('HGETALL', KEYS[1])
 else
 	return redis.error_reply('version mismatch')
@@ -124,7 +126,7 @@ end
 
 	_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key}, value.Version, value.Key,
 		value.Value, value.TxnId, value.TxnState, value.TValid, value.TLease,
-		value.Version+1, value.Prev).Result()
+		value.Version+1, value.Prev, value.LinkedLen).Result()
 	if err != nil {
 		return err
 	}

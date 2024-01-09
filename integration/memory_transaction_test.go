@@ -584,6 +584,7 @@ func TestMemory_ConcurrentTransaction(t *testing.T) {
 			txn.Read("memory", "John", &person)
 			person.Age = person.Age + id
 			txn.Write("memory", "John", person)
+			time.Sleep(100 * time.Millisecond)
 			err = txn.Commit()
 			if err != nil {
 				resChan <- false
@@ -981,4 +982,123 @@ func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
 	conn.Get("item5", &memItem)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)
+}
+
+func TestMemoryLinkedRecord(t *testing.T) {
+
+	t.Run("commit time less than MaxLen", func(t *testing.T) {
+		// run a memory database
+		memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
+		err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+		assert.NoError(t, err)
+
+		preTxn := NewTransactionWithSetup(MEMORY)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(MEMORY, "John", person)
+		err = preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(MEMORY)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+2=3 < 4, including origin
+		commitTime := 2
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(MEMORY)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(MEMORY, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(MEMORY, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(MEMORY, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
+
+	t.Run("commit time equals MaxLen", func(t *testing.T) {
+		// run a memory database
+		memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
+		err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+		assert.NoError(t, err)
+
+		preTxn := NewTransactionWithSetup(MEMORY)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(MEMORY, "John", person)
+		err = preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(MEMORY)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+3=4 == 4, including origin
+		commitTime := 3
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(MEMORY)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(MEMORY, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(MEMORY, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(MEMORY, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
+
+	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
+		// run a memory database
+		memoryDatabase := memory.NewMemoryDatabase("localhost", 8321)
+		go memoryDatabase.Start()
+		defer func() { <-memoryDatabase.MsgChan }()
+		defer func() { go memoryDatabase.Stop() }()
+		err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
+		assert.NoError(t, err)
+
+		preTxn := NewTransactionWithSetup(MEMORY)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(MEMORY, "John", person)
+		err = preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(MEMORY)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+4=5 > 4, including origin
+		commitTime := 4
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(MEMORY)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(MEMORY, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(MEMORY, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(MEMORY, "John", &p)
+		assert.EqualError(t, err, "key not found")
+	})
 }

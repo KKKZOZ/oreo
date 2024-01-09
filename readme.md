@@ -69,6 +69,10 @@ func insertTwoUsers(txn *txn.Transaction) {
 }
 ```
 
+## Roadmap
+
+Can be found [here](https://trello.com/b/Vl2H7Aqg/oreo-roadmap)
+
 ## Why this name?
 
 I love Oreo and Oreo also has many different flavors of fillings!
@@ -77,7 +81,3 @@ I love Oreo and Oreo also has many different flavors of fillings!
 
 A client coordinated transaction protocol to enable efficient multi-item transactions across heterogeneous key-value store.
 
-## Roadmap
-
-- [ ] Support MongoDB
-- [ ] Support CouchDB

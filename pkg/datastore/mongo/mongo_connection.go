@@ -150,6 +150,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value MongoItem) error {
 			{Key: "TValid", Value: value.TValid.Format(time.RFC3339Nano)},
 			{Key: "TLease", Value: value.TLease.Format(time.RFC3339Nano)},
 			{Key: "Prev", Value: value.Prev},
+			{Key: "LinkedLen", Value: value.LinkedLen},
 			{Key: "IsDeleted", Value: value.IsDeleted},
 			{Key: "Version", Value: value.Version + 1},
 		}},

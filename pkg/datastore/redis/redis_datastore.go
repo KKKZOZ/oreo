@@ -104,38 +104,35 @@ func (r *RedisDatastore) Read(key string, value any) error {
 }
 
 func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
-	if item.TValid.Before(r.Txn.TxnStartTime) {
-		// if the record has been deleted
-		if item.IsDeleted {
-			return errors.New("key not found")
+	curItem := item
+	for i := 1; i <= config.DefaultConfig.MaxRecordLength; i++ {
+
+		if curItem.TValid.Before(r.Txn.TxnStartTime) {
+			// if the record has been deleted
+			if curItem.IsDeleted {
+				return errors.New("key not found")
+			}
+			err := r.se.Deserialize([]byte(curItem.Value), value)
+			if err != nil {
+				return err
+			}
+			r.readCache[curItem.Key] = curItem
+			return nil
 		}
-		err := r.se.Deserialize([]byte(item.Value), value)
+		if i == config.DefaultConfig.MaxRecordLength {
+			break
+		}
+		// get the previous record
+		var preItem RedisItem
+		err := r.se.Deserialize([]byte(curItem.Prev), &preItem)
 		if err != nil {
+			// The transaction needs to be aborted
 			return err
 		}
-		r.readCache[item.Key] = item
-		return nil
+		curItem = preItem
 	}
-	var preItem RedisItem
-	err := r.se.Deserialize([]byte(item.Prev), &preItem)
-	if err != nil {
-		// The transaction needs to be aborted
-		return err
-	}
-	if preItem.TValid.Before(r.Txn.TxnStartTime) {
-		// if the record has been deleted
-		if preItem.IsDeleted {
-			return errors.New("key not found")
-		}
-		err := r.se.Deserialize([]byte(preItem.Value), value)
-		if err != nil {
-			return err
-		}
-		r.readCache[item.Key] = preItem
-		return nil
-	} else {
-		return errors.New("key not found")
-	}
+
+	return errors.New("key not found")
 }
 
 func (r *RedisDatastore) Write(key string, value any) error {
@@ -239,15 +236,67 @@ func (r *RedisDatastore) conditionalUpdate(item txn.Item) error {
 	return nil
 }
 
-func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (RedisItem, error) {
-	// clear the Prev field of the old item
-	oldItem.Prev = ""
-	// update record's metadata
-	bs, err := r.se.Serialize(oldItem)
-	if err != nil {
-		return newItem, err
+func (r *RedisDatastore) truncate(newItem *RedisItem) (RedisItem, error) {
+	maxLen := config.DefaultConfig.MaxRecordLength
+
+	if newItem.LinkedLen > maxLen {
+		stack := util.NewStack[RedisItem]()
+		stack.Push(*newItem)
+		curItem := newItem
+		for i := 1; i <= maxLen-1; i++ {
+			var preItem RedisItem
+			err := r.se.Deserialize([]byte(curItem.Prev), &preItem)
+			if err != nil {
+				return RedisItem{}, errors.New("Unmarshal error: " + err.Error())
+			}
+			curItem = &preItem
+			stack.Push(*curItem)
+		}
+
+		tarItem, err := stack.Pop()
+		if err != nil {
+			return RedisItem{}, errors.New("Pop error: " + err.Error())
+		}
+		tarItem.Prev = ""
+		tarItem.LinkedLen = 1
+
+		for !stack.IsEmpty() {
+			item, err := stack.Pop()
+			if err != nil {
+				return RedisItem{}, errors.New("Pop error: " + err.Error())
+			}
+			bs, err := r.se.Serialize(tarItem)
+			if err != nil {
+				return RedisItem{}, errors.New("Serialize error: " + err.Error())
+			}
+			item.Prev = string(bs)
+			item.LinkedLen = tarItem.LinkedLen + 1
+			tarItem = item
+		}
+		return tarItem, nil
+	} else {
+		return *newItem, nil
 	}
-	newItem.Prev = string(bs)
+}
+
+func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (RedisItem, error) {
+	if oldItem == (RedisItem{}) {
+		newItem.LinkedLen = 1
+	} else {
+		newItem.LinkedLen = oldItem.LinkedLen + 1
+		bs, err := r.se.Serialize(oldItem)
+		if err != nil {
+			return RedisItem{}, err
+		}
+		newItem.Prev = string(bs)
+	}
+
+	// truncate the record
+	newItem, err := r.truncate(&newItem)
+	if err != nil {
+		return RedisItem{}, err
+	}
+
 	newItem.TxnState = config.PREPARED
 	newItem.TValid = r.Txn.TxnCommitTime
 	newItem.TLease = r.Txn.TxnCommitTime.Add(config.DefaultConfig.LeaseTime)

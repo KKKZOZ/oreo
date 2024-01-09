@@ -908,41 +908,100 @@ func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)
 }
 
+func TestRedisLinkedRecord(t *testing.T) {
 
-func TestRedisReadFailDueToFastCommit(t *testing.T){
+	t.Run("commit time less than MaxLen", func(t *testing.T) {
 
-	preTxn:= NewTransactionWithSetup(REDIS)
-	preTxn.Start()
-	person:= testutil.NewDefaultPerson()
-	preTxn.Write(REDIS,"John",person)
-	preTxn.Commit()
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(REDIS, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
 
+		slowTxn := NewTransactionWithSetup(REDIS)
+		slowTxn.Start()
 
-	slowTxn:= NewTransactionWithSetup(REDIS)
-	fastTxn1:= NewTransactionWithSetup(REDIS)
-	fastTxn2:= NewTransactionWithSetup(REDIS)
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+2=3 < 4, including origin
+		commitTime := 2
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(REDIS)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(REDIS, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(REDIS, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
 
-	slowTxn.Start()
-	fastTxn1.Start()
-	var p1 testutil.Person
-	fastTxn1.Read(REDIS,"John",&p1)
-	p1.Age = 31
-	fastTxn1.Write(REDIS,"John",p1)
-	fastTxn1.Commit()
+		var p testutil.Person
+		err = slowTxn.Read(REDIS, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
 
+	t.Run("commit time equals MaxLen", func(t *testing.T) {
 
-	fastTxn2.Start()
-	var p2 testutil.Person
-	fastTxn2.Read(REDIS,"John",&p2)
-	assert.Equal(t,31,p2.Age)
-	p2.Age = 32
-	fastTxn2.Write(REDIS,"John",p2)
-	fastTxn2.Commit()
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(REDIS, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
 
-	// slowTxn should fail to read John
-	// because it can not find a corresponding version
-	var p0 testutil.Person
-	err:=slowTxn.Read(REDIS,"John",&p0)
-	assert.EqualError(t,err,"key not found")
+		slowTxn := NewTransactionWithSetup(REDIS)
+		slowTxn.Start()
 
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+3=4 == 4, including origin
+		commitTime := 3
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(REDIS)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(REDIS, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(REDIS, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(REDIS, "John", &p)
+		assert.NoError(t, err)
+		assert.Equal(t, 30, p.Age)
+	})
+
+	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+		person := testutil.NewDefaultPerson()
+		preTxn.Write(REDIS, "John", person)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		slowTxn := NewTransactionWithSetup(REDIS)
+		slowTxn.Start()
+
+		config.DefaultConfig.MaxRecordLength = 4
+		// 1+4=5 > 4, including origin
+		commitTime := 4
+		for i := 1; i <= commitTime; i++ {
+			txn := NewTransactionWithSetup(REDIS)
+			txn.Start()
+			var p testutil.Person
+			txn.Read(REDIS, "John", &p)
+			p.Age = p.Age + 1
+			txn.Write(REDIS, "John", p)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+		var p testutil.Person
+		err = slowTxn.Read(REDIS, "John", &p)
+		assert.EqualError(t, err, "key not found")
+	})
 }

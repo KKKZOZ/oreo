@@ -27,6 +27,7 @@ type MemoryItem struct {
 	TValid    time.Time
 	TLease    time.Time
 	Prev      string
+	LinkedLen int
 	isDeleted bool
 	Version   int
 }
@@ -122,38 +123,36 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 }
 
 func (m *MemoryDatastore) readAsCommitted(item MemoryItem, value any) error {
-	if item.TValid.Before(m.Txn.TxnStartTime) {
-		// if the record has been deleted
-		if item.isDeleted {
-			return errors.New("key not found")
+
+	curItem := item
+	for i := 1; i <= config.DefaultConfig.MaxRecordLength; i++ {
+
+		if curItem.TValid.Before(m.Txn.TxnStartTime) {
+			// if the record has been deleted
+			if curItem.isDeleted {
+				return errors.New("key not found")
+			}
+			err := json.Unmarshal([]byte(curItem.Value), value)
+			if err != nil {
+				return err
+			}
+			m.readCache[curItem.Key] = curItem
+			return nil
 		}
-		err := json.Unmarshal([]byte(item.Value), value)
+		if i == config.DefaultConfig.MaxRecordLength {
+			break
+		}
+		// get the previous record
+		var preItem MemoryItem
+		err := json.Unmarshal([]byte(curItem.Prev), &preItem)
 		if err != nil {
+			// The transaction needs to be aborted
 			return err
 		}
-		m.readCache[item.Key] = item
-		return nil
+		curItem = preItem
 	}
-	var preItem MemoryItem
-	err := json.Unmarshal([]byte(item.Prev), &preItem)
-	if err != nil {
-		// The transaction needs to be aborted
-		return err
-	}
-	if preItem.TValid.Before(m.Txn.TxnStartTime) {
-		// if the record has been deleted
-		if preItem.isDeleted {
-			return errors.New("key not found")
-		}
-		err := json.Unmarshal([]byte(preItem.Value), value)
-		if err != nil {
-			return err
-		}
-		m.readCache[item.Key] = preItem
-		return nil
-	} else {
-		return errors.New("key not found")
-	}
+
+	return errors.New("key not found")
 }
 
 func (m *MemoryDatastore) Write(key string, value any) error {
@@ -251,7 +250,10 @@ func (m *MemoryDatastore) conditionalUpdate(item txn.Item) error {
 	err = m.conn.Get(memItem.Key, &oldItem)
 	if err != nil {
 		// this is a new record
-		newItem := m.updateMetadata(memItem, MemoryItem{})
+		newItem, err := m.updateMetadata(memItem, MemoryItem{})
+		if err != nil {
+			return err
+		}
 		// Write the new item to the data store
 		if err = m.conn.Put(newItem.Key, newItem); err != nil {
 			return err
@@ -270,7 +272,10 @@ func (m *MemoryDatastore) conditionalUpdate(item txn.Item) error {
 		// we can do nothing when the record is deleted
 
 		// update record's metadata
-		newItem := m.updateMetadata(memItem, oldItem)
+		newItem, err := m.updateMetadata(memItem, oldItem)
+		if err != nil {
+			return err
+		}
 		// Write the new item to the data store
 		if err = m.conn.Put(newItem.Key, newItem); err != nil {
 			return err
@@ -282,17 +287,66 @@ func (m *MemoryDatastore) conditionalUpdate(item txn.Item) error {
 	}
 }
 
-func (m *MemoryDatastore) updateMetadata(newItem MemoryItem, oldItem MemoryItem) MemoryItem {
-	// clear the Prev field of the old item
-	oldItem.Prev = ""
+func (m *MemoryDatastore) truncate(newItem *MemoryItem) (MemoryItem, error) {
+	maxLen := config.DefaultConfig.MaxRecordLength
+
+	if newItem.LinkedLen > maxLen {
+		stack := util.NewStack[MemoryItem]()
+		stack.Push(*newItem)
+		curItem := newItem
+		for i := 1; i <= maxLen-1; i++ {
+			var preItem MemoryItem
+			err := json.Unmarshal([]byte(curItem.Prev), &preItem)
+			if err != nil {
+				return MemoryItem{}, errors.New("Unmarshal error: " + err.Error())
+			}
+			curItem = &preItem
+			stack.Push(*curItem)
+		}
+
+		tarItem, err := stack.Pop()
+		if err != nil {
+			return MemoryItem{}, errors.New("Pop error: " + err.Error())
+		}
+		tarItem.Prev = ""
+		tarItem.LinkedLen = 1
+
+		for !stack.IsEmpty() {
+			item, err := stack.Pop()
+			if err != nil {
+				return MemoryItem{}, errors.New("Pop error: " + err.Error())
+			}
+			item.Prev = util.ToJSONString(tarItem)
+			item.LinkedLen = tarItem.LinkedLen + 1
+			tarItem = item
+		}
+		return tarItem, nil
+	} else {
+		return *newItem, nil
+	}
+}
+
+func (m *MemoryDatastore) updateMetadata(newItem MemoryItem, oldItem MemoryItem) (MemoryItem, error) {
 	// update record's metadata
-	newItem.Prev = util.ToJSONString(oldItem)
+	if oldItem == (MemoryItem{}) {
+		newItem.LinkedLen = 1
+	} else {
+		newItem.LinkedLen = oldItem.LinkedLen + 1
+		newItem.Prev = util.ToJSONString(oldItem)
+	}
+
+	// truncate the record
+	newItem, err := m.truncate(&newItem)
+	if err != nil {
+		return MemoryItem{}, err
+	}
+
 	newItem.Version++
 	newItem.TxnState = config.PREPARED
 	newItem.TValid = m.Txn.TxnCommitTime
 	newItem.TLease = m.Txn.TxnCommitTime.Add(config.DefaultConfig.LeaseTime)
 
-	return newItem
+	return newItem, nil
 }
 
 func (m *MemoryDatastore) Prepare() error {
