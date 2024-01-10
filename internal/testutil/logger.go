@@ -6,9 +6,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 type TxnTopic string
@@ -27,19 +24,10 @@ const (
 	DTSR     TxnTopic = "TSR"
 )
 
-var Log *zap.SugaredLogger
-
 var debugStart time.Time
 var debugVerbosity int
 
 func init() {
-	conf := zap.NewDevelopmentConfig()
-	conf.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	conf.EncoderConfig.EncodeTime = zapcore.EpochNanosTimeEncoder
-	conf.EncoderConfig.MessageKey = "msg"
-	logger, _ := conf.Build()
-	Log = logger.Sugar()
 
 	debugVerbosity = getVerbosity()
 	debugStart = time.Now()

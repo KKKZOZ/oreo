@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/memory"
+	"github.com/kkkzoz/oreo/pkg/logger"
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
@@ -33,7 +33,7 @@ func insertTwoUsers(txn *txn.Transaction) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("inserted two users")
+	logger.Log.Info("inserted two users")
 
 }
 

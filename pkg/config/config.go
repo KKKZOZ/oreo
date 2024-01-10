@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/json"
 	"time"
+
+	"go.uber.org/zap/zapcore"
 )
 
 type DataStoreType string
@@ -15,12 +17,14 @@ type config struct {
 	LeaseTime       time.Duration
 	MaxRecordLength int
 	IdGenerator     IdGenerator
+	LogLevel        zapcore.Level
 }
 
 var Config = config{
 	LeaseTime:       1000 * time.Millisecond,
 	MaxRecordLength: 2,
 	IdGenerator:     NewIncrementalGenerator(),
+	LogLevel:        zapcore.InfoLevel,
 }
 
 type State int

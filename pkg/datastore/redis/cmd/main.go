@@ -8,6 +8,7 @@ import (
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
 	red "github.com/kkkzoz/oreo/pkg/datastore/redis"
+	. "github.com/kkkzoz/oreo/pkg/logger"
 )
 
 type User struct {
@@ -47,7 +48,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	testutil.Log.Infow("Get success", "item.Value", item.Value)
+	Log.Infow("Get success", "item.Value", item.Value)
 	// testutil.Log.Infow("failed to fetch URL",
 	// 	// Structured context as loosely typed key-value pairs.
 	// 	"url", 12313123,

@@ -9,6 +9,7 @@ import (
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/locker"
+	. "github.com/kkkzoz/oreo/pkg/logger"
 )
 
 type SourceType string
@@ -77,6 +78,7 @@ func (t *Transaction) Start() error {
 		return errors.New("no datastores added")
 	}
 	t.TxnId = config.Config.IdGenerator.GenerateId()
+	Log.Infow("starting transaction", "txnId", t.TxnId)
 	t.TxnStartTime, err = t.getTime()
 	if err != nil {
 		return err
@@ -160,7 +162,7 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Finally, it deletes the transaction state record.
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
-
+	Log.Infow("starts to Commit", "txnId", t.TxnId)
 	err := t.SetState(config.COMMITTED)
 	if err != nil {
 		return err
@@ -180,11 +182,13 @@ func (t *Transaction) Commit() error {
 		if err != nil {
 			success = false
 			cause = err
+			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
 			t.debug(testutil.DPrepare, "prepare phase failed(ds:%v): %v", ds.GetName(), err)
 			break
 		}
 	}
 	if !success {
+		Log.Errorw("prepare phase failed, aborting transaction", "txnId", t.TxnId, "cause", cause)
 		t.Abort()
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
@@ -193,11 +197,13 @@ func (t *Transaction) Commit() error {
 	// The sync point
 	txnState, err := t.GetTSRState(t.TxnId)
 	if err == nil && txnState == config.ABORTED {
+		Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
 		t.Abort()
 		return errors.New("transaction is aborted by other transaction")
 	}
 
 	t.debug(testutil.DTSR, "writing TSR")
+	Log.Infow("writing TSR", "txnId", t.TxnId)
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
 		t.Abort()
@@ -230,8 +236,12 @@ func (t *Transaction) Abort() error {
 	if lastState == config.COMMITTED {
 		hasCommitted = true
 	}
+	Log.Info("aborting transaction", "txnId", t.TxnId, "hasCommitted", hasCommitted)
 	for _, ds := range t.dataStoreMap {
-		ds.Abort(hasCommitted)
+		err := ds.Abort(hasCommitted)
+		if err != nil {
+			Log.Errorw("abort failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
+		}
 	}
 	return nil
 }
