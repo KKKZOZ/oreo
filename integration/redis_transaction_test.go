@@ -2,6 +2,8 @@ package integration
 
 import (
 	"errors"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -599,7 +601,11 @@ func TestRedisSimpleExpiredRead(t *testing.T) {
 	assert.NoError(t, err)
 	actual, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
+	tarMemItem.Version = 3
+	if !tarMemItem.Equal(actual) {
+		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
+	}
+	// assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
 
 }
 
@@ -653,7 +659,7 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 			slowTxn.Write(REDIS, item.Value, result)
 		}
 		err := slowTxn.Commit()
-		assert.EqualError(t, err, "prepare phase failed: write conflicted: the record has been modified by others")
+		assert.EqualError(t, err, "prepare phase failed: version mismatch")
 	}()
 	time.Sleep(1 * time.Second)
 
@@ -1003,5 +1009,349 @@ func TestRedisLinkedRecord(t *testing.T) {
 		var p testutil.Person
 		err = slowTxn.Read(REDIS, "John", &p)
 		assert.EqualError(t, err, "key not found")
+	})
+}
+
+// there is a broken item
+// txnA reads the item, decides to roll back
+// txnB reads the item, decides to roll back
+// txnB rollbacks the item
+// txnB update the item and commit
+// txnA rollbacks the item -> should fail
+func TestRedisRollbackConflict(t *testing.T) {
+	conn := NewRedisConnection()
+
+	redisItem1 := redis.RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:     "TestRedisRollbackConflict1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-5 * time.Second),
+		TLease:    time.Now().Add(-4 * time.Second),
+		LinkedLen: 1,
+		Version:   1,
+	}
+	redisItem2 := redis.RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+		TxnId:     "TestRedisRollbackConflict2",
+		TxnState:  config.PREPARED,
+		TValid:    time.Now().Add(-5 * time.Second),
+		TLease:    time.Now().Add(-4 * time.Second),
+		Prev:      util.ToJSONString(redisItem1),
+		LinkedLen: 2,
+		Version:   2,
+	}
+	conn.PutItem("item1", redisItem2)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		txnA := txn.NewTransaction()
+		mockConn := redis.NewMockRedisConnection("localhost", 6379, 0, false,
+			func() error { time.Sleep(2 * time.Second); return nil })
+		rds := redis.NewRedisDatastore("redis", mockConn)
+		txnA.AddDatastore(rds)
+		txnA.SetGlobalDatastore(rds)
+		txnA.Start()
+
+		var item testutil.TestItem
+		err := txnA.Read(REDIS, "item1", &item)
+		assert.NotNil(t, err)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	txnB := NewTransactionWithSetup(REDIS)
+	txnB.Start()
+	var item testutil.TestItem
+	err := txnB.Read(REDIS, "item1", &item)
+	assert.NoError(t, err)
+	assert.Equal(t, testutil.NewTestItem("item1-pre"), item)
+	item.Value = "item1-B"
+	txnB.Write(REDIS, "item1", item)
+	err = txnB.Commit()
+	assert.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+	resItem, err := conn.GetItem("item1")
+	assert.NoError(t, err)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+	redisItem1.Version = 3
+	assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev)
+
+}
+
+// there is a broken item
+// txnA reads the item, decides to roll forward
+// txnB reads the item, decides to roll forward
+// txnB rolls forward the item
+// txnB update the item and commit
+// txnA rolls forward the item -> should fail
+func TestRedisRollForwardConflict(t *testing.T) {
+	conn := NewRedisConnection()
+
+	redisItem1 := redis.RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:    "TestRedisRollForwardConflict1",
+		TxnState: config.COMMITTED,
+		TValid:   time.Now().Add(-5 * time.Second),
+		TLease:   time.Now().Add(-4 * time.Second),
+		Version:  1,
+	}
+	redisItem2 := redis.RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+		TxnId:     "TestRedisRollForwardConflict2",
+		TxnState:  config.PREPARED,
+		TValid:    time.Now().Add(-5 * time.Second),
+		TLease:    time.Now().Add(-4 * time.Second),
+		Prev:      util.ToJSONString(redisItem1),
+		LinkedLen: 2,
+		Version:   2,
+	}
+	conn.PutItem("item1", redisItem2)
+	conn.Put("TestRedisRollForwardConflict2", config.COMMITTED)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		txnA := txn.NewTransaction()
+		mockConn := redis.NewMockRedisConnection("localhost", 6379, 0, false,
+			func() error { time.Sleep(2 * time.Second); return nil })
+		rds := redis.NewRedisDatastore("redis", mockConn)
+		txnA.AddDatastore(rds)
+		txnA.SetGlobalDatastore(rds)
+		txnA.Start()
+		var item testutil.TestItem
+		err := txnA.Read(REDIS, "item1", &item)
+		assert.NotNil(t, err)
+
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	txnB := NewTransactionWithSetup(REDIS)
+	txnB.Start()
+	var item testutil.TestItem
+	txnB.Read(REDIS, "item1", &item)
+	assert.Equal(t, testutil.NewTestItem("item1-broken"), item)
+	item.Value = "item1-B"
+	txnB.Write(REDIS, "item1", item)
+	err := txnB.Commit()
+	assert.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+	resItem, err := conn.GetItem("item1")
+	assert.NoError(t, err)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+	redisItem2.TxnState = config.COMMITTED
+	redisItem2.Prev = ""
+	redisItem2.LinkedLen = 1
+	redisItem2.Version = 3
+	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev)
+
+}
+
+func TestRedisConcurrentDirectWrite(t *testing.T) {
+
+	conn := NewRedisConnection()
+	conn.Delete("item1")
+
+	conNumber := 5
+	mu := sync.Mutex{}
+	globalId := 0
+	resChan := make(chan bool)
+	for i := 1; i <= conNumber; i++ {
+		go func(id int) {
+			txn := NewTransactionWithSetup(REDIS)
+			item := testutil.NewTestItem("item1-" + strconv.Itoa(id))
+			txn.Start()
+			txn.Write(REDIS, "item1", item)
+			err := txn.Commit()
+			if err != nil {
+				resChan <- false
+			} else {
+				mu.Lock()
+				globalId = id
+				mu.Unlock()
+				resChan <- true
+			}
+		}(i)
+	}
+
+	successNum := 0
+	for i := 1; i <= conNumber; i++ {
+		res := <-resChan
+		if res {
+			successNum++
+		}
+	}
+
+	assert.Equal(t, 1, successNum)
+
+	postTxn := NewTransactionWithSetup(REDIS)
+	postTxn.Start()
+	var item testutil.TestItem
+	postTxn.Read(REDIS, "item1", &item)
+	assert.Equal(t, testutil.NewTestItem("item1-"+strconv.Itoa(globalId)), item)
+	// assert.Equal(t, 0, globalId)
+	t.Logf("item: %v", item)
+}
+
+func TestRedisTxnDelete(t *testing.T) {
+	preTxn := NewTransactionWithSetup(REDIS)
+	preTxn.Start()
+	item := testutil.NewTestItem("item1-pre")
+	preTxn.Write(REDIS, "item1", item)
+	err := preTxn.Commit()
+	assert.NoError(t, err)
+
+	txn := NewTransactionWithSetup(REDIS)
+	txn.Start()
+	var item1 testutil.TestItem
+	txn.Read(REDIS, "item1", &item1)
+	txn.Delete(REDIS, "item1")
+	err = txn.Commit()
+	assert.NoError(t, err)
+
+	postTxn := NewTransactionWithSetup(REDIS)
+	postTxn.Start()
+	var item2 testutil.TestItem
+	err = postTxn.Read(REDIS, "item1", &item2)
+	assert.EqualError(t, err, "key not found")
+}
+
+func TestRedisPreventLostUpdatesValidation(t *testing.T) {
+
+	t.Run("Case 1-1(with read): The target record has been updated by the concurrent transaction",
+		func(t *testing.T) {
+
+			preTxn := NewTransactionWithSetup(REDIS)
+			preTxn.Start()
+			item := testutil.NewTestItem("item1-pre")
+			preTxn.Write(REDIS, "item1", item)
+			err := preTxn.Commit()
+			assert.NoError(t, err)
+
+			txnA := NewTransactionWithSetup(REDIS)
+			txnA.Start()
+			txnB := NewTransactionWithSetup(REDIS)
+			txnB.Start()
+
+			var itemA testutil.TestItem
+			txnA.Read(REDIS, "item1", &itemA)
+			itemA.Value = "item1-A"
+			txnA.Write(REDIS, "item1", itemA)
+			err = txnA.Commit()
+			assert.NoError(t, err)
+
+			var itemB testutil.TestItem
+			txnB.Read(REDIS, "item1", &itemB)
+			itemB.Value = "item1-B"
+			txnB.Write(REDIS, "item1", itemB)
+			err = txnB.Commit()
+			assert.EqualError(t, err,
+				"prepare phase failed: version mismatch")
+
+			postTxn := NewTransactionWithSetup(REDIS)
+			postTxn.Start()
+			var item1 testutil.TestItem
+			postTxn.Read(REDIS, "item1", &item1)
+			assert.Equal(t, itemA, item1)
+		})
+
+	t.Run("Case 1-2(without read): The target record has been updated by the concurrent transaction",
+		func(t *testing.T) {
+
+			preTxn := NewTransactionWithSetup(REDIS)
+			preTxn.Start()
+			item := testutil.NewTestItem("item1-pre")
+			preTxn.Write(REDIS, "item1", item)
+			err := preTxn.Commit()
+			assert.NoError(t, err)
+
+			txnA := NewTransactionWithSetup(REDIS)
+			txnA.Start()
+			txnB := NewTransactionWithSetup(REDIS)
+			txnB.Start()
+
+			itemA := testutil.NewTestItem("item1-A")
+			txnA.Write(REDIS, "item1", itemA)
+			err = txnA.Commit()
+			assert.NoError(t, err)
+
+			itemB := testutil.NewTestItem("item1-B")
+			txnB.Write(REDIS, "item1", itemB)
+			err = txnB.Commit()
+			assert.EqualError(t, err,
+				"prepare phase failed: version mismatch")
+
+			postTxn := NewTransactionWithSetup(REDIS)
+			postTxn.Start()
+			var item1 testutil.TestItem
+			postTxn.Read(REDIS, "item1", &item1)
+			assert.Equal(t, itemA, item1)
+		})
+
+	t.Run("Case 2-1(with read): There is no conflict", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-pre")
+		preTxn.Write(REDIS, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txnA := NewTransactionWithSetup(REDIS)
+		txnA.Start()
+		var itemA testutil.TestItem
+		txnA.Read(REDIS, "item1", &itemA)
+		itemA.Value = "item1-A"
+		txnA.Write(REDIS, "item1", itemA)
+		err = txnA.Commit()
+		assert.NoError(t, err)
+
+		txnB := NewTransactionWithSetup(REDIS)
+		txnB.Start()
+		var itemB testutil.TestItem
+		txnB.Read(REDIS, "item1", &itemB)
+		itemB.Value = "item1-B"
+		txnB.Write(REDIS, "item1", itemB)
+		err = txnB.Commit()
+		assert.NoError(t, err)
+
+		postTxn := NewTransactionWithSetup(REDIS)
+		postTxn.Start()
+		var item1 testutil.TestItem
+		postTxn.Read(REDIS, "item1", &item1)
+		assert.Equal(t, itemB, item1)
+	})
+
+	t.Run("Case 2-2(without read): There is no conflict", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-pre")
+		preTxn.Write(REDIS, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txnA := NewTransactionWithSetup(REDIS)
+		txnA.Start()
+		itemA := testutil.NewTestItem("item1-A")
+		txnA.Write(REDIS, "item1", itemA)
+		err = txnA.Commit()
+		assert.NoError(t, err)
+
+		txnB := NewTransactionWithSetup(REDIS)
+		txnB.Start()
+		itemB := testutil.NewTestItem("item1-B")
+		txnB.Write(REDIS, "item1", itemB)
+		err = txnB.Commit()
+		assert.NoError(t, err)
+
+		postTxn := NewTransactionWithSetup(REDIS)
+		postTxn.Start()
+		var item1 testutil.TestItem
+		postTxn.Read(REDIS, "item1", &item1)
+		assert.Equal(t, itemB, item1)
 	})
 }

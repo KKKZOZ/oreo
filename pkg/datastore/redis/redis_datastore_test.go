@@ -14,12 +14,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// NewDefaultRedisConnection creates a new RedisConnection with default connection options.
+// It uses the localhost address and the default Redis port (6379).
 func NewDefaultRedisConnection() *RedisConnection {
 	return NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
 }
 
+// NewTransactionWithSetup creates a new transaction with a Redis datastore setup.
+// It initializes a Redis connection, creates a new transaction, and adds a Redis datastore to the transaction.
+// The Redis connection is established with the provided address.
+// The created transaction is returned.
 func NewTransactionWithSetup() *txn.Transaction {
 	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
@@ -142,6 +148,47 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 	if result != expected {
 		t.Errorf("got %v want %v", result, expected)
 	}
+}
+
+func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
+
+	txn1 := txn.NewTransaction()
+	conn := NewRedisConnection(&ConnectionOptions{
+		Address: "localhost:6379",
+	})
+	rds := NewRedisDatastore("redis", conn)
+	txn1.AddDatastore(rds)
+	txn1.SetGlobalDatastore(rds)
+
+	// initialize the redis database
+	expected := testutil.Person{
+		Name: "John",
+		Age:  30,
+	}
+	expectedRedisItem := RedisItem{
+		Key:      "John",
+		Value:    util.ToJSONString(expected),
+		TxnId:    "TestSimpleReadWhenCommittedFindEmpty",
+		TxnState: config.COMMITTED,
+		TValid:   time.Now().Add(+10 * time.Second),
+		TLease:   time.Now().Add(+5 * time.Second),
+		Version:  2,
+	}
+
+	key := "John"
+	conn.PutItem(key, expectedRedisItem)
+
+	// Start the transaction
+	err := txn1.Start()
+	if err != nil {
+		t.Errorf("Error starting transaction: %s", err)
+	}
+
+	// Read the value
+	var result testutil.Person
+	err = txn1.Read("redis", key, &result)
+	assert.EqualError(t, err, txn.KeyNotFound.Error())
+
 }
 
 func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
@@ -349,7 +396,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		Version:  2,
 	}
 
-	key := "John"
+	key := "item1"
 	conn.PutItem(key, curMemItem)
 
 	// Write the TSR
@@ -519,6 +566,9 @@ func TestSimpleWriteAndRead(t *testing.T) {
 }
 
 func TestSimpleDirectWrite(t *testing.T) {
+
+	conn := NewDefaultRedisConnection()
+	conn.Delete("John")
 
 	preTxn := NewTransactionWithSetup()
 	preTxn.Start()
@@ -1026,7 +1076,8 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 			err := txn.Commit()
 			if err != nil {
 				if err.Error() != "prepare phase failed: write conflicted: the record is in PREPARED state" &&
-					err.Error() != "prepare phase failed: write conflicted: the record has been modified by others" {
+					err.Error() != "prepare phase failed: write conflicted: the record has been modified by others" &&
+					err.Error() != "prepare phase failed: version mismatch" {
 					t.Errorf("Unexpected error: %s", err)
 				}
 				resChan <- false
@@ -1226,40 +1277,40 @@ func TestLinkedTruncate(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 4", func(t *testing.T) {
+	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 4",
+		func(t *testing.T) {
+			config.Config.MaxRecordLength = 4
+			for i := 1; i <= 4; i++ {
+				item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
+				txn := NewTransactionWithSetup()
+				txn.Start()
+				txn.Write("redis", "item1", item)
+				err := txn.Commit()
+				assert.Nil(t, err)
+			}
 
-		config.Config.MaxRecordLength = 4
-		for i := 1; i <= 4; i++ {
-			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
-			txn := NewTransactionWithSetup()
-			txn.Start()
-			txn.Write("redis", "item1", item)
-			err := txn.Commit()
-			assert.Nil(t, err)
-		}
+			// check the linked record length
+			conn := NewRedisConnection(&ConnectionOptions{
+				Address: "localhost:6379",
+			})
+			conn.Connect()
+			item, err := conn.GetItem("item1")
+			assert.NoError(t, err)
+			assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
+			t.Logf("item: %+v", item)
 
-		// check the linked record length
-		conn := NewRedisConnection(&ConnectionOptions{
-			Address: "localhost:6379",
+			tarItem := item
+			for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
+				var preItem RedisItem
+				err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
+				assert.Nil(t, err)
+				tarItem = preItem
+			}
+			assert.Equal(t, "", tarItem.Prev)
+
+			err = conn.Delete("item1")
+			assert.NoError(t, err)
 		})
-		conn.Connect()
-		item, err := conn.GetItem("item1")
-		assert.NoError(t, err)
-		assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
-		t.Logf("item: %+v", item)
-
-		tarItem := item
-		for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
-			var preItem RedisItem
-			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
-			assert.Nil(t, err)
-			tarItem = preItem
-		}
-		assert.Equal(t, "", tarItem.Prev)
-
-		err = conn.Delete("item1")
-		assert.NoError(t, err)
-	})
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 5", func(t *testing.T) {
 
@@ -1295,4 +1346,453 @@ func TestLinkedTruncate(t *testing.T) {
 		err = conn.Delete("item1")
 		assert.NoError(t, err)
 	})
+}
+
+// The transcation should ***roll back*** the record then conditionalUpdate properly
+func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
+
+	// final linked record should be "item1-cur" -> "item1-pre2"
+	t.Run("the record has a valid Prev field", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.Connect()
+
+		tarItem := RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+			TxnId:     "99",
+			TxnState:  config.COMMITTED,
+			TValid:    time.Now().Add(-10 * time.Second),
+			TLease:    time.Now().Add(-9 * time.Second),
+			LinkedLen: 1,
+			Version:   1,
+		}
+
+		curItem := RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:     "100",
+			TxnState:  config.PREPARED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			Prev:      util.ToJSONString(tarItem),
+			LinkedLen: 2,
+			Version:   2,
+		}
+
+		conn.PutItem(tarItem.Key, curItem)
+
+		// Start the transaction
+		txn := NewTransactionWithSetup()
+		txn.Start()
+
+		// Write the value
+		item := testutil.NewTestItem("item1-cur")
+		txn.Write("redis", tarItem.Key, item)
+		err := txn.Commit()
+		assert.NoError(t, err)
+
+		// First, we check the final record's Value
+		postTxn := NewTransactionWithSetup()
+		postTxn.Start()
+		var resItem testutil.TestItem
+		err = postTxn.Read("redis", "item1", &resItem)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-cur", resItem.Value)
+
+		// Second, we check the final record's Prev field is correct
+		finalRedisItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		tarItem.Version = 3
+		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev)
+	})
+
+	// final linked record should be "item1-cur" -> ""
+	t.Run("the record has an empty Prev field", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.Connect()
+
+		tarItem := RedisItem{
+			Key:      "item1",
+			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:    "99",
+			TxnState: config.PREPARED,
+			TValid:   time.Now().Add(-10 * time.Second),
+			TLease:   time.Now().Add(-9 * time.Second),
+			Version:  1,
+		}
+
+		conn.PutItem(tarItem.Key, tarItem)
+
+		// Start the transaction
+		txn := NewTransactionWithSetup()
+		txn.Start()
+
+		// Write the value
+		item := testutil.NewTestItem("item1-cur")
+		txn.Write("redis", tarItem.Key, item)
+		err := txn.Commit()
+		assert.NoError(t, err)
+
+		// First, we check the final record's Value
+		postTxn := NewTransactionWithSetup()
+		postTxn.Start()
+		var resItem testutil.TestItem
+		err = postTxn.Read("redis", "item1", &resItem)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-cur", resItem.Value)
+
+		// Second, we check the final record's Prev field is correct
+		finalRedisItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, "", finalRedisItem.Prev)
+	})
+
+}
+
+// The transcation should ***roll forward*** the record then conditionalUpdate properly
+func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
+
+	// final linked record should be "item1-cur" -> "item1-pre"
+	t.Run("the record has a valid Prev field", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.Connect()
+
+		tarItem := RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+			TxnId:     "99",
+			TxnState:  config.COMMITTED,
+			TValid:    time.Now().Add(-10 * time.Second),
+			TLease:    time.Now().Add(-9 * time.Second),
+			LinkedLen: 1,
+			Version:   1,
+		}
+
+		curItem := RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			TxnState:  config.PREPARED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			LinkedLen: 2,
+			Version:   2,
+			Prev:      util.ToJSONString(tarItem),
+		}
+
+		conn.PutItem(tarItem.Key, curItem)
+		conn.Put("TestDirectWriteOnOutdatedPreparedRecordWithTSR", config.COMMITTED)
+
+		// Start the transaction
+		txn := NewTransactionWithSetup()
+		txn.Start()
+
+		// Write the value
+		item := testutil.NewTestItem("item1-cur")
+		txn.Write("redis", tarItem.Key, item)
+		err := txn.Commit()
+		assert.NoError(t, err)
+
+		// First, we check the final record's Value
+		postTxn := NewTransactionWithSetup()
+		postTxn.Start()
+		var resItem testutil.TestItem
+		err = postTxn.Read("redis", "item1", &resItem)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-cur", resItem.Value)
+
+		// Second, we check the final record's Prev field is correct
+		finalRedisItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+
+		curItem.Prev = ""
+		curItem.LinkedLen = 1
+		curItem.TxnState = config.COMMITTED
+		curItem.Version = 3
+		assert.Equal(t, util.ToJSONString(curItem), finalRedisItem.Prev)
+	})
+
+	// final linked record should be "item1-cur" -> "item1-pre"
+	t.Run("the record has an empty Prev field", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.Connect()
+
+		tarItem := RedisItem{
+			Key:      "item1",
+			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:    "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			TxnState: config.PREPARED,
+			TValid:   time.Now().Add(-10 * time.Second),
+			TLease:   time.Now().Add(-9 * time.Second),
+			Version:  1,
+		}
+
+		conn.PutItem(tarItem.Key, tarItem)
+		conn.Put("TestDirectWriteOnOutdatedPreparedRecordWithTSR", config.COMMITTED)
+
+		// Start the transaction
+		txn := NewTransactionWithSetup()
+		txn.Start()
+
+		// Write the value
+		item := testutil.NewTestItem("item1-cur")
+		txn.Write("redis", tarItem.Key, item)
+		err := txn.Commit()
+		assert.NoError(t, err)
+
+		// First, we check the final record's Value
+		postTxn := NewTransactionWithSetup()
+		postTxn.Start()
+		var resItem testutil.TestItem
+		err = postTxn.Read("redis", "item1", &resItem)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-cur", resItem.Value)
+
+		// Second, we check the final record's Prev field is correct
+		finalRedisItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		tarItem.Version = 2
+		tarItem.TxnState = config.COMMITTED
+		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev)
+	})
+
+}
+
+// The transaction should abort because version mismatch
+func TestDirectWriteOnPreparingRecord(t *testing.T) {
+
+	conn := NewDefaultRedisConnection()
+	conn.Connect()
+
+	tarItem := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:    "TestDirectWriteOnPreparingRecord",
+		TxnState: config.PREPARED,
+		TValid:   time.Now().Add(2 * time.Second),
+		TLease:   time.Now().Add(1 * time.Second),
+		Version:  1,
+	}
+
+	conn.PutItem(tarItem.Key, tarItem)
+
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	item := testutil.NewTestItem("item1-cur")
+	txn.Write("redis", tarItem.Key, item)
+	err := txn.Commit()
+	assert.EqualError(t, err, "prepare phase failed: version mismatch")
+}
+
+func TestRollbackWhenReading(t *testing.T) {
+
+	item1Pre := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:    "TestRollback",
+		TxnState: config.COMMITTED,
+		TValid:   time.Now().Add(-10 * time.Second),
+		TLease:   time.Now().Add(-9 * time.Second),
+		Version:  1,
+	}
+
+	item1 := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
+		TxnId:    "TestRollback",
+		TxnState: config.PREPARED,
+		TValid:   time.Now().Add(-5 * time.Second),
+		TLease:   time.Now().Add(-4 * time.Second),
+		Version:  2,
+	}
+
+	t.Run("rollback an item with a valid Prev field when reading", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		todoRedisItem := item1
+		todoRedisItem.Prev = util.ToJSONString(item1Pre)
+		// TODO: need a helper func
+		todoRedisItem.LinkedLen = 2
+		conn.PutItem(todoRedisItem.Key, todoRedisItem)
+
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		var item testutil.TestItem
+		err := txn.Read("redis", todoRedisItem.Key, &item)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-pre", item.Value)
+	})
+
+	t.Run("rollback an item with an invalid Prev field when reading", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		todoRedisItem := item1
+		todoRedisItem.Prev = "a broken prev field"
+		// TODO: need a helper func
+		todoRedisItem.LinkedLen = 2
+		conn.PutItem(todoRedisItem.Key, todoRedisItem)
+
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		var item testutil.TestItem
+		err := txn.Read("redis", todoRedisItem.Key, &item)
+		assert.NotNil(t, err)
+	})
+
+	t.Run("rollback an item with an empty Prev field when reading", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.PutItem(item1.Key, item1)
+
+		txn1 := NewTransactionWithSetup()
+		txn1.Start()
+		var item testutil.TestItem
+		err := txn1.Read("redis", item1.Key, &item)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
+	})
+}
+
+func TestRollbackWhenWriting(t *testing.T) {
+	item1Pre := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:    "TestRollback",
+		TxnState: config.COMMITTED,
+		TValid:   time.Now().Add(-10 * time.Second),
+		TLease:   time.Now().Add(-9 * time.Second),
+		Version:  1,
+	}
+
+	item1 := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
+		TxnId:    "TestRollback",
+		TxnState: config.PREPARED,
+		TValid:   time.Now().Add(-5 * time.Second),
+		TLease:   time.Now().Add(-4 * time.Second),
+		Version:  2,
+	}
+
+	t.Run("rollback an item with a valid Prev field when writing", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		todoRedisItem := item1
+		todoRedisItem.Prev = util.ToJSONString(item1Pre)
+		// TODO: need a helper func
+		todoRedisItem.LinkedLen = 2
+		conn.PutItem(todoRedisItem.Key, todoRedisItem)
+
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		item := testutil.NewTestItem("item1-cur")
+		txn.Write("redis", todoRedisItem.Key, item)
+		err := txn.Commit()
+		assert.NoError(t, err)
+
+		res, err := conn.GetItem(todoRedisItem.Key)
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(item), res.Value)
+		tarItem := item1Pre
+		tarItem.Version = 3
+		assert.Equal(t, util.ToJSONString(tarItem), res.Prev)
+
+	})
+
+	t.Run("rollback an item with an invalid Prev field", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		todoRedisItem := item1
+		todoRedisItem.Prev = "a broken prev field"
+		// TODO: need a helper func
+		todoRedisItem.LinkedLen = 2
+		conn.PutItem(todoRedisItem.Key, todoRedisItem)
+
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		item := testutil.NewTestItem("item1-cur")
+		txn.Write("redis", todoRedisItem.Key, item)
+		err := txn.Commit()
+		assert.NotNil(t, err)
+	})
+
+	t.Run("rollback an item with an empty Prev field when writing", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.PutItem(item1.Key, item1)
+
+		txn1 := NewTransactionWithSetup()
+		txn1.Start()
+		item := testutil.NewTestItem("item1-cur")
+		txn1.Write("redis", item1.Key, item)
+		err := txn1.Commit()
+		assert.NoError(t, err)
+
+		res, err := conn.GetItem(item1.Key)
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(item), res.Value)
+		assert.Equal(t, "", res.Prev)
+	})
+}
+
+func TestRollForwardWhenReading(t *testing.T) {
+
+	conn := NewDefaultRedisConnection()
+	conn.Connect()
+
+	tarItem := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:    "TestRollForward",
+		TxnState: config.PREPARED,
+		TValid:   time.Now().Add(-10 * time.Second),
+		TLease:   time.Now().Add(-9 * time.Second),
+		Version:  1,
+	}
+
+	conn.PutItem(tarItem.Key, tarItem)
+	conn.Put("TestRollForward", config.COMMITTED)
+
+	// the transaction should roll forward the item
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	var item testutil.TestItem
+	err := txn.Read("redis", tarItem.Key, &item)
+	assert.NoError(t, err)
+
+	res, err := conn.GetItem(tarItem.Key)
+	assert.NoError(t, err)
+	tarItem.TxnState = config.COMMITTED
+	tarItem.Version = 2
+	if !res.Equal(tarItem) {
+		t.Errorf("\ngot\n %v \nwant\n %v", res, tarItem)
+	}
+}
+
+func TestRollForwardWhenWriting(t *testing.T) {
+
+	conn := NewDefaultRedisConnection()
+	conn.Connect()
+
+	tarItem := RedisItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:    "TestRollForward",
+		TxnState: config.PREPARED,
+		TValid:   time.Now().Add(-10 * time.Second),
+		TLease:   time.Now().Add(-9 * time.Second),
+		Version:  1,
+	}
+
+	conn.PutItem(tarItem.Key, tarItem)
+	conn.Put("TestRollForward", config.COMMITTED)
+
+	// the transaction should roll forward the item
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	item := testutil.NewTestItem("item1-cur")
+	txn.Write("redis", tarItem.Key, item)
+	err := txn.Commit()
+	assert.NoError(t, err)
+
+	res, err := conn.GetItem(tarItem.Key)
+	assert.NoError(t, err)
+	assert.Equal(t, util.ToJSONString(item), res.Value)
+	tarItem.TxnState = config.COMMITTED
+	tarItem.Version = 2
+	tarPrev := util.ToJSONString(tarItem)
+	assert.Equal(t, tarPrev, res.Prev)
 }

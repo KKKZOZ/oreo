@@ -14,6 +14,18 @@ import (
 
 type SourceType string
 
+type TxnError string
+
+func (e TxnError) Error() string {
+	return string(e)
+}
+
+const (
+	KeyNotFound      TxnError = "key not found"
+	DeserializeError TxnError = "deserialize error"
+	VersionMismatch  TxnError = "version mismatch"
+)
+
 const (
 	// EMPTY  SourceType = "EMPTY"
 	LOCAL  SourceType = "LOCAL"
@@ -162,7 +174,7 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Finally, it deletes the transaction state record.
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
-	Log.Infow("starts to Commit", "txnId", t.TxnId)
+	Log.Infow("starts to Commit()", "txnId", t.TxnId)
 	err := t.SetState(config.COMMITTED)
 	if err != nil {
 		return err
@@ -218,6 +230,7 @@ func (t *Transaction) Commit() error {
 	}
 
 	t.DeleteTSR()
+	Log.Infow("Commit() finished", "txnId", t.TxnId)
 	return nil
 }
 
@@ -236,7 +249,7 @@ func (t *Transaction) Abort() error {
 	if lastState == config.COMMITTED {
 		hasCommitted = true
 	}
-	Log.Info("aborting transaction", "txnId", t.TxnId, "hasCommitted", hasCommitted)
+	Log.Infow("aborting transaction", "txnId", t.TxnId, "hasCommitted", hasCommitted)
 	for _, ds := range t.dataStoreMap {
 		err := ds.Abort(hasCommitted)
 		if err != nil {

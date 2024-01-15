@@ -1,5 +1,8 @@
 # Oreo - An Easy-to-use Distributed Transaciotn Framework
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/kkkzoz/oreo)](https://goreportcard.com/report/github.com/kkkzoz/oreo)
+
+
 <div align="center">
 
 ![Logo](./assets/img/logo.png)
