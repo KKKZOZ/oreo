@@ -12,6 +12,7 @@ import (
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/serializer"
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -111,7 +112,7 @@ func TestRedisConnection_GetItemNotFound(t *testing.T) {
 
 	_, err := connection.GetItem(key)
 
-	assert.EqualError(t, err, fmt.Sprintf("key not found: %s", key))
+	assert.EqualError(t, err, txn.KeyNotFound.Error())
 }
 
 func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
@@ -220,7 +221,7 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 		Version:   2,
 	}
 
-	err = conn.ConditionalUpdate(key, newerItem)
+	err = conn.ConditionalUpdate(key, newerItem, false)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
@@ -265,7 +266,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 		Version:   3,
 	}
 
-	err = conn.ConditionalUpdate(key, newerItem)
+	err = conn.ConditionalUpdate(key, newerItem, false)
 	assert.EqualError(t, err, "version mismatch")
 
 	item, err := conn.GetItem(key)
@@ -294,7 +295,7 @@ func TestRedisConnectionConditionalUpdateNonExist(t *testing.T) {
 		Version:   1,
 	}
 
-	err := conn.ConditionalUpdate(key, newerItem)
+	err := conn.ConditionalUpdate(key, newerItem, true)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
@@ -344,7 +345,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 				Version:   2,
 			}
 
-			err = conn.ConditionalUpdate(key, newerItem)
+			err = conn.ConditionalUpdate(key, newerItem, false)
 			if err == nil {
 				globalId = id
 				resChan <- true
@@ -488,4 +489,62 @@ func TestRedisConnectionDeleteTwice(t *testing.T) {
 	assert.NoError(t, err)
 	err = conn.Delete("test_key")
 	assert.NoError(t, err)
+}
+
+func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
+
+	dbItem := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-db")),
+		TxnId:     "1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-3 * time.Second),
+		TLease:    time.Now().Add(-2 * time.Second),
+		Prev:      "",
+		IsDeleted: false,
+		LinkedLen: 1,
+		Version:   1,
+	}
+
+	cacheItem := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-cache")),
+		TxnId:     "2",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-2 * time.Second),
+		TLease:    time.Now().Add(-1 * time.Second),
+		Prev:      util.ToJSONString(dbItem),
+		LinkedLen: 2,
+		Version:   2,
+	}
+
+	t.Run("there is an item and doCreate is true ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		conn.PutItem(dbItem.Key, dbItem)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, true)
+		assert.EqualError(t, err, txn.VersionMismatch.Error())
+	})
+
+	t.Run("there is an item and doCreate is false ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		conn.PutItem(dbItem.Key, dbItem)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
+		assert.EqualError(t, err, txn.VersionMismatch.Error())
+	})
+
+	t.Run("there is no item and doCreate is true ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, true)
+		assert.EqualError(t, err, txn.VersionMismatch.Error())
+	})
+
+	t.Run("there is no item and doCreate is false ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
+		assert.EqualError(t, err, txn.VersionMismatch.Error())
+	})
 }

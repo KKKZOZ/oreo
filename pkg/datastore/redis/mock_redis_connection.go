@@ -29,7 +29,7 @@ func NewMockRedisConnection(address string, port int, limit int,
 	}
 }
 
-func (m *MockRedisConnection) ConditionalUpdate(key string, value RedisItem) error {
+func (m *MockRedisConnection) ConditionalUpdate(key string, value RedisItem, doCreate bool) error {
 	defer func() { m.debugCounter--; m.callTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -38,7 +38,7 @@ func (m *MockRedisConnection) ConditionalUpdate(key string, value RedisItem) err
 			m.debugFunc()
 		}
 	}
-	return m.RedisConnection.ConditionalUpdate(key, value)
+	return m.RedisConnection.ConditionalUpdate(key, value, doCreate)
 }
 
 func (m *MockRedisConnection) PutItem(key string, value RedisItem) error {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kkkzoz/oreo/pkg/serializer"
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -68,7 +69,7 @@ func (r *RedisConnection) GetItem(key string) (RedisItem, error) {
 	}
 	// Check if returned value is an empty struct
 	if (RedisItem{}) == value {
-		return RedisItem{}, fmt.Errorf("key not found: %s", key)
+		return RedisItem{}, txn.KeyNotFound
 	}
 	return value, nil
 }
@@ -102,10 +103,12 @@ func (r *RedisConnection) PutItem(key string, value RedisItem) error {
 // It takes a key string and a RedisItem value as parameters.
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (r *RedisConnection) ConditionalUpdate(key string, value RedisItem) error {
-	ctx := context.Background()
-	sha, err := r.rdb.ScriptLoad(ctx, `
-	if redis.call('EXISTS', KEYS[1]) == 0 or redis.call('HGET', KEYS[1], 'Version') == ARGV[1] then
+func (r *RedisConnection) ConditionalUpdate(key string, value RedisItem, doCreate bool) error {
+
+	if doCreate {
+		ctx := context.Background()
+		sha, err := r.rdb.ScriptLoad(ctx, `
+	if redis.call('EXISTS', KEYS[1]) == 0 then
 	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
 	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
 	redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
@@ -115,22 +118,55 @@ func (r *RedisConnection) ConditionalUpdate(key string, value RedisItem) error {
 	redis.call('HSET', KEYS[1], 'Version', ARGV[8])
 	redis.call('HSET', KEYS[1], 'Prev', ARGV[9])
 	redis.call('HSET', KEYS[1], 'LinkedLen', ARGV[10])
+	redis.call('HSET', KEYS[1], 'IsDeleted', ARGV[11])
 	return redis.call('HGETALL', KEYS[1])
 else
 	return redis.error_reply('version mismatch')
 end
     `).Result()
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+
+		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key}, value.Version, value.Key,
+			value.Value, value.TxnId, value.TxnState, value.TValid, value.TLease,
+			value.Version+1, value.Prev, value.LinkedLen, value.IsDeleted).Result()
+		if err != nil {
+			return err
+		}
+		return nil
+	} else {
+		ctx := context.Background()
+		sha, err := r.rdb.ScriptLoad(ctx, `
+		if redis.call('HGET', KEYS[1], 'Version') == ARGV[1] then
+		redis.call('HSET', KEYS[1], 'Key', ARGV[2])
+		redis.call('HSET', KEYS[1], 'Value', ARGV[3])
+		redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
+		redis.call('HSET', KEYS[1], 'TxnState', ARGV[5])
+		redis.call('HSET', KEYS[1], 'TValid', ARGV[6])
+		redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
+		redis.call('HSET', KEYS[1], 'Version', ARGV[8])
+		redis.call('HSET', KEYS[1], 'Prev', ARGV[9])
+		redis.call('HSET', KEYS[1], 'LinkedLen', ARGV[10])
+		redis.call('HSET', KEYS[1], 'IsDeleted', ARGV[11])
+		return redis.call('HGETALL', KEYS[1])
+	else
+		return redis.error_reply('version mismatch')
+	end
+		`).Result()
+		if err != nil {
+			return err
+		}
+
+		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key}, value.Version, value.Key,
+			value.Value, value.TxnId, value.TxnState, value.TValid, value.TLease,
+			value.Version+1, value.Prev, value.LinkedLen, value.IsDeleted).Result()
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
-	_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key}, value.Version, value.Key,
-		value.Value, value.TxnId, value.TxnState, value.TValid, value.TLease,
-		value.Version+1, value.Prev, value.LinkedLen).Result()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // Get retrieves the value associated with the given key from the Redis database.

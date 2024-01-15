@@ -40,7 +40,7 @@ func (r *RedisDatastore) Read(key string, value any) error {
 	if item, ok := r.writeCache[key]; ok {
 		// if the record is marked as deleted
 		if item.IsDeleted {
-			return errors.New("key not found")
+			return txn.KeyNotFound
 		}
 		return r.se.Deserialize([]byte(item.Value), value)
 	}
@@ -56,9 +56,18 @@ func (r *RedisDatastore) Read(key string, value any) error {
 		return err
 	}
 
+	err = r.basicVisibilityProcessor(item, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *RedisDatastore) basicVisibilityProcessor(item RedisItem, value any) error {
 	if item.TxnState == config.COMMITTED {
 		return r.readAsCommitted(item, value)
 	}
+
 	if item.TxnState == config.PREPARED {
 		state, err := r.Txn.GetTSRState(item.TxnId)
 		if err == nil {
@@ -79,6 +88,9 @@ func (r *RedisDatastore) Read(key string, value any) error {
 				if err != nil {
 					return err
 				}
+				if item.Equal(RedisItem{}) {
+					return txn.KeyNotFound
+				}
 				return r.readAsCommitted(item, value)
 			}
 		}
@@ -95,12 +107,14 @@ func (r *RedisDatastore) Read(key string, value any) error {
 			if err != nil {
 				return err
 			}
+			if item.Equal(RedisItem{}) {
+				return txn.KeyNotFound
+			}
 			return r.readAsCommitted(item, value)
 		}
 		return errors.New("dirty Read")
 	}
-	return errors.New("key not found")
-
+	return txn.KeyNotFound
 }
 
 func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
@@ -110,11 +124,12 @@ func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
 		if curItem.TValid.Before(r.Txn.TxnStartTime) {
 			// if the record has been deleted
 			if curItem.IsDeleted {
-				return errors.New("key not found")
+				return txn.KeyNotFound
 			}
 			err := r.se.Deserialize([]byte(curItem.Value), value)
 			if err != nil {
 				return err
+				// return txn.DeserializeError.Join(err)
 			}
 			r.readCache[curItem.Key] = curItem
 			return nil
@@ -122,6 +137,12 @@ func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
 		if i == config.Config.MaxRecordLength {
 			break
 		}
+
+		// if prev is empty
+		if curItem.Prev == "" {
+			return txn.KeyNotFound
+		}
+
 		// get the previous record
 		var preItem RedisItem
 		err := r.se.Deserialize([]byte(curItem.Prev), &preItem)
@@ -132,7 +153,7 @@ func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
 		curItem = preItem
 	}
 
-	return errors.New("key not found")
+	return txn.KeyNotFound
 }
 
 func (r *RedisDatastore) Write(key string, value any) error {
@@ -152,12 +173,13 @@ func (r *RedisDatastore) Write(key string, value any) error {
 	if item, ok := r.readCache[key]; ok {
 		version = item.Version
 	} else {
-		oldItem, err := r.conn.GetItem(key)
-		if err != nil {
-			version = 0
-		} else {
-			version = oldItem.Version
-		}
+		// TODO: we should handler version problem in conditionalUpdate?
+		// oldItem, err := r.conn.GetItem(key)
+		// if err != nil {
+		// 	version = 0
+		// } else {
+		// 	version = oldItem.Version
+		// }
 	}
 	// else Write a record to the cache
 	r.writeCache[key] = RedisItem{
@@ -216,26 +238,147 @@ func (r *RedisDatastore) Delete(key string) error {
 	return nil
 }
 
-func (r *RedisDatastore) conditionalUpdate(item txn.Item) error {
-	memItem := item.(RedisItem)
-	oldItem, err := r.conn.GetItem(memItem.Key)
-	if err != nil {
-		// this is a new record
-		newItem, _ := r.updateMetadata(memItem, RedisItem{})
-		// Write the new item to the data store
-		return r.conn.PutItem(newItem.Key, newItem)
+func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisItem) error {
+	// newItem, err := r.updateMetadata(cacheItem, dbItem)
+
+	if dbItem.Equal(RedisItem{}) {
+		newItem, err := r.updateMetadata(cacheItem, dbItem)
+		if err != nil {
+			return err
+		}
+		if err = r.conn.ConditionalUpdate(newItem.Key, newItem, true); err != nil {
+			return errors.New("write conflicted: the record has been modified by others")
+		}
+		return nil
 	}
 
-	newItem, err := r.updateMetadata(memItem, oldItem)
+	curItem := dbItem
+	for i := 1; i <= config.Config.MaxRecordLength; i++ {
+
+		if curItem.TValid.Before(r.Txn.TxnStartTime) {
+			// if the record has been deleted
+			if curItem.IsDeleted {
+				newItem, err := r.updateMetadata(cacheItem, curItem)
+				if err != nil {
+					return err
+				}
+				return r.conn.ConditionalUpdate(newItem.Key, newItem, false)
+			}
+			newItem, err := r.updateMetadata(cacheItem, curItem)
+			if err != nil {
+				return err
+			}
+			return r.conn.ConditionalUpdate(newItem.Key, newItem, false)
+		}
+		if i == config.Config.MaxRecordLength {
+			break
+		}
+
+		// if prev is empty
+		if curItem.Prev == "" {
+			newItem, err := r.updateMetadata(cacheItem, curItem)
+			if err != nil {
+				return err
+			}
+			return r.conn.ConditionalUpdate(newItem.Key, newItem, true)
+		}
+
+		// get the previous record
+		var preItem RedisItem
+		err := r.se.Deserialize([]byte(curItem.Prev), &preItem)
+		if err != nil {
+			// The transaction needs to be aborted
+			return err
+		}
+		curItem = preItem
+	}
+
+	// if it can not find a corresponding version in linked list
+	return txn.VersionMismatch
+
+	// newItem, err := r.updateMetadata(cacheItem, dbItem)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// return r.conn.ConditionalUpdate(newItem.Key, newItem, true)
+}
+
+func (r *RedisDatastore) conditionalUpdate(cacheItem RedisItem) error {
+
+	dbItem, err := r.conn.GetItem(cacheItem.Key)
 	if err != nil {
+		if err == txn.KeyNotFound {
+			return r.doConditionalUpdate(cacheItem, RedisItem{})
+			// // this is a new record
+			// newItem, _ := r.updateMetadata(cacheItem, RedisItem{})
+			// // Write the new item to the data store
+			// return r.conn.PutItem(newItem.Key, newItem)
+			// // TODO: we should handle atomic create new record here
+			// // return r.conn.ConditionalUpdate(newItem.Key, newItem)
+		}
 		return err
 	}
-	if err = r.conn.ConditionalUpdate(newItem.Key, newItem); err != nil {
-		return errors.New("write conflicted: the record has been modified by others")
+
+	if dbItem.TxnState == config.COMMITTED {
+		return r.doConditionalUpdate(cacheItem, dbItem)
+	}
+
+	if dbItem.TxnState == config.PREPARED {
+		state, err := r.Txn.GetTSRState(dbItem.TxnId)
+		if err == nil {
+			switch state {
+			// if TSR exists and the TSR is in COMMITTED state
+			// roll forward the record
+			case config.COMMITTED:
+				dbItem, err = r.rollForward(dbItem)
+				if err != nil {
+					return err
+				}
+				return r.doConditionalUpdate(cacheItem, dbItem)
+			// if TSR exists and the TSR is in ABORTED state
+			// we should rollback the record
+			// because the transaction that modified the record has been aborted
+			case config.ABORTED:
+				dbItem, err = r.rollback(dbItem)
+				if err != nil {
+					return err
+				}
+				// if item.Equal(RedisItem{}) {
+				// 	return txn.KeyNotFound
+				// }
+				return r.doConditionalUpdate(cacheItem, dbItem)
+			}
+		}
+		// if TSR does not exist
+		// and if t_lease has expired
+		// we should rollback the record
+		if dbItem.TLease.Before(r.Txn.TxnStartTime) {
+			// the corresponding transaction is considered ABORTED
+			err := r.Txn.WriteTSR(dbItem.TxnId, config.ABORTED)
+			if err != nil {
+				return err
+			}
+			dbItem, err = r.rollback(dbItem)
+			if err != nil {
+				return err
+			}
+			// if dbItem.Equal(RedisItem{}) {
+			// 	return txn.KeyNotFound
+			// }
+			return r.doConditionalUpdate(cacheItem, dbItem)
+		}
+		return txn.VersionMismatch
 	}
 	return nil
 }
 
+// truncate truncates the linked list of RedisItems if the length exceeds the maximum record length defined in the configuration.
+// It takes a pointer to a RedisItem as input and returns the truncated RedisItem and an error, if any.
+// If the length of the linked list is greater than the maximum record length, it creates a stack of RedisItems and pops the items from the stack until the length is reduced to the maximum record length.
+// It then updates the Prev and LinkedLen fields of the RedisItems in the stack accordingly.
+// Finally, it returns the last popped RedisItem as the truncated RedisItem.
+// If the length of the linked list is less than or equal to the maximum record length, it returns the input RedisItem as is.
 func (r *RedisDatastore) truncate(newItem *RedisItem) (RedisItem, error) {
 	maxLen := config.Config.MaxRecordLength
 
@@ -289,6 +432,7 @@ func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (R
 			return RedisItem{}, err
 		}
 		newItem.Prev = string(bs)
+		newItem.Version = oldItem.Version
 	}
 
 	// truncate the record
@@ -379,18 +523,31 @@ func (r *RedisDatastore) Recover(key string) {
 	panic("implement me")
 }
 
-// rollback overwrites the record with the application data and metadata that found in field Prev
+// rollback overwrites the record with the application data
+// and metadata that found in field Prev.
+// if the `Prev` is empty, it simply deletes the record
 func (r *RedisDatastore) rollback(item RedisItem) (RedisItem, error) {
+
+	if item.Prev == "" {
+		// TODO: mark the record as deleted?
+		err := r.conn.Delete(item.Key)
+		return RedisItem{}, err
+	}
+
 	var newItem RedisItem
 	err := r.se.Deserialize([]byte(item.Prev), &newItem)
 	if err != nil {
 		return RedisItem{}, errors.Join(errors.New("rollback failed"), err)
 	}
-	err = r.conn.PutItem(item.Key, newItem)
+	// try to rollback through ConditionalUpdate
+	newItem.Version = item.Version
+	err = r.conn.ConditionalUpdate(item.Key, newItem, false)
+	// err = r.conn.PutItem(item.Key, newItem)
 	if err != nil {
-		return RedisItem{}, err
+		return RedisItem{}, errors.Join(errors.New("rollback failed"), err)
 	}
-
+	// update the version
+	newItem.Version++
 	return newItem, err
 }
 
@@ -399,7 +556,12 @@ func (r *RedisDatastore) rollForward(item RedisItem) (RedisItem, error) {
 	// var oldItem RedisItem
 	// r.conn.Get(item.Key, &oldItem)
 	item.TxnState = config.COMMITTED
-	err := r.conn.PutItem(item.Key, item)
+	err := r.conn.ConditionalUpdate(item.Key, item, false)
+	if err != nil {
+		return RedisItem{}, errors.Join(errors.New("rollForward failed"), err)
+	}
+	item.Version++
+	// err := r.conn.PutItem(item.Key, item)
 	return item, err
 }
 

@@ -544,7 +544,8 @@ func TestKvrocks_ConcurrentTransaction(t *testing.T) {
 	assert.Equal(t, 1, successNum)
 }
 
-// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired redis item.
+// TestSimpleExpiredRead tests the scenario where a read operation is performed
+// on an expired redis item.
 // It inserts a redis item with an expired lease and a PREPARED state
 // Then, it starts a transaction, reads the redis item,
 // and verifies that the read item matches the expected value.
@@ -587,7 +588,11 @@ func TestKvrocks_SimpleExpiredRead(t *testing.T) {
 	assert.NoError(t, err)
 	actual, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
+	tarMemItem.Version = 3
+	if !tarMemItem.Equal(actual) {
+		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
+	}
+	// assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
 
 }
 
@@ -641,7 +646,7 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 			slowTxn.Write(KVROCKS, item.Value, result)
 		}
 		err := slowTxn.Commit()
-		assert.EqualError(t, err, "prepare phase failed: write conflicted: the record has been modified by others")
+		assert.EqualError(t, err, "prepare phase failed: version mismatch")
 	}()
 	time.Sleep(1 * time.Second)
 
