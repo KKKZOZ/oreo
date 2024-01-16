@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kkkzoz/oreo/internal/mock"
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
@@ -645,7 +646,7 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := redis.NewMockRedisConnection("localhost", 6379, 2, false,
+		conn := mock.NewMockRedisConnection("localhost", 6379, 2, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		rds := redis.NewRedisDatastore("redis", conn)
 		slowTxn.AddDatastore(rds)
@@ -754,7 +755,7 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := redis.NewMockRedisConnection("localhost", 6379, 4, false,
+		conn := mock.NewMockRedisConnection("localhost", 6379, 4, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		rds := redis.NewRedisDatastore("redis", conn)
 		slowTxn.AddDatastore(rds)
@@ -873,7 +874,7 @@ func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
 	}
 
 	txn := txn.NewTransaction()
-	conn := redis.NewMockRedisConnection("localhost", 6379, 5, true,
+	conn := mock.NewMockRedisConnection("localhost", 6379, 5, true,
 		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	mds := redis.NewRedisDatastore("redis", conn)
 	txn.AddDatastore(mds)
@@ -1047,7 +1048,7 @@ func TestRedisRollbackConflict(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		txnA := txn.NewTransaction()
-		mockConn := redis.NewMockRedisConnection("localhost", 6379, 0, false,
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, 0, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		rds := redis.NewRedisDatastore("redis", mockConn)
 		txnA.AddDatastore(rds)
@@ -1115,7 +1116,7 @@ func TestRedisRollForwardConflict(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		txnA := txn.NewTransaction()
-		mockConn := redis.NewMockRedisConnection("localhost", 6379, 0, false,
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, 0, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		rds := redis.NewRedisDatastore("redis", mockConn)
 		txnA.AddDatastore(rds)

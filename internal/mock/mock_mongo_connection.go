@@ -1,14 +1,16 @@
-package mongo
+package mock
 
 import (
 	"fmt"
+
+	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 )
 
 // MockMongoConnection is a mock of MongoConnection
 // When Put is called, it will return error when debugCounter is 0
 // Semantically, it means `Put()` call will succeed X times
 type MockMongoConnection struct {
-	*MongoConnection
+	*mongo.MongoConnection
 	debugCounter int
 	debugFunc    func() error
 	isReturned   bool
@@ -17,7 +19,7 @@ type MockMongoConnection struct {
 
 func NewMockMongoConnection(address string, port int, limit int,
 	isReturned bool, debugFunc func() error) *MockMongoConnection {
-	conn := NewMongoConnection(&ConnectionOptions{
+	conn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 		Address:        fmt.Sprintf("mongodb://%s:%d", address, port),
 		DBName:         "oreo",
 		CollectionName: "records",
@@ -31,7 +33,7 @@ func NewMockMongoConnection(address string, port int, limit int,
 	}
 }
 
-func (m *MockMongoConnection) ConditionalUpdate(key string, value MongoItem) error {
+func (m *MockMongoConnection) ConditionalUpdate(key string, value mongo.MongoItem) error {
 	defer func() { m.debugCounter--; m.callTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -43,7 +45,7 @@ func (m *MockMongoConnection) ConditionalUpdate(key string, value MongoItem) err
 	return m.MongoConnection.ConditionalUpdate(key, value)
 }
 
-func (m *MockMongoConnection) PutItem(key string, value MongoItem) error {
+func (m *MockMongoConnection) PutItem(key string, value mongo.MongoItem) error {
 	defer func() { m.debugCounter--; m.callTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {

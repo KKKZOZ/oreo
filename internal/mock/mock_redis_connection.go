@@ -1,14 +1,16 @@
-package redis
+package mock
 
 import (
 	"fmt"
+
+	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 )
 
 // MockRedisConnection is a mock of RedisConnection
 // When Put is called, it will return error when debugCounter is 0
 // Semantically, it means `Put()` call will succeed X times
 type MockRedisConnection struct {
-	*RedisConnection
+	*redis.RedisConnection
 	debugCounter int
 	debugFunc    func() error
 	isReturned   bool
@@ -17,7 +19,7 @@ type MockRedisConnection struct {
 
 func NewMockRedisConnection(address string, port int, limit int,
 	isReturned bool, debugFunc func() error) *MockRedisConnection {
-	conn := NewRedisConnection(&ConnectionOptions{
+	conn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address: fmt.Sprintf("%s:%d", address, port),
 	})
 	return &MockRedisConnection{
@@ -29,7 +31,7 @@ func NewMockRedisConnection(address string, port int, limit int,
 	}
 }
 
-func (m *MockRedisConnection) ConditionalUpdate(key string, value RedisItem, doCreate bool) error {
+func (m *MockRedisConnection) ConditionalUpdate(key string, value redis.RedisItem, doCreate bool) error {
 	defer func() { m.debugCounter--; m.callTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -41,7 +43,7 @@ func (m *MockRedisConnection) ConditionalUpdate(key string, value RedisItem, doC
 	return m.RedisConnection.ConditionalUpdate(key, value, doCreate)
 }
 
-func (m *MockRedisConnection) PutItem(key string, value RedisItem) error {
+func (m *MockRedisConnection) PutItem(key string, value redis.RedisItem) error {
 	defer func() { m.debugCounter--; m.callTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {

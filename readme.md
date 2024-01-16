@@ -33,7 +33,7 @@ It provides:
 
 + An easy-to-use interface for distributed transactions.
 + Support heterogeneous key-value store.
-+ Clear architecture.
++ Clean architecture.
 
 
 
@@ -42,6 +42,22 @@ It provides:
 ![Project Structure](./assets/img/project_structure.png)
 
 ## Getting Started
+
+### Installation
+
+Oreo supports 2 last Go versions and requires a Go version with
+[modules](https://github.com/golang/go/wiki/Modules) support. So make sure to initialize a Go module:
+
+```shell
+go mod init github.com/my/repo
+```
+
+Then install oreo:
+
+```shell
+go get github.com/kkkzoz/oreo
+```
+
 
 > Full example is in `examples/oreo_basic_with_memory_datastore`
 

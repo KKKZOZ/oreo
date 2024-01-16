@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kkkzoz/oreo/internal/mock"
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
@@ -632,7 +633,7 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := redis.NewMockRedisConnection("localhost", 6666, 2, false,
+		conn := mock.NewMockRedisConnection("localhost", 6666, 2, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(KVROCKS, conn)
 		slowTxn.AddDatastore(rds)
@@ -741,7 +742,7 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := redis.NewMockRedisConnection("localhost", 6666, 4, false,
+		conn := mock.NewMockRedisConnection("localhost", 6666, 4, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(KVROCKS, conn)
 		slowTxn.AddDatastore(rds)
@@ -860,7 +861,7 @@ func TestKvrocks_TransactionAbortWhenWritingTSR(t *testing.T) {
 	}
 
 	txn := txn.NewTransaction()
-	conn := redis.NewMockRedisConnection("localhost", 6666, 5, true,
+	conn := mock.NewMockRedisConnection("localhost", 6666, 5, true,
 		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	mds := redis.NewRedisDatastore(KVROCKS, conn)
 	txn.AddDatastore(mds)
