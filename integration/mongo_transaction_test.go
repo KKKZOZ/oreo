@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kkkzoz/oreo/internal/mock"
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
@@ -629,7 +630,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := mongo.NewMockMongoConnection("localhost", 27017, 2, false,
+		conn := mock.NewMockMongoConnection("localhost", 27017, 2, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		mds := mongo.NewMongoDatastore(MONGO, conn)
 		slowTxn.AddDatastore(mds)
@@ -740,7 +741,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 
 	go func() {
 		slowTxn := txn.NewTransaction()
-		conn := mongo.NewMockMongoConnection("localhost", 27017, 4, false,
+		conn := mock.NewMockMongoConnection("localhost", 27017, 4, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		mds := mongo.NewMongoDatastore(MONGO, conn)
 		slowTxn.AddDatastore(mds)
@@ -861,7 +862,7 @@ func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 	}
 
 	txn := txn.NewTransaction()
-	conn := mongo.NewMockMongoConnection("localhost", 27017, 5, true,
+	conn := mock.NewMockMongoConnection("localhost", 27017, 5, true,
 		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	mds := mongo.NewMongoDatastore(MONGO, conn)
 	txn.AddDatastore(mds)

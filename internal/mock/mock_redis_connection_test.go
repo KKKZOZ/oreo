@@ -1,4 +1,4 @@
-package mongo
+package mock
 
 import (
 	"errors"
@@ -7,12 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDebugCounter(t *testing.T) {
+func TestRedis_DebugCounter(t *testing.T) {
 	t.Run("test less than limit", func(t *testing.T) {
 
-		conn := NewMockMongoConnection("localhost", 27017, 10, true,
+		conn := NewMockRedisConnection("localhost", 6379, 10, true,
 			func() error { return errors.New("error") })
-		conn.Connect()
 
 		err := conn.Put("key1", "value1")
 		assert.Nil(t, err)
@@ -28,9 +27,8 @@ func TestDebugCounter(t *testing.T) {
 	})
 
 	t.Run("test equal the limit", func(t *testing.T) {
-		conn := NewMockMongoConnection("localhost", 27017, 3, true,
+		conn := NewMockRedisConnection("localhost", 6379, 3, true,
 			func() error { return errors.New("error") })
-		conn.Connect()
 
 		err := conn.Put("key1", "value1")
 		assert.Nil(t, err)
@@ -47,12 +45,11 @@ func TestDebugCounter(t *testing.T) {
 
 }
 
-func TestDebugFunc(t *testing.T) {
+func TestRedis_DebugFunc(t *testing.T) {
 
 	t.Run("trigger debugFunc", func(t *testing.T) {
-		conn := NewMockMongoConnection("localhost", 27017, 3, true,
+		conn := NewMockRedisConnection("localhost", 6379, 3, true,
 			func() error { return errors.New("my error") })
-		conn.Connect()
 
 		err := conn.Put("key1", "value1")
 		assert.Nil(t, err)
@@ -68,9 +65,8 @@ func TestDebugFunc(t *testing.T) {
 	})
 
 	t.Run("after triggerring debugFunc", func(t *testing.T) {
-		conn := NewMockMongoConnection("localhost", 27017, 3, true,
+		conn := NewMockRedisConnection("localhost", 6379, 3, true,
 			func() error { return errors.New("my error") })
-		conn.Connect()
 
 		err := conn.Put("key1", "value1")
 		assert.Nil(t, err)
@@ -92,12 +88,11 @@ func TestDebugFunc(t *testing.T) {
 	})
 }
 
-func TestCallTimes(t *testing.T) {
+func TestRedis_CallTimes(t *testing.T) {
 	testCases := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	for _, testCase := range testCases {
-		conn := NewMockMongoConnection("localhost", 27017, 20, true,
+		conn := NewMockRedisConnection("localhost", 6379, 20, true,
 			func() error { return errors.New("my error") })
-		conn.Connect()
 
 		for i := 0; i < testCase; i++ {
 			err := conn.Put("key1", "value1")
