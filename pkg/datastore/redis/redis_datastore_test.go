@@ -488,48 +488,78 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 }
 
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
-	// Create a new redis datastore
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
+
+	dbItem1 := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		TxnId:     "TestSimpleReadWhenPrepareNotExpired1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-2 * time.Second),
+		TLease:    time.Now().Add(-1 * time.Second),
+		LinkedLen: 1,
+		Version:   1,
+	}
+
+	dbItem2 := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+		TxnId:     "TestSimpleReadWhenPrepareNotExpired2",
+		TxnState:  config.PREPARED,
+		TValid:    time.Now().Add(1 * time.Second),
+		TLease:    time.Now().Add(2 * time.Second),
+		Prev:      util.ToJSONString(dbItem1),
+		LinkedLen: 2,
+		Version:   2,
+	}
+
+	t.Run("when the item has an empty Prev field", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		dbItem := dbItem2
+		dbItem.Prev = ""
+		dbItem.LinkedLen = 1
+		conn.PutItem("item1", dbItem)
+
+		txn1 := NewTransactionWithSetup()
+		txn1.Start()
+		var item testutil.TestItem
+		err := txn1.Read("redis", "item1", &item)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
 	})
-	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
 
-	// initialize the redis database
-	expected := testutil.Person{
-		Name: "John",
-		Age:  30,
-	}
-	expectedRedisItem := RedisItem{
-		Key:      "John",
-		Value:    util.ToJSONString(expected),
-		TxnId:    "100",
-		TxnState: config.PREPARED,
-		TValid:   time.Now().Add(10 * time.Second),
-		TLease:   time.Now().Add(5 * time.Second),
-		Version:  2,
-	}
+	t.Run("when the item has a valid Prev field", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.PutItem("item1", dbItem2)
 
-	key := "John"
-	err := conn.PutItem(key, expectedRedisItem)
-	if err != nil {
-		t.Errorf("Error putting item to redis datastore: %s", err)
-	}
+		txn1 := NewTransactionWithSetup()
+		txn1.Start()
+		var item testutil.TestItem
+		err := txn1.Read("redis", "item1", &item)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-pre1", item.Value)
+	})
+}
 
-	// Start the transaction
-	err = txn.Start()
-	if err != nil {
-		t.Errorf("Error starting transaction: %s", err)
+func TestSimpleReadWhenDeleted(t *testing.T) {
+	conn := NewDefaultRedisConnection()
+	dbItem := RedisItem{
+		Key:       "item2",
+		Value:     util.ToJSONString(testutil.NewTestItem("item2-db")),
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(-2 * time.Second),
+		TLease:    time.Now().Add(-1 * time.Second),
+		LinkedLen: 1,
+		Version:   1,
+		IsDeleted: true,
 	}
 
-	// Read the value
-	var result testutil.Person
-	err = txn.Read("redis", key, &result)
-	if err.Error() != errors.New("dirty Read").Error() {
-		t.Errorf("Error reading from redis datastore: %s", err)
-	}
+	conn.PutItem(dbItem.Key, dbItem)
+
+	txn1 := NewTransactionWithSetup()
+	txn1.Start()
+
+	var item testutil.TestItem
+	err := txn1.Read("redis", "item2", &item)
+	assert.EqualError(t, err, txn.KeyNotFound.Error())
 }
 
 func TestSimpleWriteAndRead(t *testing.T) {
@@ -1042,6 +1072,10 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 
 func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 
+	t.Cleanup(func() {
+		time.Sleep(1 * time.Second)
+	})
+
 	// clear the test data
 	conn := NewDefaultRedisConnection()
 	for _, item := range testutil.InputItemList {
@@ -1112,6 +1146,10 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 
 func TestTxnWriteMultiRecord(t *testing.T) {
 
+	t.Cleanup(func() {
+		time.Sleep(1 * time.Second)
+	})
+
 	// clear the test data
 	conn := NewDefaultRedisConnection()
 	conn.Delete("item1")
@@ -1151,6 +1189,10 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 // ---|---------|--------|---------|------> time
 // item1_1  T_Start   item1_2   item1_3
 func TestLinkedReadAsCommitted(t *testing.T) {
+
+	t.Cleanup(func() {
+		time.Sleep(1 * time.Second)
+	})
 
 	item1_1 := testutil.NewTestItem("item1_1")
 	memItem1_1 := RedisItem{
@@ -1242,6 +1284,10 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 }
 
 func TestLinkedTruncate(t *testing.T) {
+
+	t.Cleanup(func() {
+		time.Sleep(1 * time.Second)
+	})
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 2", func(t *testing.T) {
 
@@ -1351,6 +1397,10 @@ func TestLinkedTruncate(t *testing.T) {
 // The transcation should ***roll back*** the record then conditionalUpdate properly
 func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 
+	t.Cleanup(func() {
+		time.Sleep(1 * time.Second)
+	})
+
 	// final linked record should be "item1-cur" -> "item1-pre2"
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
@@ -1406,7 +1456,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev)
 	})
 
-	// final linked record should be "item1-cur" -> ""
+	// final linked record should be "item1-cur" -> "item1-pre(deleted)"
 	t.Run("the record has an empty Prev field", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 		conn.Connect()
@@ -1444,7 +1494,10 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		// Second, we check the final record's Prev field is correct
 		finalRedisItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
-		assert.Equal(t, "", finalRedisItem.Prev)
+		tarItem.IsDeleted = true
+		tarItem.TxnState = config.COMMITTED
+		tarItem.Version++
+		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev)
 	})
 
 }
@@ -1452,15 +1505,15 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 // The transcation should ***roll forward*** the record then conditionalUpdate properly
 func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 
-	// final linked record should be "item1-cur" -> "item1-pre"
+	// final linked record should be "item2-cur" -> "item2-pre"
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 		conn.Connect()
 
 		tarItem := RedisItem{
-			Key:       "item1",
-			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
-			TxnId:     "99",
+			Key:       "item2",
+			Value:     util.ToJSONString(testutil.NewTestItem("item2-pre2")),
+			TxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
 			TxnState:  config.COMMITTED,
 			TValid:    time.Now().Add(-10 * time.Second),
 			TLease:    time.Now().Add(-9 * time.Second),
@@ -1469,8 +1522,8 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		}
 
 		curItem := RedisItem{
-			Key:       "item1",
-			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			Key:       "item2",
+			Value:     util.ToJSONString(testutil.NewTestItem("item2-pre")),
 			TxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
 			TxnState:  config.PREPARED,
 			TValid:    time.Now().Add(-5 * time.Second),
@@ -1480,7 +1533,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			Prev:      util.ToJSONString(tarItem),
 		}
 
-		conn.PutItem(tarItem.Key, curItem)
+		conn.PutItem(curItem.Key, curItem)
 		conn.Put("TestDirectWriteOnOutdatedPreparedRecordWithTSR", config.COMMITTED)
 
 		// Start the transaction
@@ -1488,7 +1541,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		txn.Start()
 
 		// Write the value
-		item := testutil.NewTestItem("item1-cur")
+		item := testutil.NewTestItem("item2-cur")
 		txn.Write("redis", tarItem.Key, item)
 		err := txn.Commit()
 		assert.NoError(t, err)
@@ -1497,12 +1550,12 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		postTxn := NewTransactionWithSetup()
 		postTxn.Start()
 		var resItem testutil.TestItem
-		err = postTxn.Read("redis", "item1", &resItem)
+		err = postTxn.Read("redis", "item2", &resItem)
 		assert.NoError(t, err)
-		assert.Equal(t, "item1-cur", resItem.Value)
+		assert.Equal(t, "item2-cur", resItem.Value)
 
 		// Second, we check the final record's Prev field is correct
-		finalRedisItem, err := conn.GetItem("item1")
+		finalRedisItem, err := conn.GetItem("item2")
 		assert.NoError(t, err)
 
 		curItem.Prev = ""
@@ -1582,6 +1635,41 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 	txn.Write("redis", tarItem.Key, item)
 	err := txn.Commit()
 	assert.EqualError(t, err, "prepare phase failed: version mismatch")
+}
+
+func TestDirectWriteOnInvisibleRecord(t *testing.T) {
+	conn := NewDefaultRedisConnection()
+	conn.Connect()
+
+	dbItem1 := RedisItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		TxnId:     "TestDirectWriteOnInvisibleRecord1",
+		TxnState:  config.COMMITTED,
+		TValid:    time.Now().Add(3 * time.Second),
+		TLease:    time.Now().Add(4 * time.Second),
+		LinkedLen: 1,
+		Version:   2,
+	}
+	conn.PutItem(dbItem1.Key, dbItem1)
+
+	txn := NewTransactionWithSetup()
+	txn.Start()
+	item := testutil.NewTestItem("item1-cur")
+	txn.Write("redis", dbItem1.Key, item)
+	err := txn.Commit()
+	assert.EqualError(t, err, "prepare phase failed: version mismatch")
+
+	// post check
+	resItem, err := conn.GetItem("item1")
+	assert.NoError(t, err)
+	if !resItem.Equal(dbItem1) {
+		t.Errorf("\ngot\n %v\n \nwant\n %v\n", resItem, dbItem1)
+	}
+}
+
+func TestDirectWriteOnDeletedRecord(t *testing.T) {
+	// TODO:
 }
 
 func TestRollbackWhenReading(t *testing.T) {
@@ -1724,7 +1812,10 @@ func TestRollbackWhenWriting(t *testing.T) {
 		res, err := conn.GetItem(item1.Key)
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(item), res.Value)
-		assert.Equal(t, "", res.Prev)
+		item1.IsDeleted = true
+		item1.TxnState = config.COMMITTED
+		item1.Version++
+		assert.Equal(t, util.ToJSONString(item1), res.Prev)
 	})
 }
 

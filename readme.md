@@ -1,6 +1,8 @@
 # Oreo - An Easy-to-use Distributed Transaciotn Framework
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/kkkzoz/oreo)](https://goreportcard.com/report/github.com/kkkzoz/oreo)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kkkzoz/oreo.svg)](https://pkg.go.dev/github.com/kkkzoz/oreo)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
 <div align="center">
@@ -100,3 +102,5 @@ I love Oreo and Oreo also has many different flavors of fillings!
 
 A client coordinated transaction protocol to enable efficient multi-item transactions across heterogeneous key-value store.
 
+## License
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.

@@ -68,3 +68,15 @@ func (m *MockMongoConnection) Put(name string, value any) error {
 	}
 	return m.MongoConnection.Put(name, value)
 }
+
+func (m *MockMongoConnection) Delete(name string) error {
+	defer func() { m.debugCounter--; m.callTimes++ }()
+	if m.debugCounter == 0 {
+		if m.isReturned {
+			return m.debugFunc()
+		} else {
+			m.debugFunc()
+		}
+	}
+	return m.MongoConnection.Delete(name)
+}
