@@ -287,11 +287,12 @@ func TestRedisRepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 	}
 }
 
-// txn1 starts  txn2 starts
-// txn1 reads John
-// txn2 reads John
-// txn1 writes John
-// txn2 read John again
+//   - txn1 starts  txn2 starts
+//   - txn1 reads John
+//   - txn2 reads John
+//   - txn1 writes John
+//   - txn2 read John again
+//
 // two read in txn2 should be the same
 func TestRedisRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 
@@ -358,12 +359,13 @@ func TestRedisRepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	}
 }
 
-// txn1 starts  txn2 starts
-// txn1 reads John
-// txn2 reads John
-// txn1 writes John
-// txn1 commits
-// txn2 read John again
+//   - txn1 starts  txn2 starts
+//   - txn1 reads John
+//   - txn2 reads John
+//   - txn1 writes John
+//   - txn1 commits
+//   - txn2 read John again
+//
 // two read in txn2 should be the same
 func TestRedisRepeatableReadWhenAnotherCommitted(t *testing.T) {
 
@@ -571,7 +573,7 @@ func TestRedisSimpleExpiredRead(t *testing.T) {
 	tarMemItem := redis.RedisItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
-		TxnId:    "99",
+		TxnId:    "TestRedisSimpleExpiredRead1",
 		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-9 * time.Second),
@@ -581,7 +583,7 @@ func TestRedisSimpleExpiredRead(t *testing.T) {
 	curMemItem := redis.RedisItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		TxnId:    "TestRedisSimpleExpiredRead",
+		TxnId:    "TestRedisSimpleExpiredRead2",
 		TxnState: config.PREPARED,
 		TValid:   time.Now().Add(-5 * time.Second),
 		TLease:   time.Now().Add(-4 * time.Second),
@@ -614,27 +616,30 @@ func TestRedisSimpleExpiredRead(t *testing.T) {
 // preTxn writes data to the redis database
 // slowTxn read all data and write all data, but it will block when conditionalUpdate item3 (sleep 4s)
 // so when slowTxn blocks, the internal state of redis database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3 COMMITTED
-// item4 COMMITTED
-// item5 COMMITTED
+//
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3 COMMITTED
+//   - item4 COMMITTED
+//   - item5 COMMITTED
+//
 // fastTxn read item3, item4, item5 and write them, then commit
 // the internal state of redis database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5-fast COMMITTED
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5-fast COMMITTED
+//
 // then, slowTxn unblocks, it starts to conditionalUpdate item3
 // and it detects a version mismatch,so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
 // so the final internal state of redis database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5-fast COMMITTED
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5-fast COMMITTED
 func TestRedisSlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(REDIS)
@@ -721,28 +726,30 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 // slowTxn read all data and write all data,
 // but it will block when conditionalUpdate item5 (sleep 5s)
 // so when slowTxn blocks, the internal state of redis database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-slow PREPARED
-// item4-slow PREPARED
-// item5 COMMITTED
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-slow PREPARED
+//   - item4-slow PREPARED
+//   - item5 COMMITTED
+//
 // fastTxn read item3, item4 and write them, then commit
 // (fastTxn realize item3 and item4 are expired, so it will first rollback, and write the TSR with ABORTED)
 // the internal state of redis database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5 COMMITTED
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5 COMMITTED
+//
 // then, slowTxn unblocks, it conditionalUpdate item5 then check the TSR state
 // the TSR is marked as ABORTED, so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
 // so the final internal state of redis database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5 COMMITTED
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5 COMMITTED
 func TestRedisSlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(REDIS)
@@ -839,28 +846,30 @@ func TestRedisSlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
 // slowTxn read all data and write all data,
 // but it will block for 3s and **fail** when writing the TSR
 // so when slowTxn blocks, the internal state of redis database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-slow PREPARED
-// item4-slow PREPARED
-// item5-slow PREPARED
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-slow PREPARED
+//   - item4-slow PREPARED
+//   - item5-slow PREPARED
+//
 // testTxn read item1,item2,item3, item4
 // (testTxn realize item1,item2,item3, item4 are expired, so it will first rollback, and write the TSR with ABORTED)
 // the internal state of redis database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3 rollback to COMMITTED
-// item4 rollback to COMMITTED
-// item5-slow PREPARED
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3 rollback to COMMITTED
+//   - item4 rollback to COMMITTED
+//   - item5-slow PREPARED
+//
 // then, slowTxn unblocks, it fails to write the TSR, and it aborts(it tries to rollback all the items)
 // so slowTxn will abort(with rolling back all changes)
 // postTxn reads all data and verify them
 // so the final internal state of redis database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3 rollback to COMMITTED
-// item4 rollback to COMMITTED
-// item5 rollback to COMMITTED
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3 rollback to COMMITTED
+//   - item4 rollback to COMMITTED
+//   - item5 rollback to COMMITTED
 func TestRedisTransactionAbortWhenWritingTSR(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(REDIS)
@@ -1013,80 +1022,142 @@ func TestRedisLinkedRecord(t *testing.T) {
 	})
 }
 
-// there is a broken item
-// txnA reads the item, decides to roll back
-// txnB reads the item, decides to roll back
-// txnB rollbacks the item
-// txnB update the item and commit
-// txnA rollbacks the item -> should fail
 func TestRedisRollbackConflict(t *testing.T) {
-	conn := NewRedisConnection()
 
-	redisItem1 := redis.RedisItem{
-		Key:       "item1",
-		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		TxnId:     "TestRedisRollbackConflict1",
-		TxnState:  config.COMMITTED,
-		TValid:    time.Now().Add(-5 * time.Second),
-		TLease:    time.Now().Add(-4 * time.Second),
-		LinkedLen: 1,
-		Version:   1,
-	}
-	redisItem2 := redis.RedisItem{
-		Key:       "item1",
-		Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-		TxnId:     "TestRedisRollbackConflict2",
-		TxnState:  config.PREPARED,
-		TValid:    time.Now().Add(-5 * time.Second),
-		TLease:    time.Now().Add(-4 * time.Second),
-		Prev:      util.ToJSONString(redisItem1),
-		LinkedLen: 2,
-		Version:   2,
-	}
-	conn.PutItem("item1", redisItem2)
+	// there is a broken item
+	//   - txnA reads the item, decides to roll back
+	//   - txnB reads the item, decides to roll back
+	//   - txnB rollbacks the item
+	//   - txnB update the item and commit
+	//   - txnA rollbacks the item -> should fail
+	t.Run("the broken item has a valid Prev field", func(t *testing.T) {
+		conn := NewRedisConnection()
 
-	go func() {
+		redisItem1 := redis.RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:     "TestRedisRollbackConflict1",
+			TxnState:  config.COMMITTED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			LinkedLen: 1,
+			Version:   1,
+		}
+		redisItem2 := redis.RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			TxnId:     "TestRedisRollbackConflict2",
+			TxnState:  config.PREPARED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			Prev:      util.ToJSONString(redisItem1),
+			LinkedLen: 2,
+			Version:   2,
+		}
+		conn.PutItem("item1", redisItem2)
+
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			txnA := txn.NewTransaction()
+			mockConn := mock.NewMockRedisConnection("localhost", 6379, 0, false,
+				func() error { time.Sleep(2 * time.Second); return nil })
+			rds := redis.NewRedisDatastore("redis", mockConn)
+			txnA.AddDatastore(rds)
+			txnA.SetGlobalDatastore(rds)
+			txnA.Start()
+
+			var item testutil.TestItem
+			err := txnA.Read(REDIS, "item1", &item)
+			assert.NotNil(t, err)
+		}()
+
 		time.Sleep(100 * time.Millisecond)
-		txnA := txn.NewTransaction()
-		mockConn := mock.NewMockRedisConnection("localhost", 6379, 0, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
-		rds := redis.NewRedisDatastore("redis", mockConn)
-		txnA.AddDatastore(rds)
-		txnA.SetGlobalDatastore(rds)
-		txnA.Start()
-
+		txnB := NewTransactionWithSetup(REDIS)
+		txnB.Start()
 		var item testutil.TestItem
-		err := txnA.Read(REDIS, "item1", &item)
-		assert.NotNil(t, err)
-	}()
+		err := txnB.Read(REDIS, "item1", &item)
+		assert.NoError(t, err)
+		assert.Equal(t, testutil.NewTestItem("item1-pre"), item)
+		item.Value = "item1-B"
+		txnB.Write(REDIS, "item1", item)
+		err = txnB.Commit()
+		assert.NoError(t, err)
 
-	time.Sleep(100 * time.Millisecond)
-	txnB := NewTransactionWithSetup(REDIS)
-	txnB.Start()
-	var item testutil.TestItem
-	err := txnB.Read(REDIS, "item1", &item)
-	assert.NoError(t, err)
-	assert.Equal(t, testutil.NewTestItem("item1-pre"), item)
-	item.Value = "item1-B"
-	txnB.Write(REDIS, "item1", item)
-	err = txnB.Commit()
-	assert.NoError(t, err)
+		time.Sleep(2 * time.Second)
+		resItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+		redisItem1.Version = 3
+		assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev)
+	})
 
-	time.Sleep(2 * time.Second)
-	resItem, err := conn.GetItem("item1")
-	assert.NoError(t, err)
-	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
-	redisItem1.Version = 3
-	assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev)
+	// there is a broken item
+	//   - txnA reads the item, decides to roll back
+	//   - txnB reads the item, decides to roll back
+	//   - txnB rollbacks the item
+	//   - txnB update the item and commit
+	//   - txnA rollbacks the item -> should fail
+	t.Run("the broken item has an empty Prev field", func(t *testing.T) {
+		conn := NewRedisConnection()
+
+		redisItem2 := redis.RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			TxnId:     "TestRedisRollbackConflict2-emptyField",
+			TxnState:  config.PREPARED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			Prev:      "",
+			LinkedLen: 1,
+			Version:   1,
+		}
+		conn.PutItem("item1", redisItem2)
+
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			txnA := txn.NewTransaction()
+			mockConn := mock.NewMockRedisConnection("localhost", 6379, 0, false,
+				func() error { time.Sleep(2 * time.Second); return nil })
+			rds := redis.NewRedisDatastore("redis", mockConn)
+			txnA.AddDatastore(rds)
+			txnA.SetGlobalDatastore(rds)
+			txnA.Start()
+
+			var item testutil.TestItem
+			err := txnA.Read(REDIS, "item1", &item)
+			assert.NotNil(t, err)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		txnB := NewTransactionWithSetup(REDIS)
+		txnB.Start()
+		var item testutil.TestItem
+		err := txnB.Read(REDIS, "item1", &item)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
+
+		item.Value = "item1-B"
+		txnB.Write(REDIS, "item1", item)
+		err = txnB.Commit()
+		assert.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+		resItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+		redisItem2.IsDeleted = true
+		redisItem2.TxnState = config.COMMITTED
+		redisItem2.Version++
+		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev)
+	})
 
 }
 
 // there is a broken item
-// txnA reads the item, decides to roll forward
-// txnB reads the item, decides to roll forward
-// txnB rolls forward the item
-// txnB update the item and commit
-// txnA rolls forward the item -> should fail
+//   - txnA reads the item, decides to roll forward
+//   - txnB reads the item, decides to roll forward
+//   - txnB rolls forward the item
+//   - txnB update the item and commit
+//   - txnA rolls forward the item -> should fail
 func TestRedisRollForwardConflict(t *testing.T) {
 	conn := NewRedisConnection()
 
@@ -1354,5 +1425,157 @@ func TestRedisPreventLostUpdatesValidation(t *testing.T) {
 		var item1 testutil.TestItem
 		postTxn.Read(REDIS, "item1", &item1)
 		assert.Equal(t, itemB, item1)
+	})
+}
+
+func TestRedisRepeatableReadWhenDirtyRead(t *testing.T) {
+	t.Run("the prepared item has a valid Prev", func(t *testing.T) {
+		config.Config.LeaseTime = 3000 * time.Millisecond
+
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-pre")
+		preTxn.Write(REDIS, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txnA := txn.NewTransaction()
+		conn := mock.NewMockRedisConnection("localhost", 6379, 1, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore("redis", conn)
+		txnA.AddDatastore(rds)
+		txnA.SetGlobalDatastore(rds)
+
+		txnB := NewTransactionWithSetup(REDIS)
+		txnA.Start()
+		txnB.Start()
+
+		go func() {
+			itemA := testutil.NewTestItem("item1-A")
+			txnA.Write(REDIS, "item1", itemA)
+			err = txnA.Commit()
+			assert.NoError(t, err)
+		}()
+
+		// wait for txnA to write item into database
+		time.Sleep(500 * time.Millisecond)
+		var itemB testutil.TestItem
+		err = txnB.Read(REDIS, "item1", &itemB)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-pre", itemB.Value)
+
+		time.Sleep(2 * time.Second)
+		err = txnB.Read(REDIS, "item1", &itemB)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-pre", itemB.Value)
+	})
+
+	t.Run("the prepared item has an empty Prev", func(t *testing.T) {
+		config.Config.LeaseTime = 3000 * time.Millisecond
+
+		testConn := NewRedisConnection()
+		testConn.Delete("item1")
+
+		txnA := txn.NewTransaction()
+		conn := mock.NewMockRedisConnection("localhost", 6379, 1, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore("redis", conn)
+		txnA.AddDatastore(rds)
+		txnA.SetGlobalDatastore(rds)
+
+		txnB := NewTransactionWithSetup(REDIS)
+		txnA.Start()
+		txnB.Start()
+
+		go func() {
+			itemA := testutil.NewTestItem("item1-A")
+			txnA.Write(REDIS, "item1", itemA)
+			err := txnA.Commit()
+			assert.NoError(t, err)
+		}()
+
+		// wait for txnA to write item into database
+		time.Sleep(500 * time.Millisecond)
+		var itemB testutil.TestItem
+		err := txnB.Read(REDIS, "item1", &itemB)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
+
+		time.Sleep(2 * time.Second)
+
+		// make sure txnA has committed
+		resItem, err := testConn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-A")), resItem.Value)
+
+		err = txnB.Read(REDIS, "item1", &itemB)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
+
+		// post check
+		postTxn := NewTransactionWithSetup(REDIS)
+		postTxn.Start()
+
+		var itemPost testutil.TestItem
+		err = postTxn.Read(REDIS, "item1", &itemPost)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-A", itemPost.Value)
+	})
+
+}
+
+func TestRedisDeleteTimingProblems(t *testing.T) {
+
+	// conn Puts an item with an empty Prev field
+	//  - txnA reads the item, decides to delete
+	//  - txnB reads the item, updates and commmits
+	//  - txnA tries to delete the item -> should fail
+	t.Run("the item has an empty Prev field", func(t *testing.T) {
+		testConn := NewRedisConnection()
+		dbItem := redis.RedisItem{
+			Key:      "item1",
+			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:    "TestRedisDeleteTimingProblems",
+			TxnState: config.COMMITTED,
+			TValid:   time.Now().Add(-5 * time.Second),
+			TLease:   time.Now().Add(-4 * time.Second),
+			Version:  1,
+		}
+		testConn.PutItem("item1", dbItem)
+
+		txnA := txn.NewTransaction()
+		conn := mock.NewMockRedisConnection("localhost", 6379, 0, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore("redis", conn)
+		txnA.AddDatastore(rds)
+		txnA.SetGlobalDatastore(rds)
+
+		txnB := NewTransactionWithSetup(REDIS)
+		txnA.Start()
+		txnB.Start()
+
+		go func() {
+			var item testutil.TestItem
+			txnA.Read(REDIS, "item1", &item)
+			txnA.Delete(REDIS, "item1")
+			err := txnA.Commit()
+			assert.NotNil(t, err)
+			// assert.NoError(t, err)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+		var itemB testutil.TestItem
+		txnB.Read(REDIS, "item1", &itemB)
+		txnB.Delete(REDIS, "item1")
+		itemB.Value = "item1-B"
+		txnB.Write(REDIS, "item1", itemB)
+		err := txnB.Commit()
+		assert.NoError(t, err)
+
+		time.Sleep(1 * time.Second)
+
+		// post check
+		resItem, err := testConn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+
 	})
 }

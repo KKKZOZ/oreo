@@ -22,6 +22,7 @@ func (e TxnError) Error() string {
 
 const (
 	KeyNotFound      TxnError = "key not found"
+	DirtyRead        TxnError = "dirty read"
 	DeserializeError TxnError = "deserialize error"
 	VersionMismatch  TxnError = "version mismatch"
 )
@@ -190,10 +191,10 @@ func (t *Transaction) Commit() error {
 	success := true
 	var cause error
 	for _, ds := range t.dataStoreMap {
+
 		err := ds.Prepare()
 		if err != nil {
-			success = false
-			cause = err
+			success, cause = false, err
 			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
 			t.debug(testutil.DPrepare, "prepare phase failed(ds:%v): %v", ds.GetName(), err)
 			break

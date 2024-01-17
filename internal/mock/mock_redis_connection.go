@@ -66,3 +66,15 @@ func (m *MockRedisConnection) Put(name string, value any) error {
 	}
 	return m.RedisConnection.Put(name, value)
 }
+
+func (m *MockRedisConnection) Delete(name string) error {
+	defer func() { m.debugCounter--; m.callTimes++ }()
+	if m.debugCounter == 0 {
+		if m.isReturned {
+			return m.debugFunc()
+		} else {
+			m.debugFunc()
+		}
+	}
+	return m.RedisConnection.Delete(name)
+}

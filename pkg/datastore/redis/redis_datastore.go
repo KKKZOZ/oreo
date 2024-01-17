@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"slices"
-	"time"
 
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
@@ -12,42 +11,59 @@ import (
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
+// RedisDatastore represents a datastore implementation using Redis as the underlying storage.
 type RedisDatastore struct {
+	// BaseDataStore is the base datastore that RedisDatastore extends.
 	txn.BaseDataStore
-	conn       RedisConnectionInterface
-	readCache  map[string]RedisItem
+
+	// conn is the Redis connection interface used by the datastore.
+	conn RedisConnectionInterface
+
+	// readCache is the cache for read operations in RedisDatastore.
+	readCache map[string]RedisItem
+
+	// writeCache is the cache for write operations in RedisDatastore.
 	writeCache map[string]RedisItem
-	se         serializer.Serializer
+
+	// invisibleSet is the set of keys that are not visible to the current transaction.
+	invisibleSet map[string]bool
+
+	// se is the serializer used for serializing and deserializing data in RedisDatastore.
+	se serializer.Serializer
 }
 
+// NewRedisDatastore creates a new instance of RedisDatastore with the given name and Redis connection.
+// It initializes the read and write caches, as well as the JSON serializer.
 func NewRedisDatastore(name string, conn RedisConnectionInterface) *RedisDatastore {
 	return &RedisDatastore{
 		BaseDataStore: txn.BaseDataStore{Name: name},
 		conn:          conn,
 		readCache:     make(map[string]RedisItem),
 		writeCache:    make(map[string]RedisItem),
+		invisibleSet:  make(map[string]bool),
 		se:            serializer.NewJSONSerializer(),
 	}
 }
 
+// Start starts the RedisDatastore by establishing a connection to the Redis server.
+// It returns an error if the connection fails.
 func (r *RedisDatastore) Start() error {
 	return r.conn.Connect()
 }
 
+// Read reads a record from the RedisDatastore.
 func (r *RedisDatastore) Read(key string, value any) error {
-
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
 		// if the record is marked as deleted
 		if item.IsDeleted {
 			return txn.KeyNotFound
 		}
-		return r.se.Deserialize([]byte(item.Value), value)
+		return r.getValue(item, value)
 	}
-
 	// if the record is in the readCache
 	if item, ok := r.readCache[key]; ok {
-		return r.se.Deserialize([]byte(item.Value), value)
+		return r.getValue(item, value)
 	}
 
 	// else get if from connection
@@ -56,18 +72,67 @@ func (r *RedisDatastore) Read(key string, value any) error {
 		return err
 	}
 
-	err = r.basicVisibilityProcessor(item, value)
+	item, err = r.dirtyReadChecker(item)
 	if err != nil {
 		return err
 	}
-	return nil
-}
 
-func (r *RedisDatastore) basicVisibilityProcessor(item RedisItem, value any) error {
-	if item.TxnState == config.COMMITTED {
-		return r.readAsCommitted(item, value)
+	resItem, err := r.basicVisibilityProcessor(item)
+	if err != nil {
+		return err
 	}
 
+	logicFunc := func(curItem RedisItem, isFound bool) error {
+		// if the record has been deleted
+		if !isFound || curItem.IsDeleted {
+			return txn.KeyNotFound
+		}
+
+		err := r.getValue(curItem, value)
+		if err != nil {
+			return err
+			// return txn.DeserializeError.Join(err)
+		}
+		r.readCache[curItem.Key] = curItem
+		return nil
+	}
+
+	return r.treatAsCommitted(resItem, logicFunc)
+}
+
+func (r *RedisDatastore) dirtyReadChecker(item RedisItem) (RedisItem, error) {
+	if _, ok := r.invisibleSet[item.Key]; ok {
+		return RedisItem{}, txn.KeyNotFound
+	} else {
+		return item, nil
+	}
+}
+
+func (r *RedisDatastore) basicVisibilityProcessor(item RedisItem) (RedisItem, error) {
+	// function to perform the rollback operation
+	rollbackFunc := func() (RedisItem, error) {
+		item, err := r.rollback(item)
+		if err != nil {
+			return RedisItem{}, err
+		}
+		if item.Equal(RedisItem{}) {
+			return RedisItem{}, txn.KeyNotFound
+		}
+		return item, err
+	}
+
+	// function to perform the rollforward operation
+	rollforwardFunc := func() (RedisItem, error) {
+		item, err := r.rollForward(item)
+		if err != nil {
+			return RedisItem{}, err
+		}
+		return item, nil
+	}
+
+	if item.TxnState == config.COMMITTED {
+		return item, nil
+	}
 	if item.TxnState == config.PREPARED {
 		state, err := r.Txn.GetTSRState(item.TxnId)
 		if err == nil {
@@ -75,79 +140,65 @@ func (r *RedisDatastore) basicVisibilityProcessor(item RedisItem, value any) err
 			// if TSR exists and the TSR is in COMMITTED state
 			// roll forward the record
 			case config.COMMITTED:
-				item, err = r.rollForward(item)
-				if err != nil {
-					return err
-				}
-				return r.readAsCommitted(item, value)
+				return rollforwardFunc()
 			// if TSR exists and the TSR is in ABORTED state
-			// we should rollback the record
+			// we should roll back the record
 			// because the transaction that modified the record has been aborted
 			case config.ABORTED:
-				item, err := r.rollback(item)
-				if err != nil {
-					return err
-				}
-				if item.Equal(RedisItem{}) {
-					return txn.KeyNotFound
-				}
-				return r.readAsCommitted(item, value)
+				return rollbackFunc()
 			}
 		}
 		// if TSR does not exist
 		// and if t_lease has expired
-		// we should rollback the record
+		// we should roll back the record
 		if item.TLease.Before(r.Txn.TxnStartTime) {
 			// the corresponding transaction is considered ABORTED
+			// TODO: we can retry here
 			err := r.Txn.WriteTSR(item.TxnId, config.ABORTED)
 			if err != nil {
-				return err
+				return RedisItem{}, err
 			}
-			item, err := r.rollback(item)
-			if err != nil {
-				return err
-			}
-			if item.Equal(RedisItem{}) {
-				return txn.KeyNotFound
-			}
-			return r.readAsCommitted(item, value)
+			return rollbackFunc()
 		}
-		return errors.New("dirty Read")
+		// the corresponding transaction is running,
+		// we should try previous record instead of raising an error
+
+		// a little trick here:
+		// if the record is not found in the treatAsCommitted,
+		// we should add it to the invisibleSet.
+		// if the record can be found in the treatAsCommitted,
+		// it will be stored in the readCache,
+		// so we don't bother dirtyReadChecker anymore.
+		r.invisibleSet[item.Key] = true
+		// if prev is empty
+		if item.Prev == "" {
+			return RedisItem{}, txn.KeyNotFound
+		}
+
+		return r.getPrevItem(item)
+		// return RedisItem{}, txn.DirtyRead
 	}
-	return txn.KeyNotFound
+	return RedisItem{}, txn.KeyNotFound
 }
 
-func (r *RedisDatastore) readAsCommitted(item RedisItem, value any) error {
+func (r *RedisDatastore) treatAsCommitted(item RedisItem, logicFunc func(RedisItem, bool) error) error {
 	curItem := item
 	for i := 1; i <= config.Config.MaxRecordLength; i++ {
 
 		if curItem.TValid.Before(r.Txn.TxnStartTime) {
-			// if the record has been deleted
-			if curItem.IsDeleted {
-				return txn.KeyNotFound
-			}
-			err := r.se.Deserialize([]byte(curItem.Value), value)
-			if err != nil {
-				return err
-				// return txn.DeserializeError.Join(err)
-			}
-			r.readCache[curItem.Key] = curItem
-			return nil
+			return logicFunc(curItem, true)
 		}
 		if i == config.Config.MaxRecordLength {
 			break
 		}
-
 		// if prev is empty
 		if curItem.Prev == "" {
-			return txn.KeyNotFound
+			return logicFunc(curItem, false)
 		}
 
 		// get the previous record
-		var preItem RedisItem
-		err := r.se.Deserialize([]byte(curItem.Prev), &preItem)
+		preItem, err := r.getPrevItem(curItem)
 		if err != nil {
-			// The transaction needs to be aborted
 			return err
 		}
 		curItem = preItem
@@ -183,22 +234,19 @@ func (r *RedisDatastore) Write(key string, value any) error {
 	}
 	// else Write a record to the cache
 	r.writeCache[key] = RedisItem{
-		Key:       key,
-		Value:     str,
-		TxnId:     r.Txn.TxnId,
-		TValid:    time.Now(),
-		TLease:    time.Now().Add(config.Config.LeaseTime),
+		Key:   key,
+		Value: str,
+		TxnId: r.Txn.TxnId,
+		// TValid:    time.Now(),
+		// TLease:    time.Now().Add(config.Config.LeaseTime),
 		Version:   version,
 		IsDeleted: false,
 	}
 	return nil
 }
 
-func (r *RedisDatastore) Prev(key string, record string) {
-	//TODO implement me
-	panic("implement me")
-}
-
+// Delete deletes a record from the RedisDatastore.
+// It will return an error if the record is not found.
 func (r *RedisDatastore) Delete(key string) error {
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
@@ -231,9 +279,9 @@ func (r *RedisDatastore) Delete(key string) error {
 		IsDeleted: true,
 		TxnId:     r.Txn.TxnId,
 		TxnState:  config.COMMITTED,
-		TValid:    time.Now(),
-		TLease:    time.Now(),
-		Version:   version,
+		// TValid:    time.Now(),
+		// TLease:    time.Now(),
+		Version: version,
 	}
 	return nil
 }
@@ -247,130 +295,52 @@ func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisIt
 			return err
 		}
 		if err = r.conn.ConditionalUpdate(newItem.Key, newItem, true); err != nil {
-			return errors.New("write conflicted: the record has been modified by others")
+			return err
 		}
 		return nil
 	}
 
-	curItem := dbItem
-	for i := 1; i <= config.Config.MaxRecordLength; i++ {
-
-		if curItem.TValid.Before(r.Txn.TxnStartTime) {
-			// if the record has been deleted
-			if curItem.IsDeleted {
-				newItem, err := r.updateMetadata(cacheItem, curItem)
-				if err != nil {
-					return err
-				}
-				return r.conn.ConditionalUpdate(newItem.Key, newItem, false)
-			}
-			newItem, err := r.updateMetadata(cacheItem, curItem)
-			if err != nil {
-				return err
-			}
-			return r.conn.ConditionalUpdate(newItem.Key, newItem, false)
+	logicFunc := func(curItem RedisItem, isFound bool) error {
+		if !isFound {
+			// if the corresponding version can not be found in treatAsCommitted,
+			// it indicates that there are too many successful commits in the linked list
+			return txn.VersionMismatch
 		}
-		if i == config.Config.MaxRecordLength {
-			break
-		}
-
-		// if prev is empty
-		if curItem.Prev == "" {
-			newItem, err := r.updateMetadata(cacheItem, curItem)
-			if err != nil {
-				return err
-			}
-			return r.conn.ConditionalUpdate(newItem.Key, newItem, true)
-		}
-
-		// get the previous record
-		var preItem RedisItem
-		err := r.se.Deserialize([]byte(curItem.Prev), &preItem)
+		newItem, err := r.updateMetadata(cacheItem, curItem)
 		if err != nil {
-			// The transaction needs to be aborted
 			return err
 		}
-		curItem = preItem
+		return r.conn.ConditionalUpdate(newItem.Key, newItem, false)
 	}
 
-	// if it can not find a corresponding version in linked list
-	return txn.VersionMismatch
-
-	// newItem, err := r.updateMetadata(cacheItem, dbItem)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// return r.conn.ConditionalUpdate(newItem.Key, newItem, true)
+	return r.treatAsCommitted(dbItem, logicFunc)
 }
 
+// conditionalUpdate performs a conditional update operation on the RedisDatastore.
+// It retrieves the corresponding item from the Redis connection and applies basic visibility processing.
+// If the item is not found, it performs a conditional update with an empty RedisItem.
+// If there is an error during the retrieval or processing, it handles the error accordingly.
+// Finally, it performs the conditional update operation with the cacheItem and the processed dbItem.
 func (r *RedisDatastore) conditionalUpdate(cacheItem RedisItem) error {
-
+	// TODO: if it follows read-modified-write pattern,
+	// we can skip the read step
 	dbItem, err := r.conn.GetItem(cacheItem.Key)
 	if err != nil {
 		if err == txn.KeyNotFound {
 			return r.doConditionalUpdate(cacheItem, RedisItem{})
-			// // this is a new record
-			// newItem, _ := r.updateMetadata(cacheItem, RedisItem{})
-			// // Write the new item to the data store
-			// return r.conn.PutItem(newItem.Key, newItem)
-			// // TODO: we should handle atomic create new record here
-			// // return r.conn.ConditionalUpdate(newItem.Key, newItem)
 		}
 		return err
 	}
 
-	if dbItem.TxnState == config.COMMITTED {
-		return r.doConditionalUpdate(cacheItem, dbItem)
+	dbItem, err = r.basicVisibilityProcessor(dbItem)
+	if err != nil && err != txn.KeyNotFound {
+		if err == txn.DirtyRead {
+			return txn.VersionMismatch
+		}
+		return err
 	}
 
-	if dbItem.TxnState == config.PREPARED {
-		state, err := r.Txn.GetTSRState(dbItem.TxnId)
-		if err == nil {
-			switch state {
-			// if TSR exists and the TSR is in COMMITTED state
-			// roll forward the record
-			case config.COMMITTED:
-				dbItem, err = r.rollForward(dbItem)
-				if err != nil {
-					return err
-				}
-				return r.doConditionalUpdate(cacheItem, dbItem)
-			// if TSR exists and the TSR is in ABORTED state
-			// we should rollback the record
-			// because the transaction that modified the record has been aborted
-			case config.ABORTED:
-				dbItem, err = r.rollback(dbItem)
-				if err != nil {
-					return err
-				}
-				// if item.Equal(RedisItem{}) {
-				// 	return txn.KeyNotFound
-				// }
-				return r.doConditionalUpdate(cacheItem, dbItem)
-			}
-		}
-		// if TSR does not exist
-		// and if t_lease has expired
-		// we should rollback the record
-		if dbItem.TLease.Before(r.Txn.TxnStartTime) {
-			// the corresponding transaction is considered ABORTED
-			err := r.Txn.WriteTSR(dbItem.TxnId, config.ABORTED)
-			if err != nil {
-				return err
-			}
-			dbItem, err = r.rollback(dbItem)
-			if err != nil {
-				return err
-			}
-			// if dbItem.Equal(RedisItem{}) {
-			// 	return txn.KeyNotFound
-			// }
-			return r.doConditionalUpdate(cacheItem, dbItem)
-		}
-		return txn.VersionMismatch
-	}
-	return nil
+	return r.doConditionalUpdate(cacheItem, dbItem)
 }
 
 // truncate truncates the linked list of RedisItems if the length exceeds the maximum record length defined in the configuration.
@@ -387,8 +357,7 @@ func (r *RedisDatastore) truncate(newItem *RedisItem) (RedisItem, error) {
 		stack.Push(*newItem)
 		curItem := newItem
 		for i := 1; i <= maxLen-1; i++ {
-			var preItem RedisItem
-			err := r.se.Deserialize([]byte(curItem.Prev), &preItem)
+			preItem, err := r.getPrevItem(*curItem)
 			if err != nil {
 				return RedisItem{}, errors.New("Unmarshal error: " + err.Error())
 			}
@@ -422,6 +391,11 @@ func (r *RedisDatastore) truncate(newItem *RedisItem) (RedisItem, error) {
 	}
 }
 
+// updateMetadata updates the metadata of a RedisItem by comparing it with the oldItem.
+// If the oldItem is empty, it sets the LinkedLen of the newItem to 1.
+// Otherwise, it increments the LinkedLen of the newItem by 1 and sets the Prev and Version fields based on the oldItem.
+// It then truncates the record using the truncate method and sets the TxnState, TValid, and TLease fields of the newItem.
+// Finally, it returns the updated newItem and any error that occurred during the process.
 func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (RedisItem, error) {
 	if oldItem == (RedisItem{}) {
 		newItem.LinkedLen = 1
@@ -453,7 +427,6 @@ func (r *RedisDatastore) Prepare() error {
 		records = append(records, v)
 	}
 	// sort records by key
-	// TODO: global consistent hash order
 	slices.SortFunc(
 		records, func(i, j RedisItem) int {
 			return cmp.Compare(i.Key, j.Key)
@@ -488,6 +461,7 @@ func (r *RedisDatastore) Commit() error {
 	// clear the cache
 	r.writeCache = make(map[string]RedisItem)
 	r.readCache = make(map[string]RedisItem)
+	r.invisibleSet = make(map[string]bool)
 	return nil
 }
 
@@ -499,6 +473,7 @@ func (r *RedisDatastore) Abort(hasCommitted bool) error {
 
 	if !hasCommitted {
 		r.writeCache = make(map[string]RedisItem)
+		r.invisibleSet = make(map[string]bool)
 		return nil
 	}
 
@@ -515,12 +490,8 @@ func (r *RedisDatastore) Abort(hasCommitted bool) error {
 	}
 	r.readCache = make(map[string]RedisItem)
 	r.writeCache = make(map[string]RedisItem)
+	r.invisibleSet = make(map[string]bool)
 	return nil
-}
-
-func (r *RedisDatastore) Recover(key string) {
-	//TODO implement me
-	panic("implement me")
 }
 
 // rollback overwrites the record with the application data
@@ -529,13 +500,17 @@ func (r *RedisDatastore) Recover(key string) {
 func (r *RedisDatastore) rollback(item RedisItem) (RedisItem, error) {
 
 	if item.Prev == "" {
-		// TODO: mark the record as deleted?
-		err := r.conn.Delete(item.Key)
-		return RedisItem{}, err
+		item.IsDeleted = true
+		item.TxnState = config.COMMITTED
+		err := r.conn.ConditionalUpdate(item.Key, item, false)
+		if err != nil {
+			return RedisItem{}, errors.Join(errors.New("rollback failed"), err)
+		}
+		item.Version++
+		return item, err
 	}
 
-	var newItem RedisItem
-	err := r.se.Deserialize([]byte(item.Prev), &newItem)
+	newItem, err := r.getPrevItem(item)
 	if err != nil {
 		return RedisItem{}, errors.Join(errors.New("rollback failed"), err)
 	}
@@ -565,6 +540,25 @@ func (r *RedisDatastore) rollForward(item RedisItem) (RedisItem, error) {
 	return item, err
 }
 
+// getPrevItem retrieves the previous item of the given RedisItem.
+// It deserializes the "Prev" field of the item and returns the deserialized RedisItem.
+// If there is an error during deserialization, it returns an empty RedisItem and the error.
+func (r *RedisDatastore) getPrevItem(item RedisItem) (RedisItem, error) {
+	var preItem RedisItem
+	err := r.se.Deserialize([]byte(item.Prev), &preItem)
+	if err != nil {
+		return RedisItem{}, err
+	}
+	return preItem, nil
+}
+
+// getValue retrieves the value of a RedisItem from the RedisDatastore and deserializes it into the provided value.
+// It uses the RedisDatastore's serializer to deserialize the value.
+// If an error occurs during deserialization, it is returned.
+func (r *RedisDatastore) getValue(item RedisItem, value any) error {
+	return r.se.Deserialize([]byte(item.Value), value)
+}
+
 // GetName returns the name of the MemoryDatastore.
 func (r *RedisDatastore) GetName() string {
 	return r.Name
@@ -576,6 +570,8 @@ func (r *RedisDatastore) SetTxn(txn *txn.Transaction) {
 	r.Txn = txn
 }
 
+// ReadTSR reads the transaction state from the Redis datastore.
+// It takes a transaction ID as input and returns the corresponding state and an error, if any.
 func (r *RedisDatastore) ReadTSR(txnId string) (config.State, error) {
 	var txnState config.State
 	state, err := r.conn.Get(txnId)

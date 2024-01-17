@@ -14,9 +14,6 @@ type Datastore interface {
 	// Write writes records into the writeCache.
 	Write(key string, value any) error
 
-	// Prev retrieves the previous value of a record.
-	Prev(key string, record string)
-
 	// Delete marks a record as deleted.
 	Delete(key string) error
 
@@ -33,9 +30,6 @@ type Datastore interface {
 	// Abort aborts the transaction.
 	// It rolls back the records in the writeCache to the state before the transaction.
 	Abort(hasCommitted bool) error
-
-	// Recover recovers a record.
-	Recover(key string)
 
 	// GetName returns the name of the data store.
 	GetName() string

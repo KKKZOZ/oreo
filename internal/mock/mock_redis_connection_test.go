@@ -64,7 +64,7 @@ func TestRedis_DebugFunc(t *testing.T) {
 		assert.EqualError(t, err, "my error")
 	})
 
-	t.Run("after triggerring debugFunc", func(t *testing.T) {
+	t.Run("after triggering debugFunc", func(t *testing.T) {
 		conn := NewMockRedisConnection("localhost", 6379, 3, true,
 			func() error { return errors.New("my error") })
 

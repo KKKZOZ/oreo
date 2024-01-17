@@ -82,7 +82,7 @@ func TestDebugFunc(t *testing.T) {
 		assert.EqualError(t, err, "my error")
 	})
 
-	t.Run("after triggerring debugFunc", func(t *testing.T) {
+	t.Run("after triggering debugFunc", func(t *testing.T) {
 		memoryDatabase := NewMemoryDatabase("localhost", 8321)
 		go memoryDatabase.Start()
 		defer func() { <-memoryDatabase.MsgChan }()
