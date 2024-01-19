@@ -191,6 +191,8 @@ func (r *RedisDatastore) treatAsCommitted(item RedisItem, logicFunc func(RedisIt
 	for i := 1; i <= config.Config.MaxRecordLength; i++ {
 
 		if curItem.TValid.Before(r.Txn.TxnStartTime) {
+			// find the corresponding version,
+			// do some bussiness logic.
 			return logicFunc(curItem, true)
 		}
 		if i == config.Config.MaxRecordLength {
@@ -208,7 +210,6 @@ func (r *RedisDatastore) treatAsCommitted(item RedisItem, logicFunc func(RedisIt
 		}
 		curItem = preItem
 	}
-
 	return txn.KeyNotFound
 }
 
@@ -228,28 +229,31 @@ func (r *RedisDatastore) Write(key string, value any) error {
 	}
 
 	// else write a new record to the cache
+	cacheItem := RedisItem{
+		Key:   key,
+		Value: str,
+		TxnId: r.Txn.TxnId,
+	}
+	return r.writeToCache(cacheItem)
+}
 
-	// -1 indicates this is a direct write,
-	// we should find the corresponding version in ConditionalUpdate
-	version := -1
-	if item, ok := r.readCache[key]; ok {
-		version = item.Version
+// writeToCache writes the given RedisItem to the cache.
+// It will find the corresponding version of the item.
+//   - If the item already exists in the read cache, it follows the read-modified-commit pattern
+//   - If this is a direct write, it will set the version to -1
+//
+// The item is then added to the write cache.
+func (r *RedisDatastore) writeToCache(cacheItem RedisItem) error {
+
+	// check if it follows read-modified-commit pattern
+	if oldItem, ok := r.readCache[cacheItem.Key]; ok {
+		cacheItem.Version = oldItem.Version
 	} else {
-		// TODO: we should handler version problem in conditionalUpdate?
-		// oldItem, err := r.conn.GetItem(key)
-		// if err != nil {
-		// 	version = 0
-		// } else {
-		// 	version = oldItem.Version
-		// }
+		// else we set it to -1, indicating this is a direct write
+		cacheItem.Version = -1
 	}
-	r.writeCache[key] = RedisItem{
-		Key:       key,
-		Value:     str,
-		TxnId:     r.Txn.TxnId,
-		Version:   version,
-		IsDeleted: false,
-	}
+
+	r.writeCache[cacheItem.Key] = cacheItem
 	return nil
 }
 
@@ -266,32 +270,17 @@ func (r *RedisDatastore) Delete(key string) error {
 		return nil
 	}
 
-	// if the record is in the readCache
-	// we can get the corresponding version
-	version := 0
-	if item, ok := r.readCache[key]; ok {
-		version = item.Version
-	} else {
-		// else write a deleted record to the writeCache
-		// first we have to get the corresponding version
-		// TODO: should we first read into the cache?
-		item, err := r.conn.GetItem(key)
-		if err != nil {
-			return err
-		}
-		version = item.Version
+	// else write a new record to the cache
+	cacheItem := RedisItem{
+		Key:       key,
+		TxnId:     r.Txn.TxnId,
+		IsDeleted: true,
 	}
 
-	r.writeCache[key] = RedisItem{
-		Key:       key,
-		IsDeleted: true,
-		TxnId:     r.Txn.TxnId,
-		TxnState:  config.COMMITTED,
-		Version:   version,
-	}
-	return nil
+	return r.writeToCache(cacheItem)
 }
 
+// doConditionalUpdate performs the real conditonal update according to item's state
 func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisItem) error {
 
 	// if this item will be created
@@ -337,8 +326,14 @@ func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisIt
 // If there is an error during the retrieval or processing, it handles the error accordingly.
 // Finally, it performs the conditional update operation with the cacheItem and the processed dbItem.
 func (r *RedisDatastore) conditionalUpdate(cacheItem RedisItem) error {
-	// TODO: if it follows read-modified-write pattern,
-	// we can skip the read step
+
+	// if the cacheItem follows read-modified-write pattern,
+	// it already has a valid version, we can skip the read step.
+	if cacheItem.Version != -1 {
+		dbItem := r.readCache[cacheItem.Key]
+		return r.doConditionalUpdate(cacheItem, dbItem)
+	}
+
 	dbItem, err := r.conn.GetItem(cacheItem.Key)
 	if err != nil {
 		if err == txn.KeyNotFound {
