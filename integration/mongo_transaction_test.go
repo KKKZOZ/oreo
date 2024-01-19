@@ -20,7 +20,7 @@ func TestMongo_TxnWrite(t *testing.T) {
 	expected := testutil.NewDefaultPerson()
 
 	// clear the data
-	conn := NewRedisConnection()
+	conn := NewConnectionWithSetup(MONGO)
 	conn.Delete("John")
 
 	// Txn1 writes the record
@@ -136,7 +136,7 @@ func TestMongo_SingleKeyWriteConflict(t *testing.T) {
 func TestMongo_MultileKeyWriteConflict(t *testing.T) {
 
 	// clear the data
-	conn := NewRedisConnection()
+	conn := NewConnectionWithSetup(MONGO)
 	conn.Delete("item1")
 	conn.Delete("item2")
 

@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"github.com/kkkzoz/oreo/internal/mock"
 	"github.com/kkkzoz/oreo/pkg/datastore/memory"
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
@@ -14,10 +15,23 @@ const (
 	KVROCKS = "kvrocks"
 )
 
-func NewRedisConnection() *redis.RedisConnection {
-	return redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address: "localhost:6379",
-	})
+func NewConnectionWithSetup(dsType string) txn.Connector {
+
+	var conn txn.Connector
+
+	if dsType == "redis" {
+		conn = redis.NewRedisConnection(&redis.ConnectionOptions{
+			Address: "localhost:6379",
+		})
+	}
+
+	if dsType == "kvrocks" {
+		conn = redis.NewRedisConnection(&redis.ConnectionOptions{
+			Address: "localhost:6666",
+		})
+	}
+	conn.Connect()
+	return conn
 }
 
 func NewTransactionWithSetup(dsType string) *txn.Transaction {
@@ -53,6 +67,30 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 			Address: "localhost:6666",
 		})
 		rds := redis.NewRedisDatastore("kvrocks", conn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+	}
+
+	return txn
+}
+
+func NewTransactionWithMockConn(dsType string, limit int,
+	isReturned bool, debugFunc func() error) *txn.Transaction {
+
+	txn := txn.NewTransaction()
+	if dsType == "redis" {
+
+		mockConn := mock.NewMockRedisConnection(
+			"localhost", 6379, limit, isReturned, debugFunc)
+		rds := redis.NewRedisDatastore("redis", mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+	}
+
+	if dsType == "kvrocks" {
+		mockConn := mock.NewMockRedisConnection(
+			"localhost", 6666, limit, isReturned, debugFunc)
+		rds := redis.NewRedisDatastore("kvrocks", mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
 	}
