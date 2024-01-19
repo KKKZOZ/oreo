@@ -25,21 +25,21 @@ func TestNewTransactionFactory(t *testing.T) {
 		{
 			name: "Test case 1: with empty DatastoreList",
 			config: &factory.TransactionConfig{
-				DatastoreList: []txn.Datastore{},
+				DatastoreList: []txn.Datastorer{},
 			},
 			expectedErr: errors.New("DatastoreList is empty"),
 		},
 		{
 			name: "Test case 2: with nil GlobalDatastore",
 			config: &factory.TransactionConfig{
-				DatastoreList: []txn.Datastore{memDst1, memDst2},
+				DatastoreList: []txn.Datastorer{memDst1, memDst2},
 			},
 			expectedErr: errors.New("GlobalDatastore is empty"),
 		},
 		{
 			name: "Test case 3: with empty OracleURL",
 			config: &factory.TransactionConfig{
-				DatastoreList:    []txn.Datastore{memDst1, memDst2},
+				DatastoreList:    []txn.Datastorer{memDst1, memDst2},
 				GlobalDatastore:  memDst1,
 				TimeOracleSource: txn.GLOBAL,
 			},
@@ -48,7 +48,7 @@ func TestNewTransactionFactory(t *testing.T) {
 		{
 			name: "Test case 4: with local locker source and global time oracle source",
 			config: &factory.TransactionConfig{
-				DatastoreList:    []txn.Datastore{memDst1},
+				DatastoreList:    []txn.Datastorer{memDst1},
 				GlobalDatastore:  memDst1,
 				OracleURL:        "http://localhost:8300",
 				TimeOracleSource: txn.GLOBAL,
@@ -58,7 +58,7 @@ func TestNewTransactionFactory(t *testing.T) {
 		{
 			name: "Test case 5: with global locker source and empty OracleURL",
 			config: &factory.TransactionConfig{
-				DatastoreList:   []txn.Datastore{memDst1, memDst2},
+				DatastoreList:   []txn.Datastorer{memDst1, memDst2},
 				GlobalDatastore: memDst1,
 				LockerSource:    txn.GLOBAL,
 			},
@@ -88,7 +88,7 @@ func TestTransactionCreatedByFactory(t *testing.T) {
 	memDst1 := memory.NewMemoryDatastore("memory", memory.NewMemoryConnection("localhost", 8321))
 
 	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
-		DatastoreList:    []txn.Datastore{memDst1},
+		DatastoreList:    []txn.Datastorer{memDst1},
 		GlobalDatastore:  memDst1,
 		TimeOracleSource: txn.LOCAL,
 		LockerSource:     txn.LOCAL,
@@ -135,7 +135,7 @@ func TestConcurrentTransactionCreatedByFactory(t *testing.T) {
 	memDst1 := memory.NewMemoryDatastore("mem1", memory.NewMemoryConnection("localhost", 8321))
 
 	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
-		DatastoreList:    []txn.Datastore{memDst1},
+		DatastoreList:    []txn.Datastorer{memDst1},
 		GlobalDatastore:  memDst1,
 		TimeOracleSource: txn.LOCAL,
 		LockerSource:     txn.LOCAL,

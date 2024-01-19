@@ -513,7 +513,7 @@ func TestRedisConcurrentTransaction(t *testing.T) {
 	redisDst1 := redis.NewRedisDatastore("redis1", NewRedisConnection())
 
 	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
-		DatastoreList:    []txn.Datastore{redisDst1},
+		DatastoreList:    []txn.Datastorer{redisDst1},
 		GlobalDatastore:  redisDst1,
 		TimeOracleSource: txn.LOCAL,
 		LockerSource:     txn.LOCAL,
@@ -570,7 +570,7 @@ func TestRedisConcurrentTransaction(t *testing.T) {
 // Finally, it commits the transaction and checks that
 // the redis item has been updated to the committed state.
 func TestRedisSimpleExpiredRead(t *testing.T) {
-	tarMemItem := redis.RedisItem{
+	tarMemItem := txn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestRedisSimpleExpiredRead1",
@@ -580,7 +580,7 @@ func TestRedisSimpleExpiredRead(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := redis.RedisItem{
+	curMemItem := txn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "TestRedisSimpleExpiredRead2",
@@ -1033,7 +1033,7 @@ func TestRedisRollbackConflict(t *testing.T) {
 	t.Run("the broken item has a valid Prev field", func(t *testing.T) {
 		conn := NewRedisConnection()
 
-		redisItem1 := redis.RedisItem{
+		redisItem1 := txn.DataItem{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:     "TestRedisRollbackConflict1",
@@ -1043,7 +1043,7 @@ func TestRedisRollbackConflict(t *testing.T) {
 			LinkedLen: 1,
 			Version:   1,
 		}
-		redisItem2 := redis.RedisItem{
+		redisItem2 := txn.DataItem{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			TxnId:     "TestRedisRollbackConflict2",
@@ -1100,7 +1100,7 @@ func TestRedisRollbackConflict(t *testing.T) {
 	t.Run("the broken item has an empty Prev field", func(t *testing.T) {
 		conn := NewRedisConnection()
 
-		redisItem2 := redis.RedisItem{
+		redisItem2 := txn.DataItem{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			TxnId:     "TestRedisRollbackConflict2-emptyField",
@@ -1161,7 +1161,7 @@ func TestRedisRollbackConflict(t *testing.T) {
 func TestRedisRollForwardConflict(t *testing.T) {
 	conn := NewRedisConnection()
 
-	redisItem1 := redis.RedisItem{
+	redisItem1 := txn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRedisRollForwardConflict1",
@@ -1170,7 +1170,7 @@ func TestRedisRollForwardConflict(t *testing.T) {
 		TLease:   time.Now().Add(-4 * time.Second),
 		Version:  1,
 	}
-	redisItem2 := redis.RedisItem{
+	redisItem2 := txn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 		TxnId:     "TestRedisRollForwardConflict2",
@@ -1530,7 +1530,7 @@ func TestRedisDeleteTimingProblems(t *testing.T) {
 	//  - txnA tries to delete the item -> should fail
 	t.Run("the item has an empty Prev field", func(t *testing.T) {
 		testConn := NewRedisConnection()
-		dbItem := redis.RedisItem{
+		dbItem := txn.DataItem{
 			Key:      "item1",
 			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:    "TestRedisDeleteTimingProblems",

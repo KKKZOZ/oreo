@@ -553,7 +553,7 @@ func TestKvrocks_ConcurrentTransaction(t *testing.T) {
 // Finally, it commits the transaction and checks that
 // the redis item has been updated to the committed state.
 func TestKvrocks_SimpleExpiredRead(t *testing.T) {
-	tarMemItem := redis.RedisItem{
+	tarMemItem := txn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "99",
@@ -563,7 +563,7 @@ func TestKvrocks_SimpleExpiredRead(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := redis.RedisItem{
+	curMemItem := txn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "TestKvrocks_SimpleExpiredRead",

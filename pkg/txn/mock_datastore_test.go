@@ -110,19 +110,19 @@ func (_c *MockDatastore_Commit_Call) RunAndReturn(run func() error) *MockDatasto
 }
 
 // Copy provides a mock function with given fields:
-func (_m *MockDatastore) Copy() Datastore {
+func (_m *MockDatastore) Copy() Datastorer {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for Copy")
 	}
 
-	var r0 Datastore
-	if rf, ok := ret.Get(0).(func() Datastore); ok {
+	var r0 Datastorer
+	if rf, ok := ret.Get(0).(func() Datastorer); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(Datastore)
+			r0 = ret.Get(0).(Datastorer)
 		}
 	}
 
