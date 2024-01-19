@@ -1887,3 +1887,36 @@ func TestRollForwardWhenWriting(t *testing.T) {
 	tarPrev := util.ToJSONString(tarItem)
 	assert.Equal(t, tarPrev, res.Prev)
 }
+
+func TestItemVersionUpdate(t *testing.T) {
+
+	t.Run("item version ++ after updated", func(t *testing.T) {
+		conn := NewDefaultRedisConnection()
+		conn.Connect()
+		dbItem := RedisItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:     "TestItemVersionUpdate",
+			TxnState:  config.COMMITTED,
+			TValid:    time.Now().Add(-10 * time.Second),
+			TLease:    time.Now().Add(-9 * time.Second),
+			LinkedLen: 1,
+			Version:   1,
+		}
+		conn.PutItem(dbItem.Key, dbItem)
+
+		txn := NewTransactionWithSetup()
+		txn.Start()
+		var item testutil.TestItem
+		err := txn.Read("redis", dbItem.Key, &item)
+		assert.NoError(t, err)
+		item.Value = "item1-cur"
+		txn.Write("redis", dbItem.Key, item)
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		res, err := conn.GetItem(dbItem.Key)
+		assert.NoError(t, err)
+		assert.Equal(t, dbItem.Version+1, res.Version)
+	})
+}
