@@ -12,11 +12,12 @@ import (
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/txn"
+	trxn "github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
-func NewTransactionWithSetup() *txn.Transaction {
-	txn := txn.NewTransaction()
+func NewTransactionWithSetup() *trxn.Transaction {
+	txn := trxn.NewTransaction()
 	conn := NewMemoryConnection("localhost", 8321)
 	mds := NewMemoryDatastore("memory", conn)
 	txn.AddDatastore(mds)
@@ -46,7 +47,7 @@ func TestSimpleReadInCache(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(memoryPerson),
 		TxnId:    "123123",
@@ -64,7 +65,7 @@ func TestSimpleReadInCache(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	cacheMemoryItem := MemoryItem{
+	cacheMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(cachePerson),
 		TxnId:    "123123",
@@ -117,7 +118,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		Age:  30,
 	}
 	expectedStr := util.ToJSONString(expected)
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    expectedStr,
 		TxnId:    "123123",
@@ -175,7 +176,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	preMemoryItem := MemoryItem{
+	preMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
@@ -184,7 +185,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  1,
 	}
-	curMemoryItem := MemoryItem{
+	curMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
@@ -242,7 +243,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	preMemoryItem := MemoryItem{
+	preMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
@@ -251,7 +252,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  1,
 	}
-	curMemoryItem := MemoryItem{
+	curMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
@@ -304,7 +305,7 @@ func TestSimpleReadWhenPreparedWithTSR(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
@@ -363,7 +364,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
@@ -380,7 +381,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Age:  31,
 	}
 
-	curMemoryItem := MemoryItem{
+	curMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "101",
@@ -437,7 +438,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
@@ -577,7 +578,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -647,7 +648,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -716,7 +717,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -771,7 +772,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -876,7 +877,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -946,7 +947,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedMemoryItem := MemoryItem{
+	expectedMemoryItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -1203,7 +1204,7 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 func TestLinkedReadAsCommitted(t *testing.T) {
 
 	item1_1 := testutil.NewTestItem("item1_1")
-	memItem1_1 := MemoryItem{
+	memItem1_1 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_1),
 		TxnId:     "txn1",
@@ -1215,7 +1216,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	}
 
 	item1_2 := testutil.NewTestItem("item1_2")
-	memItem1_2 := MemoryItem{
+	memItem1_2 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_2),
 		TxnId:     "txn2",
@@ -1228,7 +1229,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	}
 
 	item1_3 := testutil.NewTestItem("item1_3")
-	memItem1_3 := MemoryItem{
+	memItem1_3 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_3),
 		TxnId:     "txn3",
@@ -1325,13 +1326,13 @@ func TestLinkedTruncate(t *testing.T) {
 		// check the linked record length
 		conn := NewMemoryConnection("localhost", 8321)
 		conn.Connect()
-		var item MemoryItem
+		var item trxn.DataItem
 		conn.Get("item1", &item)
 		assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
 
 		tarItem := item
 		for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
-			var preItem MemoryItem
+			var preItem trxn.DataItem
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
 			tarItem = preItem
@@ -1360,13 +1361,13 @@ func TestLinkedTruncate(t *testing.T) {
 		// check the linked record length
 		conn := NewMemoryConnection("localhost", 8321)
 		conn.Connect()
-		var item MemoryItem
+		var item trxn.DataItem
 		conn.Get("item1", &item)
 		assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
 
 		tarItem := item
 		for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
-			var preItem MemoryItem
+			var preItem trxn.DataItem
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
 			tarItem = preItem
@@ -1396,13 +1397,13 @@ func TestLinkedTruncate(t *testing.T) {
 		// check the linked record length
 		conn := NewMemoryConnection("localhost", 8321)
 		conn.Connect()
-		var item MemoryItem
+		var item trxn.DataItem
 		conn.Get("item1", &item)
 		assert.Equal(t, expectedLen, item.LinkedLen)
 
 		tarItem := item
 		for i := 1; i <= expectedLen-1; i++ {
-			var preItem MemoryItem
+			var preItem trxn.DataItem
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
 			tarItem = preItem

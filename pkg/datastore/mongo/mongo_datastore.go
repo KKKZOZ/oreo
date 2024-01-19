@@ -13,7 +13,8 @@ import (
 )
 
 type MongoDatastore struct {
-	txn.BaseDataStore
+	Name       string
+	Txn        *txn.Transaction
 	conn       MongoConnectionInterface
 	readCache  map[string]MongoItem
 	writeCache map[string]MongoItem
@@ -22,11 +23,11 @@ type MongoDatastore struct {
 
 func NewMongoDatastore(name string, conn MongoConnectionInterface) *MongoDatastore {
 	return &MongoDatastore{
-		BaseDataStore: txn.BaseDataStore{Name: name},
-		conn:          conn,
-		readCache:     make(map[string]MongoItem),
-		writeCache:    make(map[string]MongoItem),
-		se:            serializer.NewJSONSerializer(),
+		Name:       name,
+		conn:       conn,
+		readCache:  make(map[string]MongoItem),
+		writeCache: make(map[string]MongoItem),
+		se:         serializer.NewJSONSerializer(),
 	}
 }
 
@@ -216,8 +217,8 @@ func (r *MongoDatastore) Delete(key string) error {
 	return nil
 }
 
-func (r *MongoDatastore) conditionalUpdate(item txn.Item) error {
-	memItem := item.(MongoItem)
+func (r *MongoDatastore) conditionalUpdate(item MongoItem) error {
+	memItem := item
 	oldItem, err := r.conn.GetItem(memItem.Key)
 	if err != nil {
 		// this is a new record
@@ -438,6 +439,6 @@ func (r *MongoDatastore) DeleteTSR(txnId string) error {
 
 // Copy returns a new instance of MongoDatastore with the same name and connection.
 // It is used to create a copy of the MongoDatastore object.
-func (r *MongoDatastore) Copy() txn.Datastore {
+func (r *MongoDatastore) Copy() txn.Datastorer {
 	return NewMongoDatastore(r.Name, r.conn)
 }

@@ -10,102 +10,38 @@ import (
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	trxn "github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
-// NewDefaultRedisConnection creates a new RedisConnection with default connection options.
+// NewDefaultRedisConnection creates and connect a new RedisConnection with default connection options.
 // It uses the localhost address and the default Redis port (6379).
 func NewDefaultRedisConnection() *RedisConnection {
-	return NewRedisConnection(&ConnectionOptions{
+	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
+	conn.Connect()
+	return conn
 }
 
 // NewTransactionWithSetup creates a new transaction with a Redis datastore setup.
 // It initializes a Redis connection, creates a new transaction, and adds a Redis datastore to the transaction.
 // The Redis connection is established with the provided address.
 // The created transaction is returned.
-func NewTransactionWithSetup() *txn.Transaction {
+func NewTransactionWithSetup() *trxn.Transaction {
 	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	rds := NewRedisDatastore("redis", conn)
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 	return txn
 }
 
-func TestSimpleReadInCache(t *testing.T) {
-	txn := txn.NewTransaction()
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
-	})
-	rds := NewRedisDatastore("redis", conn)
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
-
-	// initialize the redis database
-	memoryPerson := testutil.Person{
-		Name: "John",
-		Age:  30,
-	}
-	expectedRedisItem := RedisItem{
-		Key:      "John",
-		Value:    util.ToJSONString(memoryPerson),
-		TxnId:    "123123",
-		TxnState: config.COMMITTED,
-		TValid:   time.Now().Add(-10 * time.Second),
-		TLease:   time.Now().Add(-5 * time.Second),
-		Version:  2,
-	}
-
-	key := "John"
-	// conn.Delete(key)
-	err := conn.PutItem(key, expectedRedisItem)
-	if err != nil {
-		t.Errorf("Error putting item to redis datastore: %s", err)
-	}
-
-	// Put a item in cache
-	cachePerson := testutil.Person{
-		Name: "John",
-		Age:  31,
-	}
-	cacheRedisItem := RedisItem{
-		Key:      "John",
-		Value:    util.ToJSONString(cachePerson),
-		TxnId:    "123123",
-		TxnState: config.COMMITTED,
-		TValid:   time.Now().Add(10 * time.Second),
-		TLease:   time.Now().Add(5 * time.Second),
-		Version:  2,
-	}
-	rds.writeCache[key] = cacheRedisItem
-
-	// Start the transaction
-	err = txn.Start()
-	if err != nil {
-		t.Errorf("Error starting transaction: %s", err)
-	}
-
-	// Read the value
-	var result testutil.Person
-	err = txn.Read("redis", key, &result)
-	if err != nil {
-		t.Errorf("Error reading from redis datastore: %s", err)
-	}
-
-	// Check the result
-	if result != cachePerson {
-		t.Errorf("got %v want %v", result, cachePerson)
-	}
-}
-
 func TestSimpleReadWhenCommitted(t *testing.T) {
 
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
@@ -118,7 +54,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -152,7 +88,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 
 func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 
-	txn1 := txn.NewTransaction()
+	txn1 := trxn.NewTransaction()
 	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
@@ -165,7 +101,7 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "TestSimpleReadWhenCommittedFindEmpty",
@@ -187,13 +123,13 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 	// Read the value
 	var result testutil.Person
 	err = txn1.Read("redis", key, &result)
-	assert.EqualError(t, err, txn.KeyNotFound.Error())
+	assert.EqualError(t, err, trxn.KeyNotFound.Error())
 
 }
 
 func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 	// Create a new transaction
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 
 	// Create a new redis datastore
 	conn := NewRedisConnection(&ConnectionOptions{
@@ -212,7 +148,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	preRedisItem := RedisItem{
+	preRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
@@ -221,7 +157,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  1,
 	}
-	curRedisItem := RedisItem{
+	curRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
@@ -260,7 +196,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -273,7 +209,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	preRedisItem := RedisItem{
+	preRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
@@ -282,7 +218,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  1,
 	}
-	curRedisItem := RedisItem{
+	curRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
@@ -317,7 +253,7 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -326,7 +262,7 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
@@ -370,12 +306,12 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
 	// initialize the redis database
-	tarMemItem := RedisItem{
+	tarMemItem := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "99",
@@ -385,7 +321,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := RedisItem{
+	curMemItem := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "TestSimpleReadWhenPreparedWithTSRInABORTED",
@@ -429,7 +365,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -438,7 +374,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
@@ -455,7 +391,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Age:  31,
 	}
 
-	curRedisItem := RedisItem{
+	curRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "101",
@@ -489,7 +425,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 
-	dbItem1 := RedisItem{
+	dbItem1 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
 		TxnId:     "TestSimpleReadWhenPrepareNotExpired1",
@@ -500,7 +436,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		Version:   1,
 	}
 
-	dbItem2 := RedisItem{
+	dbItem2 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
 		TxnId:     "TestSimpleReadWhenPrepareNotExpired2",
@@ -523,7 +459,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		txn1.Start()
 		var item testutil.TestItem
 		err := txn1.Read("redis", "item1", &item)
-		assert.EqualError(t, err, txn.KeyNotFound.Error())
+		assert.EqualError(t, err, trxn.KeyNotFound.Error())
 	})
 
 	t.Run("when the item has a valid Prev field", func(t *testing.T) {
@@ -541,7 +477,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 
 func TestSimpleReadWhenDeleted(t *testing.T) {
 	conn := NewDefaultRedisConnection()
-	dbItem := RedisItem{
+	dbItem := trxn.DataItem{
 		Key:       "item2",
 		Value:     util.ToJSONString(testutil.NewTestItem("item2-db")),
 		TxnState:  config.COMMITTED,
@@ -559,7 +495,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 
 	var item testutil.TestItem
 	err := txn1.Read("redis", "item2", &item)
-	assert.EqualError(t, err, txn.KeyNotFound.Error())
+	assert.EqualError(t, err, trxn.KeyNotFound.Error())
 }
 
 func TestSimpleWriteAndRead(t *testing.T) {
@@ -634,7 +570,7 @@ func TestSimpleWriteAndReadLocal(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -674,7 +610,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -683,7 +619,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -737,7 +673,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -746,7 +682,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -799,7 +735,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -808,7 +744,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -847,7 +783,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -856,7 +792,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -942,7 +878,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -951,7 +887,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -1005,7 +941,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		Address: "localhost:6379",
 	})
 	rds := NewRedisDatastore("redis", conn)
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
@@ -1014,7 +950,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := RedisItem{
+	expectedRedisItem := trxn.DataItem{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -1071,10 +1007,6 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 }
 
 func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
-
-	t.Cleanup(func() {
-		time.Sleep(1 * time.Second)
-	})
 
 	// clear the test data
 	conn := NewDefaultRedisConnection()
@@ -1146,10 +1078,6 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 
 func TestTxnWriteMultiRecord(t *testing.T) {
 
-	t.Cleanup(func() {
-		time.Sleep(1 * time.Second)
-	})
-
 	// clear the test data
 	conn := NewDefaultRedisConnection()
 	conn.Delete("item1")
@@ -1190,12 +1118,8 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 // item1_1  T_Start   item1_2   item1_3
 func TestLinkedReadAsCommitted(t *testing.T) {
 
-	t.Cleanup(func() {
-		time.Sleep(1 * time.Second)
-	})
-
 	item1_1 := testutil.NewTestItem("item1_1")
-	memItem1_1 := RedisItem{
+	memItem1_1 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_1),
 		TxnId:     "txn1",
@@ -1207,7 +1131,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	}
 
 	item1_2 := testutil.NewTestItem("item1_2")
-	memItem1_2 := RedisItem{
+	memItem1_2 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_2),
 		TxnId:     "txn2",
@@ -1220,7 +1144,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	}
 
 	item1_3 := testutil.NewTestItem("item1_3")
-	memItem1_3 := RedisItem{
+	memItem1_3 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_3),
 		TxnId:     "txn3",
@@ -1286,13 +1210,18 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 func TestLinkedTruncate(t *testing.T) {
 
 	t.Cleanup(func() {
-		time.Sleep(1 * time.Second)
+		config.Config.MaxRecordLength = 2
 	})
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 2", func(t *testing.T) {
 
 		config.Config.MaxRecordLength = 2
+
+		conn := NewDefaultRedisConnection()
+		conn.Delete("item1")
+
 		for i := 1; i <= 4; i++ {
+			time.Sleep(10 * time.Millisecond)
 			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
 			txn := NewTransactionWithSetup()
 			txn.Start()
@@ -1302,17 +1231,13 @@ func TestLinkedTruncate(t *testing.T) {
 		}
 
 		// check the linked record length
-		conn := NewRedisConnection(&ConnectionOptions{
-			Address: "localhost:6379",
-		})
-		conn.Connect()
 		item, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
 
 		tarItem := item
 		for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
-			var preItem RedisItem
+			var preItem trxn.DataItem
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
 			tarItem = preItem
@@ -1327,6 +1252,7 @@ func TestLinkedTruncate(t *testing.T) {
 		func(t *testing.T) {
 			config.Config.MaxRecordLength = 4
 			for i := 1; i <= 4; i++ {
+				time.Sleep(10 * time.Millisecond)
 				item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
 				txn := NewTransactionWithSetup()
 				txn.Start()
@@ -1336,10 +1262,7 @@ func TestLinkedTruncate(t *testing.T) {
 			}
 
 			// check the linked record length
-			conn := NewRedisConnection(&ConnectionOptions{
-				Address: "localhost:6379",
-			})
-			conn.Connect()
+			conn := NewDefaultRedisConnection()
 			item, err := conn.GetItem("item1")
 			assert.NoError(t, err)
 			assert.Equal(t, config.Config.MaxRecordLength, item.LinkedLen)
@@ -1347,7 +1270,7 @@ func TestLinkedTruncate(t *testing.T) {
 
 			tarItem := item
 			for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
-				var preItem RedisItem
+				var preItem trxn.DataItem
 				err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 				assert.Nil(t, err)
 				tarItem = preItem
@@ -1363,6 +1286,7 @@ func TestLinkedTruncate(t *testing.T) {
 		config.Config.MaxRecordLength = 5
 		expectedLen := min(4, config.Config.MaxRecordLength)
 		for i := 1; i <= 4; i++ {
+			time.Sleep(10 * time.Millisecond)
 			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
 			txn := NewTransactionWithSetup()
 			txn.Start()
@@ -1375,14 +1299,13 @@ func TestLinkedTruncate(t *testing.T) {
 		conn := NewRedisConnection(&ConnectionOptions{
 			Address: "localhost:6379",
 		})
-		conn.Connect()
 		item, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, expectedLen, item.LinkedLen)
 
 		tarItem := item
 		for i := 1; i <= expectedLen-1; i++ {
-			var preItem RedisItem
+			var preItem trxn.DataItem
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
 			tarItem = preItem
@@ -1397,16 +1320,11 @@ func TestLinkedTruncate(t *testing.T) {
 // The transcation should ***roll back*** the record then conditionalUpdate properly
 func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 
-	t.Cleanup(func() {
-		time.Sleep(1 * time.Second)
-	})
-
 	// final linked record should be "item1-cur" -> "item1-pre2"
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
-		conn.Connect()
 
-		tarItem := RedisItem{
+		tarItem := trxn.DataItem{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
 			TxnId:     "99",
@@ -1417,7 +1335,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			Version:   1,
 		}
 
-		curItem := RedisItem{
+		curItem := trxn.DataItem{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:     "100",
@@ -1459,9 +1377,8 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 	// final linked record should be "item1-cur" -> "item1-pre(deleted)"
 	t.Run("the record has an empty Prev field", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
-		conn.Connect()
 
-		tarItem := RedisItem{
+		tarItem := trxn.DataItem{
 			Key:      "item1",
 			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:    "99",
@@ -1508,9 +1425,8 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 	// final linked record should be "item2-cur" -> "item2-pre"
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
-		conn.Connect()
 
-		tarItem := RedisItem{
+		tarItem := trxn.DataItem{
 			Key:       "item2",
 			Value:     util.ToJSONString(testutil.NewTestItem("item2-pre2")),
 			TxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
@@ -1521,7 +1437,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			Version:   1,
 		}
 
-		curItem := RedisItem{
+		curItem := trxn.DataItem{
 			Key:       "item2",
 			Value:     util.ToJSONString(testutil.NewTestItem("item2-pre")),
 			TxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
@@ -1568,9 +1484,8 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 	// final linked record should be "item1-cur" -> "item1-pre"
 	t.Run("the record has an empty Prev field", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
-		conn.Connect()
 
-		tarItem := RedisItem{
+		tarItem := trxn.DataItem{
 			Key:      "item1",
 			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:    "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
@@ -1615,9 +1530,8 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 func TestDirectWriteOnPreparingRecord(t *testing.T) {
 
 	conn := NewDefaultRedisConnection()
-	conn.Connect()
 
-	tarItem := RedisItem{
+	tarItem := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestDirectWriteOnPreparingRecord",
@@ -1639,9 +1553,8 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 
 func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 	conn := NewDefaultRedisConnection()
-	conn.Connect()
 
-	dbItem1 := RedisItem{
+	dbItem1 := trxn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
 		TxnId:     "TestDirectWriteOnInvisibleRecord1",
@@ -1674,7 +1587,7 @@ func TestDirectWriteOnDeletedRecord(t *testing.T) {
 
 func TestRollbackWhenReading(t *testing.T) {
 
-	item1Pre := RedisItem{
+	item1Pre := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollback",
@@ -1684,7 +1597,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		Version:  1,
 	}
 
-	item1 := RedisItem{
+	item1 := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestRollback",
@@ -1733,12 +1646,12 @@ func TestRollbackWhenReading(t *testing.T) {
 		txn1.Start()
 		var item testutil.TestItem
 		err := txn1.Read("redis", item1.Key, &item)
-		assert.EqualError(t, err, txn.KeyNotFound.Error())
+		assert.EqualError(t, err, trxn.KeyNotFound.Error())
 	})
 }
 
 func TestRollbackWhenWriting(t *testing.T) {
-	item1Pre := RedisItem{
+	item1Pre := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollback",
@@ -1748,7 +1661,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		Version:  1,
 	}
 
-	item1 := RedisItem{
+	item1 := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestRollback",
@@ -1822,9 +1735,8 @@ func TestRollbackWhenWriting(t *testing.T) {
 func TestRollForwardWhenReading(t *testing.T) {
 
 	conn := NewDefaultRedisConnection()
-	conn.Connect()
 
-	tarItem := RedisItem{
+	tarItem := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollForward",
@@ -1856,9 +1768,8 @@ func TestRollForwardWhenReading(t *testing.T) {
 func TestRollForwardWhenWriting(t *testing.T) {
 
 	conn := NewDefaultRedisConnection()
-	conn.Connect()
 
-	tarItem := RedisItem{
+	tarItem := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollForward",
@@ -1892,8 +1803,7 @@ func TestItemVersionUpdate(t *testing.T) {
 
 	t.Run("item version ++ after updated", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
-		conn.Connect()
-		dbItem := RedisItem{
+		dbItem := trxn.DataItem{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:     "TestItemVersionUpdate",

@@ -69,7 +69,7 @@ func TestRedisConnection_GetItem(t *testing.T) {
 	tLease, _ := time.Parse(time.RFC3339Nano, tLeaseStr)
 
 	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := RedisItem{
+	expectedItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",
@@ -121,7 +121,7 @@ func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
 
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := RedisItem{
+	expectedItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",
@@ -149,7 +149,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
+	olderItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -166,7 +166,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -193,7 +193,7 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
+	olderItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -209,7 +209,7 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -238,7 +238,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 	conn := NewRedisConnection(nil)
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
+	olderItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -254,7 +254,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "2",
@@ -283,7 +283,7 @@ func TestRedisConnectionConditionalUpdateNonExist(t *testing.T) {
 	conn.Delete(key)
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -312,7 +312,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
+	olderItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -333,7 +333,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 		go func(id int) {
 			newerPerson := testutil.NewDefaultPerson()
 			newerPerson.Name = "newer"
-			newerItem := RedisItem{
+			newerItem := txn.DataItem{
 				Key:       key,
 				Value:     util.ToJSONString(newerPerson),
 				TxnId:     strconv.Itoa(id),
@@ -375,7 +375,7 @@ func TestRedisConnectionPutAndGet(t *testing.T) {
 
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
-	item := RedisItem{
+	item := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -393,7 +393,7 @@ func TestRedisConnectionPutAndGet(t *testing.T) {
 
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem RedisItem
+	var actualItem txn.DataItem
 	err = se.Deserialize([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -407,7 +407,7 @@ func TestRedisConnectionReplaceAndGet(t *testing.T) {
 
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
-	item := RedisItem{
+	item := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -430,7 +430,7 @@ func TestRedisConnectionReplaceAndGet(t *testing.T) {
 
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem RedisItem
+	var actualItem txn.DataItem
 	err = se.Deserialize([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -455,7 +455,7 @@ func TestRedisConnectionPutDirectItem(t *testing.T) {
 	conn.Delete(key)
 
 	person := testutil.NewDefaultPerson()
-	item := RedisItem{
+	item := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -473,7 +473,7 @@ func TestRedisConnectionPutDirectItem(t *testing.T) {
 	// post check
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem RedisItem
+	var actualItem txn.DataItem
 	err = json.Unmarshal([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -493,7 +493,7 @@ func TestRedisConnectionDeleteTwice(t *testing.T) {
 
 func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 
-	dbItem := RedisItem{
+	dbItem := txn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-db")),
 		TxnId:     "1",
@@ -506,7 +506,7 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		Version:   1,
 	}
 
-	cacheItem := RedisItem{
+	cacheItem := txn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-cache")),
 		TxnId:     "2",

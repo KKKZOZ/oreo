@@ -4,7 +4,11 @@ import (
 	"fmt"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
+
+// MockRedisConnection implements the txn.Connector interface.
+var _ txn.Connector = (*MockRedisConnection)(nil)
 
 // MockRedisConnection is a mock of RedisConnection
 // When Put is called, it will return error when debugCounter is 0
@@ -34,7 +38,7 @@ func NewMockRedisConnection(address string, port int, limit int,
 	}
 }
 
-func (m *MockRedisConnection) GetItem(key string) (redis.RedisItem, error) {
+func (m *MockRedisConnection) GetItem(key string) (txn.DataItem, error) {
 	defer func() { m.GetTimes++ }()
 	return m.RedisConnection.GetItem(key)
 }
@@ -44,7 +48,7 @@ func (m *MockRedisConnection) Get(name string) (string, error) {
 	return m.RedisConnection.Get(name)
 }
 
-func (m *MockRedisConnection) ConditionalUpdate(key string, value redis.RedisItem, doCreate bool) error {
+func (m *MockRedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -56,7 +60,7 @@ func (m *MockRedisConnection) ConditionalUpdate(key string, value redis.RedisIte
 	return m.RedisConnection.ConditionalUpdate(key, value, doCreate)
 }
 
-func (m *MockRedisConnection) PutItem(key string, value redis.RedisItem) error {
+func (m *MockRedisConnection) PutItem(key string, value txn.DataItem) error {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
