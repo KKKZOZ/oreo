@@ -41,7 +41,7 @@ func NewRedisDatastore(name string, conn RedisConnectionInterface) *RedisDatasto
 		readCache:     make(map[string]RedisItem),
 		writeCache:    make(map[string]RedisItem),
 		invisibleSet:  make(map[string]bool),
-		se:            serializer.NewJSONSerializer(),
+		se:            config.Config.Serializer,
 	}
 }
 
@@ -100,6 +100,7 @@ func (r *RedisDatastore) Read(key string, value any) error {
 	return r.treatAsCommitted(resItem, logicFunc)
 }
 
+// dirtyReadChecker will drop an item if it violates repeatable read rules.
 func (r *RedisDatastore) dirtyReadChecker(item RedisItem) (RedisItem, error) {
 	if _, ok := r.invisibleSet[item.Key]; ok {
 		return RedisItem{}, txn.KeyNotFound
@@ -108,6 +109,8 @@ func (r *RedisDatastore) dirtyReadChecker(item RedisItem) (RedisItem, error) {
 	}
 }
 
+// basicVisibilityProcessor performs basic visibility processing on a RedisItem.
+// It tries to bring the item to the COMMITTED state by performing rollback or rollforward operations.
 func (r *RedisDatastore) basicVisibilityProcessor(item RedisItem) (RedisItem, error) {
 	// function to perform the rollback operation
 	rollbackFunc := func() (RedisItem, error) {
@@ -181,6 +184,8 @@ func (r *RedisDatastore) basicVisibilityProcessor(item RedisItem) (RedisItem, er
 	return RedisItem{}, txn.KeyNotFound
 }
 
+// treatAsCommitted treats a RedisItem as committed, finds a corresponding version
+// according to its timestamp, and performs the given logic function on it.
 func (r *RedisDatastore) treatAsCommitted(item RedisItem, logicFunc func(RedisItem, bool) error) error {
 	curItem := item
 	for i := 1; i <= config.Config.MaxRecordLength; i++ {
@@ -207,6 +212,8 @@ func (r *RedisDatastore) treatAsCommitted(item RedisItem, logicFunc func(RedisIt
 	return txn.KeyNotFound
 }
 
+// Write writes a record to the cache.
+// It will serialize the value using the Datastore's serializer.
 func (r *RedisDatastore) Write(key string, value any) error {
 	bs, err := r.se.Serialize(value)
 	if err != nil {
@@ -220,7 +227,11 @@ func (r *RedisDatastore) Write(key string, value any) error {
 		return nil
 	}
 
-	var version int
+	// else write a new record to the cache
+
+	// -1 indicates this is a direct write,
+	// we should find the corresponding version in ConditionalUpdate
+	version := -1
 	if item, ok := r.readCache[key]; ok {
 		version = item.Version
 	} else {
@@ -232,26 +243,23 @@ func (r *RedisDatastore) Write(key string, value any) error {
 		// 	version = oldItem.Version
 		// }
 	}
-	// else Write a record to the cache
 	r.writeCache[key] = RedisItem{
-		Key:   key,
-		Value: str,
-		TxnId: r.Txn.TxnId,
-		// TValid:    time.Now(),
-		// TLease:    time.Now().Add(config.Config.LeaseTime),
+		Key:       key,
+		Value:     str,
+		TxnId:     r.Txn.TxnId,
 		Version:   version,
 		IsDeleted: false,
 	}
 	return nil
 }
 
-// Delete deletes a record from the RedisDatastore.
+// Delete deletes a record from the Datastore.
 // It will return an error if the record is not found.
 func (r *RedisDatastore) Delete(key string) error {
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
 		if item.IsDeleted {
-			return errors.New("key not found")
+			return txn.KeyNotFound
 		}
 		item.IsDeleted = true
 		r.writeCache[key] = item
@@ -264,7 +272,7 @@ func (r *RedisDatastore) Delete(key string) error {
 	if item, ok := r.readCache[key]; ok {
 		version = item.Version
 	} else {
-		// else write a Delete record to the writeCache
+		// else write a deleted record to the writeCache
 		// first we have to get the corresponding version
 		// TODO: should we first read into the cache?
 		item, err := r.conn.GetItem(key)
@@ -279,16 +287,14 @@ func (r *RedisDatastore) Delete(key string) error {
 		IsDeleted: true,
 		TxnId:     r.Txn.TxnId,
 		TxnState:  config.COMMITTED,
-		// TValid:    time.Now(),
-		// TLease:    time.Now(),
-		Version: version,
+		Version:   version,
 	}
 	return nil
 }
 
 func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisItem) error {
-	// newItem, err := r.updateMetadata(cacheItem, dbItem)
 
+	// if this item will be created
 	if dbItem.Equal(RedisItem{}) {
 		newItem, err := r.updateMetadata(cacheItem, dbItem)
 		if err != nil {
@@ -300,6 +306,8 @@ func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisIt
 		return nil
 	}
 
+	// else this item will be updated
+	// we should find the corresponding version
 	logicFunc := func(curItem RedisItem, isFound bool) error {
 		if !isFound {
 			// if the corresponding version can not be found in treatAsCommitted,
@@ -316,7 +324,7 @@ func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisIt
 	return r.treatAsCommitted(dbItem, logicFunc)
 }
 
-// conditionalUpdate performs a conditional update operation on the RedisDatastore.
+// conditionalUpdate performs a conditional update operation on the Datastore.
 // It retrieves the corresponding item from the Redis connection and applies basic visibility processing.
 // If the item is not found, it performs a conditional update with an empty RedisItem.
 // If there is an error during the retrieval or processing, it handles the error accordingly.
@@ -421,6 +429,7 @@ func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (R
 	return newItem, nil
 }
 
+// Prepare prepares the Datastore for commit.
 func (r *RedisDatastore) Prepare() error {
 	records := make([]RedisItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
@@ -568,6 +577,12 @@ func (r *RedisDatastore) GetName() string {
 // It takes a pointer to a Transaction as input and assigns it to the Txn field of the MemoryDatastore.
 func (r *RedisDatastore) SetTxn(txn *txn.Transaction) {
 	r.Txn = txn
+}
+
+// SetSerializer sets the serializer for the RedisDatastore.
+// The serializer is used to serialize and deserialize data when storing and retrieving it from Redis.
+func (r *RedisDatastore) SetSerializer(se serializer.Serializer) {
+	r.se = se
 }
 
 // ReadTSR reads the transaction state from the Redis datastore.
