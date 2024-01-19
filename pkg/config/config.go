@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/kkkzoz/oreo/pkg/serializer"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -14,16 +15,27 @@ const (
 )
 
 type config struct {
-	LeaseTime       time.Duration
+	// LeaseTime specifies the duration of time for which a record is leased.
+	LeaseTime time.Duration
+
+	// MaxRecordLength specifies the maximum length of a linked record.
 	MaxRecordLength int
-	IdGenerator     IdGenerator
-	LogLevel        zapcore.Level
+
+	// IdGenerator generates unique IDs for records.
+	IdGenerator IdGenerator
+
+	// Serializer serializes and deserializes records.
+	Serializer serializer.Serializer
+
+	// LogLevel specifies the logging level for the application.
+	LogLevel zapcore.Level
 }
 
 var Config = config{
 	LeaseTime:       1000 * time.Millisecond,
 	MaxRecordLength: 2,
 	IdGenerator:     NewIncrementalGenerator(),
+	Serializer:      serializer.NewJSONSerializer(),
 	LogLevel:        zapcore.InfoLevel,
 }
 
