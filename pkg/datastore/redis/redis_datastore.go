@@ -303,6 +303,8 @@ func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisIt
 		if err = r.conn.ConditionalUpdate(newItem.Key, newItem, true); err != nil {
 			return err
 		}
+		newItem.Version++
+		r.writeCache[newItem.Key] = newItem
 		return nil
 	}
 
@@ -318,7 +320,12 @@ func (r *RedisDatastore) doConditionalUpdate(cacheItem RedisItem, dbItem RedisIt
 		if err != nil {
 			return err
 		}
-		return r.conn.ConditionalUpdate(newItem.Key, newItem, false)
+		if err = r.conn.ConditionalUpdate(newItem.Key, newItem, false); err != nil {
+			return err
+		}
+		newItem.Version++
+		r.writeCache[newItem.Key] = newItem
+		return nil
 	}
 
 	return r.treatAsCommitted(dbItem, logicFunc)
@@ -431,18 +438,18 @@ func (r *RedisDatastore) updateMetadata(newItem RedisItem, oldItem RedisItem) (R
 
 // Prepare prepares the Datastore for commit.
 func (r *RedisDatastore) Prepare() error {
-	records := make([]RedisItem, 0, len(r.writeCache))
+	items := make([]RedisItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
-		records = append(records, v)
+		items = append(items, v)
 	}
 	// sort records by key
 	slices.SortFunc(
-		records, func(i, j RedisItem) int {
+		items, func(i, j RedisItem) int {
 			return cmp.Compare(i.Key, j.Key)
 		},
 	)
-	for _, v := range records {
-		err := r.conditionalUpdate(v)
+	for _, item := range items {
+		err := r.conditionalUpdate(item)
 		if err != nil {
 			return err
 		}
@@ -453,16 +460,12 @@ func (r *RedisDatastore) Prepare() error {
 // Commit updates the state of records in the data store to COMMITTED.
 // It iterates over the write cache and updates each record's state to COMMITTED.
 // After updating the records, it clears the write cache.
-// Returns an error if there is any issue updating the records or clearing the cache.
+// Returns an error if there is any issue updating the records.
 func (r *RedisDatastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
-	for _, v := range r.writeCache {
-		item, err := r.conn.GetItem(v.Key)
-		if err != nil {
-			return err
-		}
+	for _, item := range r.writeCache {
 		item.TxnState = config.COMMITTED
-		err = r.conn.PutItem(v.Key, item)
+		err := r.conn.PutItem(item.Key, item)
 		if err != nil {
 			return err
 		}

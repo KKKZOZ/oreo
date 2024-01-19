@@ -9,12 +9,14 @@ import (
 // MockRedisConnection is a mock of RedisConnection
 // When Put is called, it will return error when debugCounter is 0
 // Semantically, it means `Put()` call will succeed X times
+// If debugCounter is a negative number, it will never return errors
 type MockRedisConnection struct {
 	*redis.RedisConnection
 	debugCounter int
 	debugFunc    func() error
 	isReturned   bool
-	callTimes    int
+	PutTimes     int
+	GetTimes     int
 }
 
 func NewMockRedisConnection(address string, port int, limit int,
@@ -27,12 +29,23 @@ func NewMockRedisConnection(address string, port int, limit int,
 		debugCounter:    limit,
 		debugFunc:       debugFunc,
 		isReturned:      isReturned,
-		callTimes:       0,
+		PutTimes:        0,
+		GetTimes:        0,
 	}
 }
 
+func (m *MockRedisConnection) GetItem(key string) (redis.RedisItem, error) {
+	defer func() { m.GetTimes++ }()
+	return m.RedisConnection.GetItem(key)
+}
+
+func (m *MockRedisConnection) Get(name string) (string, error) {
+	defer func() { m.GetTimes++ }()
+	return m.RedisConnection.Get(name)
+}
+
 func (m *MockRedisConnection) ConditionalUpdate(key string, value redis.RedisItem, doCreate bool) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()
@@ -44,7 +57,7 @@ func (m *MockRedisConnection) ConditionalUpdate(key string, value redis.RedisIte
 }
 
 func (m *MockRedisConnection) PutItem(key string, value redis.RedisItem) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()
@@ -56,7 +69,7 @@ func (m *MockRedisConnection) PutItem(key string, value redis.RedisItem) error {
 }
 
 func (m *MockRedisConnection) Put(name string, value any) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()
@@ -68,7 +81,7 @@ func (m *MockRedisConnection) Put(name string, value any) error {
 }
 
 func (m *MockRedisConnection) Delete(name string) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()

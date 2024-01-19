@@ -1579,3 +1579,60 @@ func TestRedisDeleteTimingProblems(t *testing.T) {
 
 	})
 }
+
+func TestRedisVisibilityResults(t *testing.T) {
+
+	t.Run("a normal chain", func(t *testing.T) {
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-V0")
+		preTxn.Write(REDIS, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		chainNum := 5
+
+		for i := 1; i <= chainNum; i++ {
+			time.Sleep(10 * time.Millisecond)
+			txn := NewTransactionWithSetup(REDIS)
+			txn.Start()
+			var item testutil.TestItem
+			txn.Read(REDIS, "item1", &item)
+			assert.Equal(t, "item1-V"+strconv.Itoa(i-1), item.Value)
+			item.Value = "item1-V" + strconv.Itoa(i)
+			txn.Write(REDIS, "item1", item)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+	})
+}
+
+func TestRedisReadModifyWritePattern(t *testing.T) {
+
+	preTxn := NewTransactionWithSetup(REDIS)
+	preTxn.Start()
+	dbItem := testutil.NewTestItem("item1-pre")
+	preTxn.Write(REDIS, "item1", dbItem)
+	err := preTxn.Commit()
+	assert.NoError(t, err)
+
+	txn := txn.NewTransaction()
+	mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+		func() error { time.Sleep(1 * time.Second); return nil })
+	rds := redis.NewRedisDatastore("redis", mockConn)
+	txn.AddDatastore(rds)
+	txn.SetGlobalDatastore(rds)
+	txn.Start()
+
+	var item1 testutil.TestItem
+	err = txn.Read(REDIS, "item1", &item1)
+	assert.NoError(t, err)
+	item1.Value = "item1-modified"
+	txn.Write(REDIS, "item1", item1)
+	err = txn.Commit()
+	assert.NoError(t, err)
+
+	t.Logf("Connection status:\nGetTimes: %d\nPutTimes: %d\n",
+		mockConn.GetTimes, mockConn.PutTimes)
+}
