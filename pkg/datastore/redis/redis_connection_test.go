@@ -69,7 +69,7 @@ func TestRedisConnection_GetItem(t *testing.T) {
 	tLease, _ := time.Parse(time.RFC3339Nano, tLeaseStr)
 
 	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := RedisItem{
+	expectedItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",
@@ -121,7 +121,7 @@ func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
 
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := RedisItem{
+	expectedItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",
@@ -149,7 +149,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
+	olderItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -166,7 +166,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -193,7 +193,7 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
+	olderItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -209,7 +209,7 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -238,7 +238,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 	conn := NewRedisConnection(nil)
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
+	olderItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -254,7 +254,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "2",
@@ -283,7 +283,7 @@ func TestRedisConnectionConditionalUpdateNonExist(t *testing.T) {
 	conn.Delete(key)
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := RedisItem{
+	newerItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -308,65 +308,118 @@ func TestRedisConnectionConditionalUpdateNonExist(t *testing.T) {
 }
 
 func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
-	conn := NewRedisConnection(nil)
 
-	key := "test_key"
-	olderPerson := testutil.NewDefaultPerson()
-	olderItem := RedisItem{
-		Key:       key,
-		Value:     util.ToJSONString(olderPerson),
-		TxnId:     "1",
-		TxnState:  config.COMMITTED,
-		TValid:    time.Now().Add(-3 * time.Second),
-		TLease:    time.Now().Add(-2 * time.Second),
-		Prev:      "",
-		IsDeleted: false,
-		Version:   2,
-	}
-	err := conn.PutItem(key, olderItem)
-	assert.NoError(t, err)
+	t.Run("this is a update", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
 
-	resChan := make(chan bool)
-	currentNum := 300
-	globalId := 0
-	for i := 1; i <= currentNum; i++ {
-		go func(id int) {
-			newerPerson := testutil.NewDefaultPerson()
-			newerPerson.Name = "newer"
-			newerItem := RedisItem{
-				Key:       key,
-				Value:     util.ToJSONString(newerPerson),
-				TxnId:     strconv.Itoa(id),
-				TxnState:  config.COMMITTED,
-				TValid:    time.Now().Add(-2 * time.Second),
-				TLease:    time.Now().Add(-1 * time.Second),
-				Prev:      "",
-				IsDeleted: false,
-				Version:   2,
-			}
-
-			err = conn.ConditionalUpdate(key, newerItem, false)
-			if err == nil {
-				globalId = id
-				resChan <- true
-			} else {
-				resChan <- false
-			}
-		}(i)
-	}
-	successCnt := 0
-	for i := 1; i <= currentNum; i++ {
-		res := <-resChan
-		if res {
-			successCnt++
+		key := "test_key"
+		olderPerson := testutil.NewDefaultPerson()
+		olderItem := txn.DataItem{
+			Key:       key,
+			Value:     util.ToJSONString(olderPerson),
+			TxnId:     "1",
+			TxnState:  config.COMMITTED,
+			TValid:    time.Now().Add(-3 * time.Second),
+			TLease:    time.Now().Add(-2 * time.Second),
+			Prev:      "",
+			IsDeleted: false,
+			Version:   2,
 		}
-	}
-	assert.Equal(t, 1, successCnt)
+		err := conn.PutItem(key, olderItem)
+		assert.NoError(t, err)
 
-	item, err := conn.GetItem(key)
-	if item.TxnId != strconv.Itoa(globalId) {
-		t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId)
-	}
+		resChan := make(chan bool)
+		currentNum := 100
+		globalId := 0
+		for i := 1; i <= currentNum; i++ {
+			go func(id int) {
+				newerPerson := testutil.NewDefaultPerson()
+				newerPerson.Name = "newer"
+				newerItem := txn.DataItem{
+					Key:       key,
+					Value:     util.ToJSONString(newerPerson),
+					TxnId:     strconv.Itoa(id),
+					TxnState:  config.COMMITTED,
+					TValid:    time.Now().Add(-2 * time.Second),
+					TLease:    time.Now().Add(-1 * time.Second),
+					Prev:      "",
+					IsDeleted: false,
+					Version:   2,
+				}
+
+				err = conn.ConditionalUpdate(key, newerItem, false)
+				if err == nil {
+					globalId = id
+					resChan <- true
+				} else {
+					resChan <- false
+				}
+			}(i)
+		}
+		successCnt := 0
+		for i := 1; i <= currentNum; i++ {
+			res := <-resChan
+			if res {
+				successCnt++
+			}
+		}
+		assert.Equal(t, 1, successCnt)
+
+		item, err := conn.GetItem(key)
+		assert.NoError(t, err)
+		if item.TxnId != strconv.Itoa(globalId) {
+			t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId)
+		}
+	})
+
+	t.Run("this is a create", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		key := "test_key"
+		conn.Delete(key)
+
+		resChan := make(chan bool)
+		currentNum := 100
+		globalId := 0
+		for i := 1; i <= currentNum; i++ {
+			go func(id int) {
+				newerPerson := testutil.NewDefaultPerson()
+				newerPerson.Name = "newer"
+				newerItem := txn.DataItem{
+					Key:       key,
+					Value:     util.ToJSONString(newerPerson),
+					TxnId:     strconv.Itoa(id),
+					TxnState:  config.COMMITTED,
+					TValid:    time.Now().Add(-2 * time.Second),
+					TLease:    time.Now().Add(-1 * time.Second),
+					Prev:      "",
+					IsDeleted: false,
+					Version:   2,
+				}
+
+				err := conn.ConditionalUpdate(key, newerItem, true)
+				if err == nil {
+					globalId = id
+					resChan <- true
+				} else {
+					resChan <- false
+				}
+			}(i)
+		}
+		successCnt := 0
+		for i := 1; i <= currentNum; i++ {
+			res := <-resChan
+			if res {
+				successCnt++
+			}
+		}
+		assert.Equal(t, 1, successCnt)
+
+		item, err := conn.GetItem(key)
+		assert.NoError(t, err)
+		if item.TxnId != strconv.Itoa(globalId) {
+			t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId)
+		}
+	})
 }
 
 func TestRedisConnectionPutAndGet(t *testing.T) {
@@ -375,7 +428,7 @@ func TestRedisConnectionPutAndGet(t *testing.T) {
 
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
-	item := RedisItem{
+	item := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -393,7 +446,7 @@ func TestRedisConnectionPutAndGet(t *testing.T) {
 
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem RedisItem
+	var actualItem txn.DataItem
 	err = se.Deserialize([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -407,7 +460,7 @@ func TestRedisConnectionReplaceAndGet(t *testing.T) {
 
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
-	item := RedisItem{
+	item := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -430,7 +483,7 @@ func TestRedisConnectionReplaceAndGet(t *testing.T) {
 
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem RedisItem
+	var actualItem txn.DataItem
 	err = se.Deserialize([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -455,7 +508,7 @@ func TestRedisConnectionPutDirectItem(t *testing.T) {
 	conn.Delete(key)
 
 	person := testutil.NewDefaultPerson()
-	item := RedisItem{
+	item := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -473,7 +526,7 @@ func TestRedisConnectionPutDirectItem(t *testing.T) {
 	// post check
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem RedisItem
+	var actualItem txn.DataItem
 	err = json.Unmarshal([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -493,7 +546,7 @@ func TestRedisConnectionDeleteTwice(t *testing.T) {
 
 func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 
-	dbItem := RedisItem{
+	dbItem := txn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-db")),
 		TxnId:     "1",
@@ -506,7 +559,7 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		Version:   1,
 	}
 
-	cacheItem := RedisItem{
+	cacheItem := txn.DataItem{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-cache")),
 		TxnId:     "2",
@@ -515,8 +568,16 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		TLease:    time.Now().Add(-1 * time.Second),
 		Prev:      util.ToJSONString(dbItem),
 		LinkedLen: 2,
-		Version:   2,
+		Version:   1,
 	}
+
+	t.Run("there is no item and doCreate is true ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		conn.Delete(cacheItem.Key)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, true)
+		assert.NoError(t, err)
+	})
 
 	t.Run("there is an item and doCreate is true ", func(t *testing.T) {
 		conn := NewRedisConnection(nil)
@@ -526,25 +587,20 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		assert.EqualError(t, err, txn.VersionMismatch.Error())
 	})
 
+	t.Run("there is no item and doCreate is false ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		conn.Delete(cacheItem.Key)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
+		assert.EqualError(t, err, txn.VersionMismatch.Error())
+	})
+
 	t.Run("there is an item and doCreate is false ", func(t *testing.T) {
 		conn := NewRedisConnection(nil)
 		conn.PutItem(dbItem.Key, dbItem)
 
 		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
-		assert.EqualError(t, err, txn.VersionMismatch.Error())
+		assert.NoError(t, err)
 	})
 
-	t.Run("there is no item and doCreate is true ", func(t *testing.T) {
-		conn := NewRedisConnection(nil)
-
-		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, true)
-		assert.EqualError(t, err, txn.VersionMismatch.Error())
-	})
-
-	t.Run("there is no item and doCreate is false ", func(t *testing.T) {
-		conn := NewRedisConnection(nil)
-
-		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
-		assert.EqualError(t, err, txn.VersionMismatch.Error())
-	})
 }

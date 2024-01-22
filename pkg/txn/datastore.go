@@ -3,7 +3,7 @@ package txn
 // Datastore is an interface that defines the operations for interacting with a data store.
 //
 //go:generate mockery --name Datastore
-type Datastore interface {
+type Datastorer interface {
 	// Start starts a transaction, including initializing the connection.
 	Start() error
 
@@ -37,15 +37,5 @@ type Datastore interface {
 	// SetTxn sets the current transaction for the data store.
 	SetTxn(txn *Transaction)
 
-	Copy() Datastore
-}
-
-// BaseDataStore represents a base data store with a name and a transaction.
-type BaseDataStore struct {
-	Name string
-	Txn  *Transaction
-}
-
-type Item interface {
-	GetKey() string
+	Copy() Datastorer
 }

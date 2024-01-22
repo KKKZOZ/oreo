@@ -9,6 +9,7 @@ import (
 	"github.com/kkkzoz/oreo/pkg/config"
 	red "github.com/kkkzoz/oreo/pkg/datastore/redis"
 	. "github.com/kkkzoz/oreo/pkg/logger"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 type User struct {
@@ -24,7 +25,7 @@ func main() {
 	})
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := red.RedisItem{
+	expectedItem := txn.DataItem{
 		Key:       key,
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",

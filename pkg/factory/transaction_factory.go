@@ -19,8 +19,8 @@ type TransactionFactory struct {
 	// LockerSource is the source type for the locker.
 	LockerSource txn.SourceType
 
-	dateStoreList   []txn.Datastore
-	globalDatastore txn.Datastore
+	dateStoreList   []txn.Datastorer
+	globalDatastore txn.Datastorer
 }
 
 type TransactionConfig struct {
@@ -37,10 +37,10 @@ type TransactionConfig struct {
 	Options map[string]string
 
 	// DatastoreList is a list of datastores to be added to the transaction.
-	DatastoreList []txn.Datastore
+	DatastoreList []txn.Datastorer
 
 	// GlobalDatastore is the global datastore to be added to the transaction.
-	GlobalDatastore txn.Datastore
+	GlobalDatastore txn.Datastorer
 
 	// LocalLocker is the local locker instance.
 	LocalLocker locker.Locker
