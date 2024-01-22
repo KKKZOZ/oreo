@@ -10,7 +10,7 @@ import (
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/datastore/memory"
 	"github.com/kkkzoz/oreo/pkg/factory"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	trxn "github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -558,10 +558,10 @@ func TestMemory_ConcurrentTransaction(t *testing.T) {
 	memDst1 := memory.NewMemoryDatastore("mem1", memory.NewMemoryConnection("localhost", 8321))
 
 	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
-		DatastoreList:    []txn.Datastore{memDst1},
+		DatastoreList:    []trxn.Datastorer{memDst1},
 		GlobalDatastore:  memDst1,
-		TimeOracleSource: txn.LOCAL,
-		LockerSource:     txn.LOCAL,
+		TimeOracleSource: trxn.LOCAL,
+		LockerSource:     trxn.LOCAL,
 	})
 	assert.NoError(t, err)
 
@@ -617,7 +617,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
 	assert.NoError(t, err)
 
-	tarMemItem := memory.MemoryItem{
+	tarMemItem := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "99",
@@ -627,7 +627,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := memory.MemoryItem{
+	curMemItem := trxn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "100",
@@ -648,7 +648,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 	assert.Equal(t, testutil.NewTestItem("item1"), item)
 	err = txn.Commit()
 	assert.NoError(t, err)
-	var actual memory.MemoryItem
+	var actual trxn.DataItem
 	conn.Get("item1", &actual)
 	assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
 }
@@ -697,7 +697,7 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	preTxn.Commit()
 
 	go func() {
-		slowTxn := txn.NewTransaction()
+		slowTxn := trxn.NewTransaction()
 		conn := memory.NewMockMemoryConnection("localhost", 8321, 2, false,
 			func() error { time.Sleep(4 * time.Second); return nil })
 		mds := memory.NewMemoryDatastore("memory", conn)
@@ -719,17 +719,17 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	// ensure the internal state of memory database
 	testConn := memory.NewMemoryConnection("localhost", 8321)
 	testConn.Connect()
-	var memItem1 memory.MemoryItem
+	var memItem1 trxn.DataItem
 	testConn.Get("item1", &memItem1)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value)
 	assert.Equal(t, memItem1.TxnState, config.PREPARED)
 
-	var memItem2 memory.MemoryItem
+	var memItem2 trxn.DataItem
 	testConn.Get("item2", &memItem2)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item2-slow")), memItem2.Value)
 	assert.Equal(t, memItem2.TxnState, config.PREPARED)
 
-	var memItem3 memory.MemoryItem
+	var memItem3 trxn.DataItem
 	testConn.Get("item3", &memItem3)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value)
 	assert.Equal(t, memItem3.TxnState, config.COMMITTED)
@@ -820,7 +820,7 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 	assert.NoError(t, err)
 
 	go func() {
-		slowTxn := txn.NewTransaction()
+		slowTxn := trxn.NewTransaction()
 		conn := memory.NewMockMemoryConnection("localhost", 8321, 4, false,
 			func() error { time.Sleep(5 * time.Second); return nil })
 		mds := memory.NewMemoryDatastore("memory", conn)
@@ -844,7 +844,7 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 
 	// all records should be PREPARED state except item5
 	for _, item := range testutil.InputItemList {
-		var memItem memory.MemoryItem
+		var memItem trxn.DataItem
 		testConn.Get(item.Value, &memItem)
 		if item.Value == "item5" {
 			assert.Equal(t, util.ToJSONString(testutil.NewTestItem(item.Value)), memItem.Value)
@@ -943,7 +943,7 @@ func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
 		t.Errorf("preTxn commit err: %s", err)
 	}
 
-	txn := txn.NewTransaction()
+	txn := trxn.NewTransaction()
 	conn := memory.NewMockMemoryConnection("localhost", 8321, 5, true,
 		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	mds := memory.NewMemoryDatastore("memory", conn)
@@ -978,7 +978,7 @@ func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
 		postTxn.Read("memory", item.Value, &memItem)
 		assert.Equal(t, item.Value, memItem.Value)
 	}
-	var memItem memory.MemoryItem
+	var memItem trxn.DataItem
 	conn.Get("item5", &memItem)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)

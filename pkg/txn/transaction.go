@@ -48,7 +48,7 @@ type Transaction struct {
 	// tsrMaintainer is responsible for handling and updating the status of transactions.
 	tsrMaintainer TSRMaintainer
 	// dataStoreMap is a map of transaction-specific datastores.
-	dataStoreMap map[string]Datastore
+	dataStoreMap map[string]Datastorer
 	// timeSource represents the source of time for the transaction.
 	timeSource SourceType
 	// oracleURL is the URL of the oracle service used by the transaction.
@@ -64,7 +64,7 @@ type Transaction struct {
 func NewTransaction() *Transaction {
 	return &Transaction{
 		TxnId:        "",
-		dataStoreMap: make(map[string]Datastore),
+		dataStoreMap: make(map[string]Datastorer),
 		timeSource:   LOCAL,
 		locker:       locker.AMemoryLocker,
 		StateMachine: NewStateMachine(),
@@ -108,7 +108,7 @@ func (t *Transaction) Start() error {
 // AddDatastore adds a datastore to the transaction.
 // It checks if the datastore name is duplicated and returns an error if it is.
 // Otherwise, it sets the transaction for the datastore and adds it to the transaction's datastore map.
-func (t *Transaction) AddDatastore(ds Datastore) error {
+func (t *Transaction) AddDatastore(ds Datastorer) error {
 	// if name is duplicated
 	if _, ok := t.dataStoreMap[ds.GetName()]; ok {
 		return errors.New("duplicated datastore name")
@@ -120,7 +120,7 @@ func (t *Transaction) AddDatastore(ds Datastore) error {
 
 // SetGlobalDatastore sets the global datastore for the transaction.
 // It takes a Datastore parameter and assigns it to the globalDataStore field of the Transaction struct.
-func (t *Transaction) SetGlobalDatastore(ds Datastore) {
+func (t *Transaction) SetGlobalDatastore(ds Datastorer) {
 	t.tsrMaintainer = ds.(TSRMaintainer)
 }
 

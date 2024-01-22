@@ -10,6 +10,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// RedisConnection implements the txn.Connector interface.
+var _ txn.Connector = (*RedisConnection)(nil)
+
 type RedisConnection struct {
 	rdb     *redis.Client
 	Address string
@@ -59,25 +62,25 @@ func (r *RedisConnection) Connect() error {
 	return nil
 }
 
-// GetItem retrieves a RedisItem from the Redis database based on the specified key.
-// If the key is not found, it returns an empty RedisItem and an error.
-func (r *RedisConnection) GetItem(key string) (RedisItem, error) {
-	var value RedisItem
+// GetItem retrieves a txn.DataItem from the Redis database based on the specified key.
+// If the key is not found, it returns an empty txn.DataItem and an error.
+func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
+	var value txn.DataItem
 	err := r.rdb.HGetAll(context.Background(), key).Scan(&value)
 	if err != nil {
-		return RedisItem{}, err
+		return txn.DataItem{}, err
 	}
 	// Check if returned value is an empty struct
-	if (RedisItem{}) == value {
-		return RedisItem{}, txn.KeyNotFound
+	if (txn.DataItem{}) == value {
+		return txn.DataItem{}, txn.KeyNotFound
 	}
 	return value, nil
 }
 
 // PutItem puts an item into the Redis database with the specified key and value.
-// It sets various fields of the RedisItem struct as hash fields in the Redis hash.
+// It sets various fields of the txn.DataItem struct as hash fields in the Redis hash.
 // The function returns an error if there was a problem executing the Redis commands.
-func (r *RedisConnection) PutItem(key string, value RedisItem) error {
+func (r *RedisConnection) PutItem(key string, value txn.DataItem) error {
 	ctx := context.Background()
 	_, err := r.rdb.Pipelined(ctx, func(rdb redis.Pipeliner) error {
 		rdb.HSet(ctx, key, "Key", value.Key)
@@ -100,10 +103,10 @@ func (r *RedisConnection) PutItem(key string, value RedisItem) error {
 }
 
 // ConditionalUpdate updates the value of a Redis item if the version matches the provided value.
-// It takes a key string and a RedisItem value as parameters.
+// It takes a key string and a txn.DataItem value as parameters.
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (r *RedisConnection) ConditionalUpdate(key string, value RedisItem, doCreate bool) error {
+func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
 
 	if doCreate {
 		ctx := context.Background()

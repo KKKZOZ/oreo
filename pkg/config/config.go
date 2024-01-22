@@ -34,7 +34,7 @@ type config struct {
 var Config = config{
 	LeaseTime:       1000 * time.Millisecond,
 	MaxRecordLength: 2,
-	IdGenerator:     NewIncrementalGenerator(),
+	IdGenerator:     NewUUIDGenerator(),
 	Serializer:      serializer.NewJSONSerializer(),
 	LogLevel:        zapcore.InfoLevel,
 }

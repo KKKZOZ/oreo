@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 // MockMongoConnection is a mock of MongoConnection
@@ -14,7 +15,8 @@ type MockMongoConnection struct {
 	debugCounter int
 	debugFunc    func() error
 	isReturned   bool
-	callTimes    int
+	PutTimes     int
+	GetTimes     int
 }
 
 func NewMockMongoConnection(address string, port int, limit int,
@@ -29,12 +31,23 @@ func NewMockMongoConnection(address string, port int, limit int,
 		debugCounter:    limit,
 		debugFunc:       debugFunc,
 		isReturned:      isReturned,
-		callTimes:       0,
+		PutTimes:        0,
+		GetTimes:        0,
 	}
 }
 
-func (m *MockMongoConnection) ConditionalUpdate(key string, value mongo.MongoItem) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+func (m *MockMongoConnection) GetItem(key string) (txn.DataItem, error) {
+	defer func() { m.GetTimes++ }()
+	return m.MongoConnection.GetItem(key)
+}
+
+func (m *MockMongoConnection) Get(name string) (string, error) {
+	defer func() { m.GetTimes++ }()
+	return m.MongoConnection.Get(name)
+}
+
+func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()
@@ -42,11 +55,11 @@ func (m *MockMongoConnection) ConditionalUpdate(key string, value mongo.MongoIte
 			m.debugFunc()
 		}
 	}
-	return m.MongoConnection.ConditionalUpdate(key, value)
+	return m.MongoConnection.ConditionalUpdate(key, value, doCreate)
 }
 
-func (m *MockMongoConnection) PutItem(key string, value mongo.MongoItem) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+func (m *MockMongoConnection) PutItem(key string, value txn.DataItem) error {
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()
@@ -58,7 +71,7 @@ func (m *MockMongoConnection) PutItem(key string, value mongo.MongoItem) error {
 }
 
 func (m *MockMongoConnection) Put(name string, value any) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()
@@ -70,7 +83,7 @@ func (m *MockMongoConnection) Put(name string, value any) error {
 }
 
 func (m *MockMongoConnection) Delete(name string) error {
-	defer func() { m.debugCounter--; m.callTimes++ }()
+	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
 			return m.debugFunc()
