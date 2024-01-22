@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -73,7 +74,8 @@ func (m *MongoConnection) Connect() error {
 		return err
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	err = client.Ping(ctx, nil)
 	if err != nil {
 		return err
@@ -94,33 +96,33 @@ func (m *MongoConnection) Close() error {
 	return m.client.Disconnect(context.Background())
 }
 
-// GetItem retrieves a MongoItem from the MongoDB database based on the specified key.
-// If the key is not found, it returns an empty MongoItem and an error.
-func (m *MongoConnection) GetItem(key string) (MongoItem, error) {
+// GetItem retrieves a txn.DataItem from the MongoDB database based on the specified key.
+// If the key is not found, it returns an empty txn.DataItem and an error.
+func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 	if !m.hasConnected {
-		return MongoItem{}, fmt.Errorf("not connected to MongoDB")
+		return txn.DataItem{}, fmt.Errorf("not connected to MongoDB")
 	}
-	var item MongoItem
-	err := m.coll.FindOne(context.Background(), bson.M{"Key": key}).Decode(&item)
+	var item txn.DataItem
+	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return MongoItem{}, fmt.Errorf("key not found: %s", key)
+			return txn.DataItem{}, txn.KeyNotFound
 		}
-		return MongoItem{}, err
+		return txn.DataItem{}, err
 	}
 	return item, nil
 }
 
 // PutItem puts an item into the MongoDB database with the specified key and value.
 // The function returns an error if there was a problem executing the MongoDB commands.
-func (m *MongoConnection) PutItem(key string, value MongoItem) error {
+func (m *MongoConnection) PutItem(key string, value txn.DataItem) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
 	}
 
 	_, err := m.coll.UpdateOne(
 		context.Background(),
-		bson.M{"Key": key},
+		bson.M{"_id": key},
 		bson.D{
 			{Key: "$set", Value: value},
 		},
@@ -133,15 +135,20 @@ func (m *MongoConnection) PutItem(key string, value MongoItem) error {
 }
 
 // ConditionalUpdate updates the value of a Mongo item if the version matches the provided value.
-// It takes a key string and a MongoItem value as parameters.
+// It takes a key string and a txn.DataItem value as parameters.
 // If the item's version does not match, it returns a version mismatch error.
 // Note: if the previous version of the item is not found, it will return a key not found error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (m *MongoConnection) ConditionalUpdate(key string, value MongoItem) error {
+func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreat bool) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
 	}
-	filter := bson.M{"Key": key, "Version": value.Version}
+
+	if doCreat {
+		return m.atomicCreate(key, value)
+	}
+
+	filter := bson.M{"_id": key, "Version": value.Version}
 	update := bson.D{
 		{Key: "$set", Value: bson.D{
 			{Key: "Value", Value: value.Value},
@@ -159,20 +166,48 @@ func (m *MongoConnection) ConditionalUpdate(key string, value MongoItem) error {
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &after,
 	}
-	var updatedItem MongoItem
+	var updatedItem txn.DataItem
 	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return fmt.Errorf("version mismatch while updating key: %s", key)
+			return txn.VersionMismatch
 		}
 		return err
 	}
 
 	if updatedItem.Version != value.Version+1 {
-		return fmt.Errorf("version mismatch while updating key: %s", key)
+		return txn.VersionMismatch
 	}
 
 	return nil
+}
+
+func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) error {
+	filter := bson.M{"_id": key}
+
+	var result txn.DataItem
+	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			_, err := m.coll.InsertOne(context.Background(), bson.D{
+				{Key: "_id", Value: key},
+				{Key: "Value", Value: value.Value},
+				{Key: "TxnId", Value: value.TxnId},
+				{Key: "TxnState", Value: value.TxnState},
+				{Key: "TValid", Value: value.TValid.Format(time.RFC3339Nano)},
+				{Key: "TLease", Value: value.TLease.Format(time.RFC3339Nano)},
+				{Key: "Prev", Value: value.Prev},
+				{Key: "LinkedLen", Value: value.LinkedLen},
+				{Key: "IsDeleted", Value: value.IsDeleted},
+				{Key: "Version", Value: value.Version + 1},
+			})
+			return err
+		}
+		return err
+	}
+
+	return txn.VersionMismatch
 }
 
 // Get retrieves the value associated with the given key from the MongoDB database.
@@ -184,13 +219,13 @@ func (m *MongoConnection) Get(key string) (string, error) {
 		return "", fmt.Errorf("not connected to MongoDB")
 	}
 	var result struct {
-		Key   string `bson:"Key"`
+		Key   string `bson:"_id"`
 		Value string `bson:"Value"`
 	}
-	err := m.coll.FindOne(context.Background(), bson.M{"Key": key}).Decode(&result)
+	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return "", fmt.Errorf("key not found: %s", key)
+			return "", txn.KeyNotFound
 		}
 		return "", err
 	}
@@ -209,7 +244,7 @@ func (m *MongoConnection) Put(key string, value any) error {
 
 	_, err := m.coll.UpdateOne(
 		context.Background(),
-		bson.M{"Key": key},
+		bson.M{"_id": key},
 		bson.D{
 			{Key: "$set", Value: bson.D{
 				{Key: "Value", Value: str},
@@ -229,7 +264,7 @@ func (m *MongoConnection) Delete(key string) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
 	}
-	_, err := m.coll.DeleteOne(context.Background(), bson.M{"Key": key})
+	_, err := m.coll.DeleteOne(context.Background(), bson.M{"_id": key})
 	if err != nil {
 		return err
 	}

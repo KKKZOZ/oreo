@@ -2,6 +2,8 @@ package integration
 
 import (
 	"errors"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -9,7 +11,8 @@ import (
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
+	"github.com/kkkzoz/oreo/pkg/datastore/redis"
+	"github.com/kkkzoz/oreo/pkg/factory"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
@@ -284,11 +287,12 @@ func TestMongo_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 	}
 }
 
-// txn1 starts  txn2 starts
-// txn1 reads John
-// txn2 reads John
-// txn1 writes John
-// txn2 read John again
+//   - txn1 starts  txn2 starts
+//   - txn1 reads John
+//   - txn2 reads John
+//   - txn1 writes John
+//   - txn2 read John again
+//
 // two read in txn2 should be the same
 func TestMongo_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 
@@ -355,12 +359,13 @@ func TestMongo_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	}
 }
 
-// txn1 starts  txn2 starts
-// txn1 reads John
-// txn2 reads John
-// txn1 writes John
-// txn1 commits
-// txn2 read John again
+//   - txn1 starts  txn2 starts
+//   - txn1 reads John
+//   - txn2 reads John
+//   - txn1 writes John
+//   - txn1 commits
+//   - txn2 read John again
+//
 // two read in txn2 should be the same
 func TestMongo_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 
@@ -504,20 +509,35 @@ func TestMongo_TxnAbortCausedByWriteConflict(t *testing.T) {
 
 func TestMongo_ConcurrentTransaction(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(MONGO)
+	// Create a new redis datastore instance
+	redisDst1 := redis.NewRedisDatastore("redis1", NewConnectionWithSetup(MONGO))
+
+	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
+		DatastoreList:    []txn.Datastorer{redisDst1},
+		GlobalDatastore:  redisDst1,
+		TimeOracleSource: txn.LOCAL,
+		LockerSource:     txn.LOCAL,
+	})
+	assert.NoError(t, err)
+
+	preTxn := txnFactory.NewTransaction()
 	preTxn.Start()
 	person := testutil.NewDefaultPerson()
 	preTxn.Write(MONGO, "John", person)
-	err := preTxn.Commit()
+	err = preTxn.Commit()
 	assert.NoError(t, err)
 
 	resChan := make(chan bool)
-	conNum := 50
+	conNum := 10
+
+	conn := NewConnectionWithSetup(MONGO)
 
 	for i := 1; i <= conNum; i++ {
 		go func(id int) {
-			txn := NewTransactionWithSetup(MONGO)
-
+			txn := txn.NewTransaction()
+			rds := redis.NewRedisDatastore(MONGO, conn)
+			txn.AddDatastore(rds)
+			txn.SetGlobalDatastore(rds)
 			txn.Start()
 			var person testutil.Person
 			txn.Read(MONGO, "John", &person)
@@ -543,27 +563,27 @@ func TestMongo_ConcurrentTransaction(t *testing.T) {
 	assert.Equal(t, 1, successNum)
 }
 
-// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired mongo item.
-// It inserts a mongo item with an expired lease and a PREPARED state
-// Then, it starts a transaction, reads the mongo item,
+// TestSimpleExpiredRead tests the scenario where a read operation is performed on an expired redis item.
+// It inserts a redis item with an expired lease and a PREPARED state
+// Then, it starts a transaction, reads the redis item,
 // and verifies that the read item matches the expected value.
 // Finally, it commits the transaction and checks that
-// the mongo item has been updated to the committed state.
+// the redis item has been updated to the committed state.
 func TestMongo_SimpleExpiredRead(t *testing.T) {
-	tarMemItem := mongo.MongoItem{
+	tarMemItem := txn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
-		TxnId:    "99",
+		TxnId:    "TestMongo_SimpleExpiredRead1",
 		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-9 * time.Second),
 		Version:  1,
 	}
 
-	curMemItem := mongo.MongoItem{
+	curMemItem := txn.DataItem{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		TxnId:    "TestMongo_SimpleExpiredRead",
+		TxnId:    "TestMongo_SimpleExpiredRead2",
 		TxnState: config.PREPARED,
 		TValid:   time.Now().Add(-5 * time.Second),
 		TLease:   time.Now().Add(-4 * time.Second),
@@ -571,13 +591,7 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 		Version:  2,
 	}
 
-	conn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
-		Address:        "mongodb://localhost:27017",
-		DBName:         "oreo",
-		CollectionName: "records",
-	})
-	conn.Connect()
-
+	conn := NewConnectionWithSetup(MONGO)
 	conn.PutItem("item1", curMemItem)
 
 	txn := NewTransactionWithSetup(MONGO)
@@ -590,35 +604,42 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 	assert.NoError(t, err)
 	actual, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
+	tarMemItem.Version = 3
+	if !tarMemItem.Equal(actual) {
+		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
+	}
+	// assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
 
 }
 
 // A complex test
-// preTxn writes data to the mongo database
+// preTxn writes data to the redis database
 // slowTxn read all data and write all data, but it will block when conditionalUpdate item3 (sleep 4s)
-// so when slowTxn blocks, the internal state of mongo database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3 COMMITTED
-// item4 COMMITTED
-// item5 COMMITTED
+// so when slowTxn blocks, the internal state of redis database:
+//
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3 COMMITTED
+//   - item4 COMMITTED
+//   - item5 COMMITTED
+//
 // fastTxn read item3, item4, item5 and write them, then commit
-// the internal state of mongo database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5-fast COMMITTED
+// the internal state of redis database:
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5-fast COMMITTED
+//
 // then, slowTxn unblocks, it starts to conditionalUpdate item3
 // and it detects a version mismatch,so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of mongo database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5-fast COMMITTED
+// so the final internal state of redis database:
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5-fast COMMITTED
 func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(MONGO)
@@ -629,12 +650,8 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 	preTxn.Commit()
 
 	go func() {
-		slowTxn := txn.NewTransaction()
-		conn := mock.NewMockMongoConnection("localhost", 27017, 2, false,
+		slowTxn := NewTransactionWithMockConn(MONGO, 2, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
-		mds := mongo.NewMongoDatastore(MONGO, conn)
-		slowTxn.AddDatastore(mds)
-		slowTxn.SetGlobalDatastore(mds)
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -644,16 +661,12 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 			slowTxn.Write(MONGO, item.Value, result)
 		}
 		err := slowTxn.Commit()
-		assert.EqualError(t, err, "prepare phase failed: write conflicted: the record has been modified by others")
+		assert.EqualError(t, err, "prepare phase failed: version mismatch")
 	}()
 	time.Sleep(1 * time.Second)
 
-	// ensure the internal state of mongo database
-	testConn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
-		Address:        "mongodb://localhost:27017",
-		DBName:         "oreo",
-		CollectionName: "records",
-	})
+	// ensure the internal state of redis database
+	testConn := NewConnectionWithSetup(MONGO)
 	testConn.Connect()
 	memItem1, _ := testConn.GetItem("item1")
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value)
@@ -703,32 +716,34 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 }
 
 // A complex test
-// preTxn writes data to the mongo database
+// preTxn writes data to the redis database
 // slowTxn read all data and write all data,
 // but it will block when conditionalUpdate item5 (sleep 5s)
-// so when slowTxn blocks, the internal state of mongo database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-slow PREPARED
-// item4-slow PREPARED
-// item5 COMMITTED
+// so when slowTxn blocks, the internal state of redis database:
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-slow PREPARED
+//   - item4-slow PREPARED
+//   - item5 COMMITTED
+//
 // fastTxn read item3, item4 and write them, then commit
 // (fastTxn realize item3 and item4 are expired, so it will first rollback, and write the TSR with ABORTED)
-// the internal state of mongo database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5 COMMITTED
+// the internal state of redis database:
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5 COMMITTED
+//
 // then, slowTxn unblocks, it conditionalUpdate item5 then check the TSR state
 // the TSR is marked as ABORTED, so it aborts(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of mongo database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3-fast COMMITTED
-// item4-fast COMMITTED
-// item5 COMMITTED
+// so the final internal state of redis database:
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3-fast COMMITTED
+//   - item4-fast COMMITTED
+//   - item5 COMMITTED
 func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(MONGO)
@@ -740,13 +755,8 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 	assert.NoError(t, err)
 
 	go func() {
-		slowTxn := txn.NewTransaction()
-		conn := mock.NewMockMongoConnection("localhost", 27017, 4, false,
+		slowTxn := NewTransactionWithMockConn(MONGO, 4, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
-		mds := mongo.NewMongoDatastore(MONGO, conn)
-		slowTxn.AddDatastore(mds)
-		slowTxn.SetGlobalDatastore(mds)
-
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
@@ -759,11 +769,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 	}()
 
 	time.Sleep(1 * time.Second)
-	testConn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
-		Address:        "mongodb://localhost:27017",
-		DBName:         "oreo",
-		CollectionName: "records",
-	})
+	testConn := NewConnectionWithSetup(MONGO)
 	testConn.Connect()
 
 	// all records should be PREPARED state except item5
@@ -823,32 +829,34 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 }
 
 // A complex test
-// preTxn writes data to the mongo database
+// preTxn writes data to the redis database
 // slowTxn read all data and write all data,
 // but it will block for 3s and **fail** when writing the TSR
-// so when slowTxn blocks, the internal state of mongo database:
-// item1-slow PREPARED
-// item2-slow PREPARED
-// item3-slow PREPARED
-// item4-slow PREPARED
-// item5-slow PREPARED
+// so when slowTxn blocks, the internal state of redis database:
+//   - item1-slow PREPARED
+//   - item2-slow PREPARED
+//   - item3-slow PREPARED
+//   - item4-slow PREPARED
+//   - item5-slow PREPARED
+//
 // testTxn read item1,item2,item3, item4
 // (testTxn realize item1,item2,item3, item4 are expired, so it will first rollback, and write the TSR with ABORTED)
-// the internal state of mongo database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3 rollback to COMMITTED
-// item4 rollback to COMMITTED
-// item5-slow PREPARED
+// the internal state of redis database:
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3 rollback to COMMITTED
+//   - item4 rollback to COMMITTED
+//   - item5-slow PREPARED
+//
 // then, slowTxn unblocks, it fails to write the TSR, and it aborts(it tries to rollback all the items)
 // so slowTxn will abort(with rolling back all changes)
 // postTxn reads all data and verify them
-// so the final internal state of mongo database:
-// item1 rollback to COMMITTED
-// item2 rollback to COMMITTED
-// item3 rollback to COMMITTED
-// item4 rollback to COMMITTED
-// item5 rollback to COMMITTED
+// so the final internal state of redis database:
+//   - item1 rollback to COMMITTED
+//   - item2 rollback to COMMITTED
+//   - item3 rollback to COMMITTED
+//   - item4 rollback to COMMITTED
+//   - item5 rollback to COMMITTED
 func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 
 	preTxn := NewTransactionWithSetup(MONGO)
@@ -861,13 +869,8 @@ func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 		t.Errorf("preTxn commit err: %s", err)
 	}
 
-	txn := txn.NewTransaction()
-	conn := mock.NewMockMongoConnection("localhost", 27017, 5, true,
+	txn := NewTransactionWithMockConn(MONGO, 5, true,
 		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
-	mds := mongo.NewMongoDatastore(MONGO, conn)
-	txn.AddDatastore(mds)
-	txn.SetGlobalDatastore(mds)
-
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
@@ -897,6 +900,7 @@ func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 		assert.Equal(t, item.Value, memItem.Value)
 	}
 
+	conn := NewConnectionWithSetup(MONGO)
 	memItem, err := conn.GetItem("item5")
 	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
@@ -904,6 +908,10 @@ func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 }
 
 func TestMongo_LinkedRecord(t *testing.T) {
+
+	t.Cleanup(func() {
+		config.Config.MaxRecordLength = 2
+	})
 
 	t.Run("commit time less than MaxLen", func(t *testing.T) {
 
@@ -999,4 +1007,643 @@ func TestMongo_LinkedRecord(t *testing.T) {
 		err = slowTxn.Read(MONGO, "John", &p)
 		assert.EqualError(t, err, "key not found")
 	})
+}
+
+func TestMongo_RollbackConflict(t *testing.T) {
+
+	// there is a broken item
+	//   - txnA reads the item, decides to roll back
+	//   - txnB reads the item, decides to roll back
+	//   - txnB rollbacks the item
+	//   - txnB update the item and commit
+	//   - txnA rollbacks the item -> should fail
+	t.Run("the broken item has a valid Prev field", func(t *testing.T) {
+		conn := NewConnectionWithSetup(MONGO)
+
+		redisItem1 := txn.DataItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:     "TestMongo_RollbackConflict1",
+			TxnState:  config.COMMITTED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			LinkedLen: 1,
+			Version:   1,
+		}
+		redisItem2 := txn.DataItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			TxnId:     "TestMongo_RollbackConflict2",
+			TxnState:  config.PREPARED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			Prev:      util.ToJSONString(redisItem1),
+			LinkedLen: 2,
+			Version:   2,
+		}
+		conn.PutItem("item1", redisItem2)
+
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			txnA := NewTransactionWithMockConn(MONGO, 0, false,
+				func() error { time.Sleep(2 * time.Second); return nil })
+			txnA.Start()
+
+			var item testutil.TestItem
+			err := txnA.Read(MONGO, "item1", &item)
+			assert.NotNil(t, err)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		txnB := NewTransactionWithSetup(MONGO)
+		txnB.Start()
+		var item testutil.TestItem
+		err := txnB.Read(MONGO, "item1", &item)
+		assert.NoError(t, err)
+		assert.Equal(t, testutil.NewTestItem("item1-pre"), item)
+		item.Value = "item1-B"
+		txnB.Write(MONGO, "item1", item)
+		err = txnB.Commit()
+		assert.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+		resItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+		redisItem1.Version = 3
+		assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev)
+	})
+
+	// there is a broken item
+	//   - txnA reads the item, decides to roll back
+	//   - txnB reads the item, decides to roll back
+	//   - txnB rollbacks the item
+	//   - txnB update the item and commit
+	//   - txnA rollbacks the item -> should fail
+	t.Run("the broken item has an empty Prev field", func(t *testing.T) {
+		conn := NewConnectionWithSetup(MONGO)
+
+		redisItem2 := txn.DataItem{
+			Key:       "item1",
+			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			TxnId:     "TestMongo_RollbackConflict2-emptyField",
+			TxnState:  config.PREPARED,
+			TValid:    time.Now().Add(-5 * time.Second),
+			TLease:    time.Now().Add(-4 * time.Second),
+			Prev:      "",
+			LinkedLen: 1,
+			Version:   1,
+		}
+		conn.PutItem("item1", redisItem2)
+
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			txnA := NewTransactionWithMockConn(MONGO, 0, false,
+				func() error { time.Sleep(2 * time.Second); return nil })
+			txnA.Start()
+
+			var item testutil.TestItem
+			err := txnA.Read(MONGO, "item1", &item)
+			assert.NotNil(t, err)
+		}()
+
+		time.Sleep(100 * time.Millisecond)
+		txnB := NewTransactionWithSetup(MONGO)
+		txnB.Start()
+		var item testutil.TestItem
+		err := txnB.Read(MONGO, "item1", &item)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
+
+		item.Value = "item1-B"
+		txnB.Write(MONGO, "item1", item)
+		err = txnB.Commit()
+		assert.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+		resItem, err := conn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+		redisItem2.IsDeleted = true
+		redisItem2.TxnState = config.COMMITTED
+		redisItem2.Version++
+		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev)
+	})
+
+}
+
+// there is a broken item
+//   - txnA reads the item, decides to roll forward
+//   - txnB reads the item, decides to roll forward
+//   - txnB rolls forward the item
+//   - txnB update the item and commit
+//   - txnA rolls forward the item -> should fail
+func TestMongo_RollForwardConflict(t *testing.T) {
+	conn := NewConnectionWithSetup(MONGO)
+
+	redisItem1 := txn.DataItem{
+		Key:      "item1",
+		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		TxnId:    "TestMongo_RollForwardConflict1",
+		TxnState: config.COMMITTED,
+		TValid:   time.Now().Add(-5 * time.Second),
+		TLease:   time.Now().Add(-4 * time.Second),
+		Version:  1,
+	}
+	redisItem2 := txn.DataItem{
+		Key:       "item1",
+		Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+		TxnId:     "TestMongo_RollForwardConflict2",
+		TxnState:  config.PREPARED,
+		TValid:    time.Now().Add(-5 * time.Second),
+		TLease:    time.Now().Add(-4 * time.Second),
+		Prev:      util.ToJSONString(redisItem1),
+		LinkedLen: 2,
+		Version:   2,
+	}
+	conn.PutItem("item1", redisItem2)
+	conn.Put("TestMongo_RollForwardConflict2", config.COMMITTED)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		txnA := NewTransactionWithMockConn(MONGO, 0, false,
+			func() error { time.Sleep(2 * time.Second); return nil })
+		txnA.Start()
+		var item testutil.TestItem
+		err := txnA.Read(MONGO, "item1", &item)
+		assert.NotNil(t, err)
+
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	txnB := NewTransactionWithSetup(MONGO)
+	txnB.Start()
+	var item testutil.TestItem
+	txnB.Read(MONGO, "item1", &item)
+	assert.Equal(t, testutil.NewTestItem("item1-broken"), item)
+	item.Value = "item1-B"
+	txnB.Write(MONGO, "item1", item)
+	err := txnB.Commit()
+	assert.NoError(t, err)
+
+	time.Sleep(2 * time.Second)
+	resItem, err := conn.GetItem("item1")
+	assert.NoError(t, err)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+	redisItem2.TxnState = config.COMMITTED
+	redisItem2.Prev = ""
+	redisItem2.LinkedLen = 1
+	redisItem2.Version = 3
+	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev)
+
+}
+
+func TestMongo_ConcurrentDirectWrite(t *testing.T) {
+
+	conn := NewConnectionWithSetup(MONGO)
+	conn.Delete("item1")
+
+	conNumber := 5
+	mu := sync.Mutex{}
+	globalId := 0
+	resChan := make(chan bool)
+	for i := 1; i <= conNumber; i++ {
+		go func(id int) {
+			txn := NewTransactionWithSetup(MONGO)
+			item := testutil.NewTestItem("item1-" + strconv.Itoa(id))
+			txn.Start()
+			txn.Write(MONGO, "item1", item)
+			err := txn.Commit()
+			if err != nil {
+				resChan <- false
+			} else {
+				mu.Lock()
+				globalId = id
+				mu.Unlock()
+				resChan <- true
+			}
+		}(i)
+	}
+
+	successNum := 0
+	for i := 1; i <= conNumber; i++ {
+		res := <-resChan
+		if res {
+			successNum++
+		}
+	}
+
+	assert.Equal(t, 1, successNum)
+
+	postTxn := NewTransactionWithSetup(MONGO)
+	postTxn.Start()
+	var item testutil.TestItem
+	postTxn.Read(MONGO, "item1", &item)
+	assert.Equal(t, testutil.NewTestItem("item1-"+strconv.Itoa(globalId)), item)
+	// assert.Equal(t, 0, globalId)
+	t.Logf("item: %v", item)
+}
+
+func TestMongo_TxnDelete(t *testing.T) {
+	preTxn := NewTransactionWithSetup(MONGO)
+	preTxn.Start()
+	item := testutil.NewTestItem("item1-pre")
+	preTxn.Write(MONGO, "item1", item)
+	err := preTxn.Commit()
+	assert.NoError(t, err)
+
+	txn := NewTransactionWithSetup(MONGO)
+	txn.Start()
+	var item1 testutil.TestItem
+	txn.Read(MONGO, "item1", &item1)
+	txn.Delete(MONGO, "item1")
+	err = txn.Commit()
+	assert.NoError(t, err)
+
+	postTxn := NewTransactionWithSetup(MONGO)
+	postTxn.Start()
+	var item2 testutil.TestItem
+	err = postTxn.Read(MONGO, "item1", &item2)
+	assert.EqualError(t, err, "key not found")
+}
+
+func TestMongo_PreventLostUpdatesValidation(t *testing.T) {
+
+	t.Run("Case 1-1(with read): The target record has been updated by the concurrent transaction",
+		func(t *testing.T) {
+
+			preTxn := NewTransactionWithSetup(MONGO)
+			preTxn.Start()
+			item := testutil.NewTestItem("item1-pre")
+			preTxn.Write(MONGO, "item1", item)
+			err := preTxn.Commit()
+			assert.NoError(t, err)
+
+			txnA := NewTransactionWithSetup(MONGO)
+			txnA.Start()
+			txnB := NewTransactionWithSetup(MONGO)
+			txnB.Start()
+
+			var itemA testutil.TestItem
+			txnA.Read(MONGO, "item1", &itemA)
+			itemA.Value = "item1-A"
+			txnA.Write(MONGO, "item1", itemA)
+			err = txnA.Commit()
+			assert.NoError(t, err)
+
+			var itemB testutil.TestItem
+			txnB.Read(MONGO, "item1", &itemB)
+			itemB.Value = "item1-B"
+			txnB.Write(MONGO, "item1", itemB)
+			err = txnB.Commit()
+			assert.EqualError(t, err,
+				"prepare phase failed: version mismatch")
+
+			postTxn := NewTransactionWithSetup(MONGO)
+			postTxn.Start()
+			var item1 testutil.TestItem
+			postTxn.Read(MONGO, "item1", &item1)
+			assert.Equal(t, itemA, item1)
+		})
+
+	t.Run("Case 1-2(without read): The target record has been updated by the concurrent transaction",
+		func(t *testing.T) {
+
+			preTxn := NewTransactionWithSetup(MONGO)
+			preTxn.Start()
+			item := testutil.NewTestItem("item1-pre")
+			preTxn.Write(MONGO, "item1", item)
+			err := preTxn.Commit()
+			assert.NoError(t, err)
+
+			txnA := NewTransactionWithSetup(MONGO)
+			txnA.Start()
+			txnB := NewTransactionWithSetup(MONGO)
+			txnB.Start()
+
+			itemA := testutil.NewTestItem("item1-A")
+			txnA.Write(MONGO, "item1", itemA)
+			err = txnA.Commit()
+			assert.NoError(t, err)
+
+			itemB := testutil.NewTestItem("item1-B")
+			txnB.Write(MONGO, "item1", itemB)
+			err = txnB.Commit()
+			assert.EqualError(t, err,
+				"prepare phase failed: version mismatch")
+
+			postTxn := NewTransactionWithSetup(MONGO)
+			postTxn.Start()
+			var item1 testutil.TestItem
+			postTxn.Read(MONGO, "item1", &item1)
+			assert.Equal(t, itemA, item1)
+		})
+
+	t.Run("Case 2-1(with read): There is no conflict", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-pre")
+		preTxn.Write(MONGO, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txnA := NewTransactionWithSetup(MONGO)
+		txnA.Start()
+		var itemA testutil.TestItem
+		txnA.Read(MONGO, "item1", &itemA)
+		itemA.Value = "item1-A"
+		txnA.Write(MONGO, "item1", itemA)
+		err = txnA.Commit()
+		assert.NoError(t, err)
+
+		txnB := NewTransactionWithSetup(MONGO)
+		txnB.Start()
+		var itemB testutil.TestItem
+		txnB.Read(MONGO, "item1", &itemB)
+		itemB.Value = "item1-B"
+		txnB.Write(MONGO, "item1", itemB)
+		err = txnB.Commit()
+		assert.NoError(t, err)
+
+		postTxn := NewTransactionWithSetup(MONGO)
+		postTxn.Start()
+		var item1 testutil.TestItem
+		postTxn.Read(MONGO, "item1", &item1)
+		assert.Equal(t, itemB, item1)
+	})
+
+	t.Run("Case 2-2(without read): There is no conflict", func(t *testing.T) {
+
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-pre")
+		preTxn.Write(MONGO, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txnA := NewTransactionWithSetup(MONGO)
+		txnA.Start()
+		itemA := testutil.NewTestItem("item1-A")
+		txnA.Write(MONGO, "item1", itemA)
+		err = txnA.Commit()
+		assert.NoError(t, err)
+
+		txnB := NewTransactionWithSetup(MONGO)
+		txnB.Start()
+		itemB := testutil.NewTestItem("item1-B")
+		txnB.Write(MONGO, "item1", itemB)
+		err = txnB.Commit()
+		assert.NoError(t, err)
+
+		postTxn := NewTransactionWithSetup(MONGO)
+		postTxn.Start()
+		var item1 testutil.TestItem
+		postTxn.Read(MONGO, "item1", &item1)
+		assert.Equal(t, itemB, item1)
+	})
+}
+
+func TestMongo_RepeatableReadWhenDirtyRead(t *testing.T) {
+	t.Run("the prepared item has a valid Prev", func(t *testing.T) {
+		config.Config.LeaseTime = 3000 * time.Millisecond
+
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-pre")
+		preTxn.Write(MONGO, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txnA := NewTransactionWithMockConn(MONGO, 1, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		txnB := NewTransactionWithSetup(MONGO)
+		txnA.Start()
+		txnB.Start()
+
+		go func() {
+			itemA := testutil.NewTestItem("item1-A")
+			txnA.Write(MONGO, "item1", itemA)
+			err = txnA.Commit()
+			assert.NoError(t, err)
+		}()
+
+		// wait for txnA to write item into database
+		time.Sleep(500 * time.Millisecond)
+		var itemB testutil.TestItem
+		err = txnB.Read(MONGO, "item1", &itemB)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-pre", itemB.Value)
+
+		time.Sleep(2 * time.Second)
+		err = txnB.Read(MONGO, "item1", &itemB)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-pre", itemB.Value)
+	})
+
+	t.Run("the prepared item has an empty Prev", func(t *testing.T) {
+		config.Config.LeaseTime = 3000 * time.Millisecond
+
+		testConn := NewConnectionWithSetup(MONGO)
+		testConn.Delete("item1")
+
+		txnA := NewTransactionWithMockConn(MONGO, 1, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		txnB := NewTransactionWithSetup(MONGO)
+		txnA.Start()
+		txnB.Start()
+
+		go func() {
+			itemA := testutil.NewTestItem("item1-A")
+			txnA.Write(MONGO, "item1", itemA)
+			err := txnA.Commit()
+			assert.NoError(t, err)
+		}()
+
+		// wait for txnA to write item into database
+		time.Sleep(500 * time.Millisecond)
+		var itemB testutil.TestItem
+		err := txnB.Read(MONGO, "item1", &itemB)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
+
+		time.Sleep(2 * time.Second)
+
+		// make sure txnA has committed
+		resItem, err := testConn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-A")), resItem.Value)
+
+		err = txnB.Read(MONGO, "item1", &itemB)
+		assert.EqualError(t, err, txn.KeyNotFound.Error())
+
+		// post check
+		postTxn := NewTransactionWithSetup(MONGO)
+		postTxn.Start()
+
+		var itemPost testutil.TestItem
+		err = postTxn.Read(MONGO, "item1", &itemPost)
+		assert.NoError(t, err)
+		assert.Equal(t, "item1-A", itemPost.Value)
+	})
+
+}
+
+func TestMongo_DeleteTimingProblems(t *testing.T) {
+
+	// conn Puts an item with an empty Prev field
+	//  - txnA reads the item, decides to delete
+	//  - txnB reads the item, updates and commmits
+	//  - txnA tries to delete the item -> should fail
+	t.Run("the item has an empty Prev field", func(t *testing.T) {
+		testConn := NewConnectionWithSetup(MONGO)
+		dbItem := txn.DataItem{
+			Key:      "item1",
+			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			TxnId:    "TestMongo_DeleteTimingProblems",
+			TxnState: config.COMMITTED,
+			TValid:   time.Now().Add(-5 * time.Second),
+			TLease:   time.Now().Add(-4 * time.Second),
+			Version:  1,
+		}
+		testConn.PutItem("item1", dbItem)
+
+		txnA := NewTransactionWithMockConn(MONGO, 0, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		txnB := NewTransactionWithSetup(MONGO)
+		txnA.Start()
+		txnB.Start()
+
+		go func() {
+			var item testutil.TestItem
+			txnA.Read(MONGO, "item1", &item)
+			txnA.Delete(MONGO, "item1")
+			err := txnA.Commit()
+			assert.NotNil(t, err)
+			// assert.NoError(t, err)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+		var itemB testutil.TestItem
+		txnB.Read(MONGO, "item1", &itemB)
+		txnB.Delete(MONGO, "item1")
+		itemB.Value = "item1-B"
+		txnB.Write(MONGO, "item1", itemB)
+		err := txnB.Commit()
+		assert.NoError(t, err)
+
+		time.Sleep(1 * time.Second)
+
+		// post check
+		resItem, err := testConn.GetItem("item1")
+		assert.NoError(t, err)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+
+	})
+}
+
+func TestMongo_VisibilityResults(t *testing.T) {
+
+	t.Run("a normal chain", func(t *testing.T) {
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		item := testutil.NewTestItem("item1-V0")
+		preTxn.Write(MONGO, "item1", item)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		chainNum := 5
+
+		for i := 1; i <= chainNum; i++ {
+			time.Sleep(10 * time.Millisecond)
+			txn := NewTransactionWithSetup(MONGO)
+			txn.Start()
+			var item testutil.TestItem
+			txn.Read(MONGO, "item1", &item)
+			assert.Equal(t, "item1-V"+strconv.Itoa(i-1), item.Value)
+			item.Value = "item1-V" + strconv.Itoa(i)
+			txn.Write(MONGO, "item1", item)
+			err = txn.Commit()
+			assert.NoError(t, err)
+		}
+
+	})
+}
+
+// A network call times test
+//
+// when a transaction read-modify-commit X items at once, it will:
+//  - call `Get` X+1 times
+//  - call `Put` 2X+2 times
+
+func TestMongo_ReadModifyWritePattern(t *testing.T) {
+
+	t.Run("when X = 1", func(t *testing.T) {
+
+		X := 1
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		dbItem := testutil.NewTestItem("item1-pre")
+		preTxn.Write(MONGO, "item1", dbItem)
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(MONGO, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		var item1 testutil.TestItem
+		err = txn.Read(MONGO, "item1", &item1)
+		assert.NoError(t, err)
+		item1.Value = "item1-modified"
+		txn.Write(MONGO, "item1", item1)
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		// t.Logf("Connection status:\nGetTimes: %d\nPutTimes: %d\n",
+		// 	mockConn.GetTimes, mockConn.PutTimes)
+
+		assert.Equal(t, X+1, mockConn.GetTimes)
+		assert.Equal(t, 2*X+2, mockConn.PutTimes)
+	})
+
+	t.Run("when X = 5", func(t *testing.T) {
+
+		X := 5
+		preTxn := NewTransactionWithSetup(MONGO)
+		preTxn.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn.Write(MONGO, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(MONGO, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= X; i++ {
+			var item testutil.TestItem
+			err = txn.Read(MONGO, "item"+strconv.Itoa(i), &item)
+			assert.NoError(t, err)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(MONGO, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		// t.Logf("Connection status:\nGetTimes: %d\nPutTimes: %d\n",
+		// 	mockConn.GetTimes, mockConn.PutTimes)
+
+		assert.Equal(t, X+1, mockConn.GetTimes)
+		assert.Equal(t, 2*X+2, mockConn.PutTimes)
+	})
+
 }

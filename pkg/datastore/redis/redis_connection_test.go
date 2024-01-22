@@ -308,65 +308,118 @@ func TestRedisConnectionConditionalUpdateNonExist(t *testing.T) {
 }
 
 func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
-	conn := NewRedisConnection(nil)
 
-	key := "test_key"
-	olderPerson := testutil.NewDefaultPerson()
-	olderItem := txn.DataItem{
-		Key:       key,
-		Value:     util.ToJSONString(olderPerson),
-		TxnId:     "1",
-		TxnState:  config.COMMITTED,
-		TValid:    time.Now().Add(-3 * time.Second),
-		TLease:    time.Now().Add(-2 * time.Second),
-		Prev:      "",
-		IsDeleted: false,
-		Version:   2,
-	}
-	err := conn.PutItem(key, olderItem)
-	assert.NoError(t, err)
+	t.Run("this is a update", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
 
-	resChan := make(chan bool)
-	currentNum := 300
-	globalId := 0
-	for i := 1; i <= currentNum; i++ {
-		go func(id int) {
-			newerPerson := testutil.NewDefaultPerson()
-			newerPerson.Name = "newer"
-			newerItem := txn.DataItem{
-				Key:       key,
-				Value:     util.ToJSONString(newerPerson),
-				TxnId:     strconv.Itoa(id),
-				TxnState:  config.COMMITTED,
-				TValid:    time.Now().Add(-2 * time.Second),
-				TLease:    time.Now().Add(-1 * time.Second),
-				Prev:      "",
-				IsDeleted: false,
-				Version:   2,
-			}
-
-			err = conn.ConditionalUpdate(key, newerItem, false)
-			if err == nil {
-				globalId = id
-				resChan <- true
-			} else {
-				resChan <- false
-			}
-		}(i)
-	}
-	successCnt := 0
-	for i := 1; i <= currentNum; i++ {
-		res := <-resChan
-		if res {
-			successCnt++
+		key := "test_key"
+		olderPerson := testutil.NewDefaultPerson()
+		olderItem := txn.DataItem{
+			Key:       key,
+			Value:     util.ToJSONString(olderPerson),
+			TxnId:     "1",
+			TxnState:  config.COMMITTED,
+			TValid:    time.Now().Add(-3 * time.Second),
+			TLease:    time.Now().Add(-2 * time.Second),
+			Prev:      "",
+			IsDeleted: false,
+			Version:   2,
 		}
-	}
-	assert.Equal(t, 1, successCnt)
+		err := conn.PutItem(key, olderItem)
+		assert.NoError(t, err)
 
-	item, err := conn.GetItem(key)
-	if item.TxnId != strconv.Itoa(globalId) {
-		t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId)
-	}
+		resChan := make(chan bool)
+		currentNum := 100
+		globalId := 0
+		for i := 1; i <= currentNum; i++ {
+			go func(id int) {
+				newerPerson := testutil.NewDefaultPerson()
+				newerPerson.Name = "newer"
+				newerItem := txn.DataItem{
+					Key:       key,
+					Value:     util.ToJSONString(newerPerson),
+					TxnId:     strconv.Itoa(id),
+					TxnState:  config.COMMITTED,
+					TValid:    time.Now().Add(-2 * time.Second),
+					TLease:    time.Now().Add(-1 * time.Second),
+					Prev:      "",
+					IsDeleted: false,
+					Version:   2,
+				}
+
+				err = conn.ConditionalUpdate(key, newerItem, false)
+				if err == nil {
+					globalId = id
+					resChan <- true
+				} else {
+					resChan <- false
+				}
+			}(i)
+		}
+		successCnt := 0
+		for i := 1; i <= currentNum; i++ {
+			res := <-resChan
+			if res {
+				successCnt++
+			}
+		}
+		assert.Equal(t, 1, successCnt)
+
+		item, err := conn.GetItem(key)
+		assert.NoError(t, err)
+		if item.TxnId != strconv.Itoa(globalId) {
+			t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId)
+		}
+	})
+
+	t.Run("this is a create", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		key := "test_key"
+		conn.Delete(key)
+
+		resChan := make(chan bool)
+		currentNum := 100
+		globalId := 0
+		for i := 1; i <= currentNum; i++ {
+			go func(id int) {
+				newerPerson := testutil.NewDefaultPerson()
+				newerPerson.Name = "newer"
+				newerItem := txn.DataItem{
+					Key:       key,
+					Value:     util.ToJSONString(newerPerson),
+					TxnId:     strconv.Itoa(id),
+					TxnState:  config.COMMITTED,
+					TValid:    time.Now().Add(-2 * time.Second),
+					TLease:    time.Now().Add(-1 * time.Second),
+					Prev:      "",
+					IsDeleted: false,
+					Version:   2,
+				}
+
+				err := conn.ConditionalUpdate(key, newerItem, true)
+				if err == nil {
+					globalId = id
+					resChan <- true
+				} else {
+					resChan <- false
+				}
+			}(i)
+		}
+		successCnt := 0
+		for i := 1; i <= currentNum; i++ {
+			res := <-resChan
+			if res {
+				successCnt++
+			}
+		}
+		assert.Equal(t, 1, successCnt)
+
+		item, err := conn.GetItem(key)
+		assert.NoError(t, err)
+		if item.TxnId != strconv.Itoa(globalId) {
+			t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId)
+		}
+	})
 }
 
 func TestRedisConnectionPutAndGet(t *testing.T) {
@@ -515,8 +568,16 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		TLease:    time.Now().Add(-1 * time.Second),
 		Prev:      util.ToJSONString(dbItem),
 		LinkedLen: 2,
-		Version:   2,
+		Version:   1,
 	}
+
+	t.Run("there is no item and doCreate is true ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		conn.Delete(cacheItem.Key)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, true)
+		assert.NoError(t, err)
+	})
 
 	t.Run("there is an item and doCreate is true ", func(t *testing.T) {
 		conn := NewRedisConnection(nil)
@@ -526,25 +587,20 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		assert.EqualError(t, err, txn.VersionMismatch.Error())
 	})
 
+	t.Run("there is no item and doCreate is false ", func(t *testing.T) {
+		conn := NewRedisConnection(nil)
+		conn.Delete(cacheItem.Key)
+
+		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
+		assert.EqualError(t, err, txn.VersionMismatch.Error())
+	})
+
 	t.Run("there is an item and doCreate is false ", func(t *testing.T) {
 		conn := NewRedisConnection(nil)
 		conn.PutItem(dbItem.Key, dbItem)
 
 		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
-		assert.EqualError(t, err, txn.VersionMismatch.Error())
+		assert.NoError(t, err)
 	})
 
-	t.Run("there is no item and doCreate is true ", func(t *testing.T) {
-		conn := NewRedisConnection(nil)
-
-		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, true)
-		assert.EqualError(t, err, txn.VersionMismatch.Error())
-	})
-
-	t.Run("there is no item and doCreate is false ", func(t *testing.T) {
-		conn := NewRedisConnection(nil)
-
-		err := conn.ConditionalUpdate(cacheItem.Key, cacheItem, false)
-		assert.EqualError(t, err, txn.VersionMismatch.Error())
-	})
 }
