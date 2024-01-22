@@ -24,6 +24,15 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 			Address: "localhost:6379",
 		})
 	}
+	if dsType == "mongo" {
+		conn = mongo.NewMongoConnection(&mongo.ConnectionOptions{
+			Address:        "mongodb://localhost:27017",
+			Username:       "",
+			Password:       "",
+			DBName:         "oreo",
+			CollectionName: "records",
+		})
+	}
 
 	if dsType == "kvrocks" {
 		conn = redis.NewRedisConnection(&redis.ConnectionOptions{
@@ -85,6 +94,14 @@ func NewTransactionWithMockConn(dsType string, limit int,
 		rds := redis.NewRedisDatastore("redis", mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
+	}
+
+	if dsType == "mongo" {
+		mockConn := mock.NewMockMongoConnection(
+			"localhost", 27017, limit, isReturned, debugFunc)
+		mds := mongo.NewMongoDatastore("mongo", mockConn)
+		txn.AddDatastore(mds)
+		txn.SetGlobalDatastore(mds)
 	}
 
 	if dsType == "kvrocks" {

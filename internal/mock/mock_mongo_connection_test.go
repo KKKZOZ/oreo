@@ -103,6 +103,6 @@ func TestMongo_CallTimes(t *testing.T) {
 			err := conn.Put("key1", "value1")
 			assert.Nil(t, err)
 		}
-		assert.Equal(t, testCase, conn.callTimes)
+		assert.Equal(t, testCase, conn.PutTimes)
 	}
 }
