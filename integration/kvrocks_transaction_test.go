@@ -570,7 +570,7 @@ func TestKvrocks_ConcurrentTransaction(t *testing.T) {
 // Finally, it commits the transaction and checks that
 // the redis item has been updated to the committed state.
 func TestKvrocks_SimpleExpiredRead(t *testing.T) {
-	tarMemItem := txn.DataItem{
+	tarMemItem := txn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestKvrocks_SimpleExpiredRead1",
@@ -580,7 +580,7 @@ func TestKvrocks_SimpleExpiredRead(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := txn.DataItem{
+	curMemItem := txn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "TestKvrocks_SimpleExpiredRead2",
@@ -1020,7 +1020,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 	t.Run("the broken item has a valid Prev field", func(t *testing.T) {
 		conn := NewConnectionWithSetup(KVROCKS)
 
-		redisItem1 := txn.DataItem{
+		redisItem1 := txn.DataItem2{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:     "TestKvrocks_RollbackConflict1",
@@ -1030,7 +1030,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 			LinkedLen: 1,
 			Version:   1,
 		}
-		redisItem2 := txn.DataItem{
+		redisItem2 := txn.DataItem2{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			TxnId:     "TestKvrocks_RollbackConflict2",
@@ -1083,7 +1083,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 	t.Run("the broken item has an empty Prev field", func(t *testing.T) {
 		conn := NewConnectionWithSetup(KVROCKS)
 
-		redisItem2 := txn.DataItem{
+		redisItem2 := txn.DataItem2{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			TxnId:     "TestKvrocks_RollbackConflict2-emptyField",
@@ -1140,7 +1140,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 func TestKvrocks_RollForwardConflict(t *testing.T) {
 	conn := NewConnectionWithSetup(KVROCKS)
 
-	redisItem1 := txn.DataItem{
+	redisItem1 := txn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestKvrocks_RollForwardConflict1",
@@ -1149,7 +1149,7 @@ func TestKvrocks_RollForwardConflict(t *testing.T) {
 		TLease:   time.Now().Add(-4 * time.Second),
 		Version:  1,
 	}
-	redisItem2 := txn.DataItem{
+	redisItem2 := txn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 		TxnId:     "TestKvrocks_RollForwardConflict2",
@@ -1495,7 +1495,7 @@ func TestKvrocks_DeleteTimingProblems(t *testing.T) {
 	//  - txnA tries to delete the item -> should fail
 	t.Run("the item has an empty Prev field", func(t *testing.T) {
 		testConn := NewConnectionWithSetup(KVROCKS)
-		dbItem := txn.DataItem{
+		dbItem := txn.DataItem2{
 			Key:      "item1",
 			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:    "TestKvrocks_DeleteTimingProblems",

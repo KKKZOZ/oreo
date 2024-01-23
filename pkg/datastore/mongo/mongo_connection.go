@@ -98,24 +98,24 @@ func (m *MongoConnection) Close() error {
 
 // GetItem retrieves a txn.DataItem from the MongoDB database based on the specified key.
 // If the key is not found, it returns an empty txn.DataItem and an error.
-func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
+func (m *MongoConnection) GetItem(key string) (txn.DataItem2, error) {
 	if !m.hasConnected {
-		return txn.DataItem{}, fmt.Errorf("not connected to MongoDB")
+		return txn.DataItem2{}, fmt.Errorf("not connected to MongoDB")
 	}
-	var item txn.DataItem
+	var item txn.DataItem2
 	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return txn.DataItem{}, txn.KeyNotFound
+			return txn.DataItem2{}, txn.KeyNotFound
 		}
-		return txn.DataItem{}, err
+		return txn.DataItem2{}, err
 	}
 	return item, nil
 }
 
 // PutItem puts an item into the MongoDB database with the specified key and value.
 // The function returns an error if there was a problem executing the MongoDB commands.
-func (m *MongoConnection) PutItem(key string, value txn.DataItem) error {
+func (m *MongoConnection) PutItem(key string, value txn.DataItem2) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
 	}
@@ -139,7 +139,7 @@ func (m *MongoConnection) PutItem(key string, value txn.DataItem) error {
 // If the item's version does not match, it returns a version mismatch error.
 // Note: if the previous version of the item is not found, it will return a key not found error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreat bool) error {
+func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem2, doCreat bool) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
 	}
@@ -166,7 +166,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &after,
 	}
-	var updatedItem txn.DataItem
+	var updatedItem txn.DataItem2
 	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -182,10 +182,10 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	return nil
 }
 
-func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) error {
+func (m *MongoConnection) atomicCreate(key string, value txn.DataItem2) error {
 	filter := bson.M{"_id": key}
 
-	var result txn.DataItem
+	var result txn.DataItem2
 	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
 
 	if err != nil {

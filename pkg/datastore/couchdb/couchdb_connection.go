@@ -58,21 +58,21 @@ func (r *CouchDBConnection) Connect() error {
 	return nil
 }
 
-func (r *CouchDBConnection) GetItem(key string) (txn.DataItem, error) {
+func (r *CouchDBConnection) GetItem(key string) (txn.DataItem2, error) {
 	row := r.db.Get(context.Background(), key)
-	var value txn.DataItem
+	var value txn.DataItem2
 	err := row.ScanDoc(&value)
 	if err != nil {
 		if kivik.HTTPStatus(err) == http.StatusNotFound {
-			return txn.DataItem{}, txn.KeyNotFound
+			return txn.DataItem2{}, txn.KeyNotFound
 		}
 		// For all other errors, return as is
-		return txn.DataItem{}, err
+		return txn.DataItem2{}, err
 	}
 	return value, nil
 }
 
-func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) error {
+func (r *CouchDBConnection) PutItem(key string, value txn.DataItem2) error {
 	_, err := r.db.Put(context.Background(), key, value)
 	if err != nil {
 		return err
@@ -85,7 +85,7 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) error {
 
 Consider using CouchDB's conflict resolution system by checking for conflicts on Get(), or apply updates using previous _rev as a reference to ensure atomicity
 */
-func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem) error {
+func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem2) error {
 	// Dummy function, needs to be appropriately implemented
 	return nil
 }

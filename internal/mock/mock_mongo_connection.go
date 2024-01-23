@@ -36,7 +36,7 @@ func NewMockMongoConnection(address string, port int, limit int,
 	}
 }
 
-func (m *MockMongoConnection) GetItem(key string) (txn.DataItem, error) {
+func (m *MockMongoConnection) GetItem(key string) (txn.DataItem2, error) {
 	defer func() { m.GetTimes++ }()
 	return m.MongoConnection.GetItem(key)
 }
@@ -46,7 +46,7 @@ func (m *MockMongoConnection) Get(name string) (string, error) {
 	return m.MongoConnection.Get(name)
 }
 
-func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
+func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem2, doCreate bool) error {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -58,7 +58,7 @@ func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem, 
 	return m.MongoConnection.ConditionalUpdate(key, value, doCreate)
 }
 
-func (m *MockMongoConnection) PutItem(key string, value txn.DataItem) error {
+func (m *MockMongoConnection) PutItem(key string, value txn.DataItem2) error {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {

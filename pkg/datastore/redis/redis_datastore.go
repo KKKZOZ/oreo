@@ -11,5 +11,5 @@ type RedisDatastore struct {
 
 // NewRedisDatastore creates a new instance of RedisDatastore with the given name and Redis connection.
 func NewRedisDatastore(name string, conn txn.Connector) txn.Datastorer {
-	return txn.NewDatastore(name, conn)
+	return txn.NewDatastore(name, conn, &RedisItemFactory{})
 }

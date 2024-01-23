@@ -617,7 +617,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 	err := testutil.WaitForServer("localhost", 8321, 100*time.Millisecond)
 	assert.NoError(t, err)
 
-	tarMemItem := trxn.DataItem{
+	tarMemItem := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "99",
@@ -627,7 +627,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := trxn.DataItem{
+	curMemItem := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "100",
@@ -648,7 +648,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 	assert.Equal(t, testutil.NewTestItem("item1"), item)
 	err = txn.Commit()
 	assert.NoError(t, err)
-	var actual trxn.DataItem
+	var actual trxn.DataItem2
 	conn.Get("item1", &actual)
 	assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
 }
@@ -719,17 +719,17 @@ func TestMemory_SlowTransactionRecordExpiredWhenPrepare(t *testing.T) {
 	// ensure the internal state of memory database
 	testConn := memory.NewMemoryConnection("localhost", 8321)
 	testConn.Connect()
-	var memItem1 trxn.DataItem
+	var memItem1 trxn.DataItem2
 	testConn.Get("item1", &memItem1)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value)
 	assert.Equal(t, memItem1.TxnState, config.PREPARED)
 
-	var memItem2 trxn.DataItem
+	var memItem2 trxn.DataItem2
 	testConn.Get("item2", &memItem2)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item2-slow")), memItem2.Value)
 	assert.Equal(t, memItem2.TxnState, config.PREPARED)
 
-	var memItem3 trxn.DataItem
+	var memItem3 trxn.DataItem2
 	testConn.Get("item3", &memItem3)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value)
 	assert.Equal(t, memItem3.TxnState, config.COMMITTED)
@@ -844,7 +844,7 @@ func TestMemory_SlowTransactionRecordExpiredWhenWriteTSR(t *testing.T) {
 
 	// all records should be PREPARED state except item5
 	for _, item := range testutil.InputItemList {
-		var memItem trxn.DataItem
+		var memItem trxn.DataItem2
 		testConn.Get(item.Value, &memItem)
 		if item.Value == "item5" {
 			assert.Equal(t, util.ToJSONString(testutil.NewTestItem(item.Value)), memItem.Value)
@@ -978,7 +978,7 @@ func TestMemory_TransactionAbortWhenWritingTSR(t *testing.T) {
 		postTxn.Read("memory", item.Value, &memItem)
 		assert.Equal(t, item.Value, memItem.Value)
 	}
-	var memItem trxn.DataItem
+	var memItem trxn.DataItem2
 	conn.Get("item5", &memItem)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
 	assert.Equal(t, config.COMMITTED, memItem.TxnState)
