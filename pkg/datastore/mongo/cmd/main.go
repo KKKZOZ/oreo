@@ -32,16 +32,16 @@ func main() {
 	coll := client.Database("oreo").Collection("test")
 
 	now := time.Now()
-	mongoItem := mong.MongoItem{
-		Key:       "test_key",
-		Value:     "test_value",
-		TxnId:     "1",
-		TxnState:  1,
-		TValid:    now.Add(-3 * time.Second),
-		TLease:    now.Add(-2 * time.Second),
-		Prev:      "",
-		IsDeleted: false,
-		Version:   2,
+	mongoItem := &mong.MongoItem{
+		MKey:       "test_key",
+		MValue:     "test_value",
+		MTxnId:     "1",
+		MTxnState:  1,
+		MTValid:    now.Add(-3 * time.Second),
+		MTLease:    now.Add(-2 * time.Second),
+		MPrev:      "",
+		MIsDeleted: false,
+		MVersion:   2,
 	}
 
 	keyFilter := bson.D{{Key: "TxnId", Value: "1"}}
