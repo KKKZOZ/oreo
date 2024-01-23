@@ -60,7 +60,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -105,7 +105,7 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "TestSimpleReadWhenCommittedFindEmpty",
@@ -150,7 +150,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	preRedisItem := trxn.DataItem{
+	preRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
@@ -159,7 +159,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		TLease:   time.Now().Add(-5 * time.Second),
 		Version:  1,
 	}
-	curRedisItem := trxn.DataItem{
+	curRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
@@ -209,7 +209,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		Name: "John",
 		Age:  31,
 	}
-	preRedisItem := trxn.DataItem{
+	preRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "99",
@@ -218,7 +218,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		TLease:   time.Now().Add(5 * time.Second),
 		Version:  1,
 	}
-	curRedisItem := trxn.DataItem{
+	curRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "100",
@@ -260,7 +260,7 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
@@ -307,7 +307,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 	txn.SetGlobalDatastore(rds)
 
 	// initialize the redis database
-	tarMemItem := trxn.DataItem{
+	tarMemItem := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "99",
@@ -317,7 +317,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		Version:  1,
 	}
 
-	curMemItem := trxn.DataItem{
+	curMemItem := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "TestSimpleReadWhenPreparedWithTSRInABORTED",
@@ -368,7 +368,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "100",
@@ -385,7 +385,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Age:  31,
 	}
 
-	curRedisItem := trxn.DataItem{
+	curRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(curPerson),
 		TxnId:    "101",
@@ -419,7 +419,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 
-	dbItem1 := trxn.DataItem{
+	dbItem1 := trxn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
 		TxnId:     "TestSimpleReadWhenPrepareNotExpired1",
@@ -430,7 +430,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		Version:   1,
 	}
 
-	dbItem2 := trxn.DataItem{
+	dbItem2 := trxn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
 		TxnId:     "TestSimpleReadWhenPrepareNotExpired2",
@@ -471,7 +471,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 
 func TestSimpleReadWhenDeleted(t *testing.T) {
 	conn := NewDefaultConnection()
-	dbItem := trxn.DataItem{
+	dbItem := trxn.DataItem2{
 		Key:       "item2",
 		Value:     util.ToJSONString(testutil.NewTestItem("item2-db")),
 		TxnState:  config.COMMITTED,
@@ -609,7 +609,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -670,7 +670,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -730,7 +730,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -776,7 +776,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -869,7 +869,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -930,7 +930,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		Name: "John",
 		Age:  30,
 	}
-	expectedRedisItem := trxn.DataItem{
+	expectedRedisItem := trxn.DataItem2{
 		Key:      "John",
 		Value:    util.ToJSONString(expected),
 		TxnId:    "123123",
@@ -1099,7 +1099,7 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 func TestLinkedReadAsCommitted(t *testing.T) {
 
 	item1_1 := testutil.NewTestItem("item1_1")
-	memItem1_1 := trxn.DataItem{
+	memItem1_1 := trxn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_1),
 		TxnId:     "txn1",
@@ -1111,7 +1111,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	}
 
 	item1_2 := testutil.NewTestItem("item1_2")
-	memItem1_2 := trxn.DataItem{
+	memItem1_2 := trxn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_2),
 		TxnId:     "txn2",
@@ -1124,7 +1124,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	}
 
 	item1_3 := testutil.NewTestItem("item1_3")
-	memItem1_3 := trxn.DataItem{
+	memItem1_3 := trxn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(item1_3),
 		TxnId:     "txn3",
@@ -1211,7 +1211,7 @@ func TestLinkedTruncate(t *testing.T) {
 
 		tarItem := item
 		for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
-			var preItem trxn.DataItem
+			var preItem trxn.DataItem2
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
 			tarItem = preItem
@@ -1244,7 +1244,7 @@ func TestLinkedTruncate(t *testing.T) {
 
 			tarItem := item
 			for i := 1; i <= config.Config.MaxRecordLength-1; i++ {
-				var preItem trxn.DataItem
+				var preItem trxn.DataItem2
 				err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 				assert.Nil(t, err)
 				tarItem = preItem
@@ -1277,7 +1277,7 @@ func TestLinkedTruncate(t *testing.T) {
 
 		tarItem := item
 		for i := 1; i <= expectedLen-1; i++ {
-			var preItem trxn.DataItem
+			var preItem trxn.DataItem2
 			err := json.Unmarshal([]byte(tarItem.Prev), &preItem)
 			assert.Nil(t, err)
 			tarItem = preItem
@@ -1296,7 +1296,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := NewDefaultConnection()
 
-		tarItem := trxn.DataItem{
+		tarItem := trxn.DataItem2{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
 			TxnId:     "99",
@@ -1307,7 +1307,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			Version:   1,
 		}
 
-		curItem := trxn.DataItem{
+		curItem := trxn.DataItem2{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:     "100",
@@ -1350,7 +1350,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 	t.Run("the record has an empty Prev field", func(t *testing.T) {
 		conn := NewDefaultConnection()
 
-		tarItem := trxn.DataItem{
+		tarItem := trxn.DataItem2{
 			Key:      "item1",
 			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:    "99",
@@ -1398,7 +1398,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := NewDefaultConnection()
 
-		tarItem := trxn.DataItem{
+		tarItem := trxn.DataItem2{
 			Key:       "item2",
 			Value:     util.ToJSONString(testutil.NewTestItem("item2-pre2")),
 			TxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
@@ -1409,7 +1409,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			Version:   1,
 		}
 
-		curItem := trxn.DataItem{
+		curItem := trxn.DataItem2{
 			Key:       "item2",
 			Value:     util.ToJSONString(testutil.NewTestItem("item2-pre")),
 			TxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
@@ -1457,7 +1457,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 	t.Run("the record has an empty Prev field", func(t *testing.T) {
 		conn := NewDefaultConnection()
 
-		tarItem := trxn.DataItem{
+		tarItem := trxn.DataItem2{
 			Key:      "item1",
 			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:    "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
@@ -1503,7 +1503,7 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 
 	conn := NewDefaultConnection()
 
-	tarItem := trxn.DataItem{
+	tarItem := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestDirectWriteOnPreparingRecord",
@@ -1526,7 +1526,7 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 	conn := NewDefaultConnection()
 
-	dbItem1 := trxn.DataItem{
+	dbItem1 := trxn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
 		TxnId:     "TestDirectWriteOnInvisibleRecord1",
@@ -1559,7 +1559,7 @@ func TestDirectWriteOnDeletedRecord(t *testing.T) {
 
 func TestRollbackWhenReading(t *testing.T) {
 
-	item1Pre := trxn.DataItem{
+	item1Pre := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollback",
@@ -1569,7 +1569,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		Version:  1,
 	}
 
-	item1 := trxn.DataItem{
+	item1 := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestRollback",
@@ -1623,7 +1623,7 @@ func TestRollbackWhenReading(t *testing.T) {
 }
 
 func TestRollbackWhenWriting(t *testing.T) {
-	item1Pre := trxn.DataItem{
+	item1Pre := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollback",
@@ -1633,7 +1633,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		Version:  1,
 	}
 
-	item1 := trxn.DataItem{
+	item1 := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestRollback",
@@ -1708,7 +1708,7 @@ func TestRollForwardWhenReading(t *testing.T) {
 
 	conn := NewDefaultConnection()
 
-	tarItem := trxn.DataItem{
+	tarItem := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollForward",
@@ -1741,7 +1741,7 @@ func TestRollForwardWhenWriting(t *testing.T) {
 
 	conn := NewDefaultConnection()
 
-	tarItem := trxn.DataItem{
+	tarItem := trxn.DataItem2{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		TxnId:    "TestRollForward",
@@ -1775,7 +1775,7 @@ func TestItemVersionUpdate(t *testing.T) {
 
 	t.Run("item version ++ after updated", func(t *testing.T) {
 		conn := NewDefaultConnection()
-		dbItem := trxn.DataItem{
+		dbItem := trxn.DataItem2{
 			Key:       "item1",
 			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			TxnId:     "TestItemVersionUpdate",

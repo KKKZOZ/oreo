@@ -81,7 +81,7 @@ func TestMongoConnectionPutItemAndGetItem(t *testing.T) {
 
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := trxn.DataItem{
+	expectedItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",
@@ -110,7 +110,7 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := trxn.DataItem{
+	olderItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -127,7 +127,7 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := trxn.DataItem{
+	newerItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -155,7 +155,7 @@ func TestMongoConnection_DeleteItem(t *testing.T) {
 
 	key := "test_key_for_delete"
 	person := testutil.NewDefaultPerson()
-	item := trxn.DataItem{
+	item := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -205,7 +205,7 @@ func TestMongoConnection_ConditionalUpdateSuccess(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := trxn.DataItem{
+	olderItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -221,7 +221,7 @@ func TestMongoConnection_ConditionalUpdateSuccess(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := trxn.DataItem{
+	newerItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -253,7 +253,7 @@ func TestMongoConnection_ConditionalUpdateFail(t *testing.T) {
 
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
-	olderItem := trxn.DataItem{
+	olderItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "1",
@@ -269,7 +269,7 @@ func TestMongoConnection_ConditionalUpdateFail(t *testing.T) {
 
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := trxn.DataItem{
+	newerItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(olderPerson),
 		TxnId:     "2",
@@ -299,7 +299,7 @@ func TestMongoConnection_ConditionalUpdateNonExist(t *testing.T) {
 	conn.Delete(key)
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
-	newerItem := trxn.DataItem{
+	newerItem := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(newerPerson),
 		TxnId:     "2",
@@ -330,7 +330,7 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 
 		key := "test_key"
 		olderPerson := testutil.NewDefaultPerson()
-		olderItem := txn.DataItem{
+		olderItem := txn.DataItem2{
 			Key:       key,
 			Value:     util.ToJSONString(olderPerson),
 			TxnId:     "1",
@@ -351,7 +351,7 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 			go func(id int) {
 				newerPerson := testutil.NewDefaultPerson()
 				newerPerson.Name = "newer"
-				newerItem := txn.DataItem{
+				newerItem := txn.DataItem2{
 					Key:       key,
 					Value:     util.ToJSONString(newerPerson),
 					TxnId:     strconv.Itoa(id),
@@ -401,7 +401,7 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 			go func(id int) {
 				newerPerson := testutil.NewDefaultPerson()
 				newerPerson.Name = "newer"
-				newerItem := txn.DataItem{
+				newerItem := txn.DataItem2{
 					Key:       key,
 					Value:     util.ToJSONString(newerPerson),
 					TxnId:     strconv.Itoa(id),
@@ -460,7 +460,7 @@ func TestMongoConnection_PutAndGet(t *testing.T) {
 
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
-	item := trxn.DataItem{
+	item := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -478,7 +478,7 @@ func TestMongoConnection_PutAndGet(t *testing.T) {
 
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem trxn.DataItem
+	var actualItem trxn.DataItem2
 	err = se.Deserialize([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -493,7 +493,7 @@ func TestMongoConnection_ReplaceAndGet(t *testing.T) {
 
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
-	item := trxn.DataItem{
+	item := trxn.DataItem2{
 		Key:       key,
 		Value:     util.ToJSONString(person),
 		TxnId:     "1",
@@ -516,7 +516,7 @@ func TestMongoConnection_ReplaceAndGet(t *testing.T) {
 
 	str, err := conn.Get(key)
 	assert.NoError(t, err)
-	var actualItem trxn.DataItem
+	var actualItem trxn.DataItem2
 	err = se.Deserialize([]byte(str), &actualItem)
 	assert.NoError(t, err)
 	if !actualItem.Equal(item) {
@@ -581,7 +581,7 @@ func TestMongoConnection_DeleteTwice(t *testing.T) {
 
 func TestMongoConnection_ConditionalUpdateDoCreate(t *testing.T) {
 
-	dbItem := txn.DataItem{
+	dbItem := txn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-db")),
 		TxnId:     "1",
@@ -594,7 +594,7 @@ func TestMongoConnection_ConditionalUpdateDoCreate(t *testing.T) {
 		Version:   1,
 	}
 
-	cacheItem := txn.DataItem{
+	cacheItem := txn.DataItem2{
 		Key:       "item1",
 		Value:     util.ToJSONString(testutil.NewTestItem("item1-cache")),
 		TxnId:     "2",
