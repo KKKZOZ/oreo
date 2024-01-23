@@ -16,16 +16,16 @@ type MemoryDatastore struct {
 	Name       string
 	Txn        *txn.Transaction
 	conn       MemoryConnectionInterface
-	readCache  map[string]txn.DataItem
-	writeCache map[string]txn.DataItem
+	readCache  map[string]txn.DataItem2
+	writeCache map[string]txn.DataItem2
 }
 
 func NewMemoryDatastore(name string, conn MemoryConnectionInterface) *MemoryDatastore {
 	return &MemoryDatastore{
 		Name:       name,
 		conn:       conn,
-		readCache:  make(map[string]txn.DataItem),
-		writeCache: make(map[string]txn.DataItem),
+		readCache:  make(map[string]txn.DataItem2),
+		writeCache: make(map[string]txn.DataItem2),
 	}
 }
 
@@ -39,7 +39,7 @@ func (m *MemoryDatastore) Start() error {
 
 func (m *MemoryDatastore) Read(key string, value any) error {
 
-	var item txn.DataItem
+	var item txn.DataItem2
 
 	// if the record is in the writeCache
 	if item, ok := m.writeCache[key]; ok {
@@ -106,7 +106,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 
 }
 
-func (m *MemoryDatastore) readAsCommitted(item txn.DataItem, value any) error {
+func (m *MemoryDatastore) readAsCommitted(item txn.DataItem2, value any) error {
 
 	curItem := item
 	for i := 1; i <= config.Config.MaxRecordLength; i++ {
@@ -127,7 +127,7 @@ func (m *MemoryDatastore) readAsCommitted(item txn.DataItem, value any) error {
 			break
 		}
 		// get the previous record
-		var preItem txn.DataItem
+		var preItem txn.DataItem2
 		err := json.Unmarshal([]byte(curItem.Prev), &preItem)
 		if err != nil {
 			// The transaction needs to be aborted
@@ -153,7 +153,7 @@ func (m *MemoryDatastore) Write(key string, value any) error {
 	if item, ok := m.readCache[key]; ok {
 		version = item.Version
 	} else {
-		var oldItem txn.DataItem
+		var oldItem txn.DataItem2
 		err := m.conn.Get(key, &oldItem)
 		if err != nil {
 			version = 0
@@ -162,7 +162,7 @@ func (m *MemoryDatastore) Write(key string, value any) error {
 		}
 	}
 	// else Write a record to the cache
-	m.writeCache[key] = txn.DataItem{
+	m.writeCache[key] = txn.DataItem2{
 		Key:       key,
 		Value:     jsonString,
 		TxnId:     m.Txn.TxnId,
@@ -200,7 +200,7 @@ func (m *MemoryDatastore) Delete(key string) error {
 		// else write a Delete record to the writeCache
 		// first we have to get the corresponding version
 		// TODO: should we first read into the cache?
-		var item txn.DataItem
+		var item txn.DataItem2
 		err := m.conn.Get(key, &item)
 		if err != nil {
 			return err
@@ -208,7 +208,7 @@ func (m *MemoryDatastore) Delete(key string) error {
 		version = item.Version
 	}
 
-	m.writeCache[key] = txn.DataItem{
+	m.writeCache[key] = txn.DataItem2{
 		Key:       key,
 		IsDeleted: true,
 		TxnId:     m.Txn.TxnId,
@@ -220,7 +220,7 @@ func (m *MemoryDatastore) Delete(key string) error {
 	return nil
 }
 
-func (m *MemoryDatastore) conditionalUpdate(item txn.DataItem) error {
+func (m *MemoryDatastore) conditionalUpdate(item txn.DataItem2) error {
 	memItem := item
 
 	key := "memory" + memItem.Key
@@ -230,11 +230,11 @@ func (m *MemoryDatastore) conditionalUpdate(item txn.DataItem) error {
 	}
 	defer m.Txn.Unlock(key, memItem.TxnId)
 
-	var oldItem txn.DataItem
+	var oldItem txn.DataItem2
 	err = m.conn.Get(memItem.Key, &oldItem)
 	if err != nil {
 		// this is a new record
-		newItem, err := m.updateMetadata(memItem, txn.DataItem{})
+		newItem, err := m.updateMetadata(memItem, txn.DataItem2{})
 		if err != nil {
 			return err
 		}
@@ -271,18 +271,18 @@ func (m *MemoryDatastore) conditionalUpdate(item txn.DataItem) error {
 	}
 }
 
-func (m *MemoryDatastore) truncate(newItem *txn.DataItem) (txn.DataItem, error) {
+func (m *MemoryDatastore) truncate(newItem *txn.DataItem2) (txn.DataItem2, error) {
 	maxLen := config.Config.MaxRecordLength
 
 	if newItem.LinkedLen > maxLen {
-		stack := util.NewStack[txn.DataItem]()
+		stack := util.NewStack[txn.DataItem2]()
 		stack.Push(*newItem)
 		curItem := newItem
 		for i := 1; i <= maxLen-1; i++ {
-			var preItem txn.DataItem
+			var preItem txn.DataItem2
 			err := json.Unmarshal([]byte(curItem.Prev), &preItem)
 			if err != nil {
-				return txn.DataItem{}, errors.New("Unmarshal error: " + err.Error())
+				return txn.DataItem2{}, errors.New("Unmarshal error: " + err.Error())
 			}
 			curItem = &preItem
 			stack.Push(*curItem)
@@ -290,7 +290,7 @@ func (m *MemoryDatastore) truncate(newItem *txn.DataItem) (txn.DataItem, error) 
 
 		tarItem, err := stack.Pop()
 		if err != nil {
-			return txn.DataItem{}, errors.New("Pop error: " + err.Error())
+			return txn.DataItem2{}, errors.New("Pop error: " + err.Error())
 		}
 		tarItem.Prev = ""
 		tarItem.LinkedLen = 1
@@ -298,7 +298,7 @@ func (m *MemoryDatastore) truncate(newItem *txn.DataItem) (txn.DataItem, error) 
 		for !stack.IsEmpty() {
 			item, err := stack.Pop()
 			if err != nil {
-				return txn.DataItem{}, errors.New("Pop error: " + err.Error())
+				return txn.DataItem2{}, errors.New("Pop error: " + err.Error())
 			}
 			item.Prev = util.ToJSONString(tarItem)
 			item.LinkedLen = tarItem.LinkedLen + 1
@@ -310,9 +310,9 @@ func (m *MemoryDatastore) truncate(newItem *txn.DataItem) (txn.DataItem, error) 
 	}
 }
 
-func (m *MemoryDatastore) updateMetadata(newItem txn.DataItem, oldItem txn.DataItem) (txn.DataItem, error) {
+func (m *MemoryDatastore) updateMetadata(newItem txn.DataItem2, oldItem txn.DataItem2) (txn.DataItem2, error) {
 	// update record's metadata
-	if oldItem == (txn.DataItem{}) {
+	if oldItem == (txn.DataItem2{}) {
 		newItem.LinkedLen = 1
 	} else {
 		newItem.LinkedLen = oldItem.LinkedLen + 1
@@ -322,7 +322,7 @@ func (m *MemoryDatastore) updateMetadata(newItem txn.DataItem, oldItem txn.DataI
 	// truncate the record
 	newItem, err := m.truncate(&newItem)
 	if err != nil {
-		return txn.DataItem{}, err
+		return txn.DataItem2{}, err
 	}
 
 	newItem.Version++
@@ -334,14 +334,14 @@ func (m *MemoryDatastore) updateMetadata(newItem txn.DataItem, oldItem txn.DataI
 }
 
 func (m *MemoryDatastore) Prepare() error {
-	records := make([]txn.DataItem, 0, len(m.writeCache))
+	records := make([]txn.DataItem2, 0, len(m.writeCache))
 	for _, v := range m.writeCache {
 		records = append(records, v)
 	}
 	// sort records by key
 	// TODO: global consistent hash order
 	slices.SortFunc(
-		records, func(i, j txn.DataItem) int {
+		records, func(i, j txn.DataItem2) int {
 			return cmp.Compare(i.Key, j.Key)
 		},
 	)
@@ -361,7 +361,7 @@ func (m *MemoryDatastore) Prepare() error {
 func (m *MemoryDatastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
 	for _, v := range m.writeCache {
-		var item txn.DataItem
+		var item txn.DataItem2
 		err := m.conn.Get(v.Key, &item)
 		if err != nil {
 			return err
@@ -373,8 +373,8 @@ func (m *MemoryDatastore) Commit() error {
 		}
 	}
 	// clear the cache
-	m.writeCache = make(map[string]txn.DataItem)
-	m.readCache = make(map[string]txn.DataItem)
+	m.writeCache = make(map[string]txn.DataItem2)
+	m.readCache = make(map[string]txn.DataItem2)
 	return nil
 }
 
@@ -385,12 +385,12 @@ func (m *MemoryDatastore) Commit() error {
 func (m *MemoryDatastore) Abort(hasCommitted bool) error {
 
 	if !hasCommitted {
-		m.writeCache = make(map[string]txn.DataItem)
+		m.writeCache = make(map[string]txn.DataItem2)
 		return nil
 	}
 
 	for _, v := range m.writeCache {
-		var item txn.DataItem
+		var item txn.DataItem2
 		err := m.conn.Get(v.Key, &item)
 		if err != nil {
 			return err
@@ -401,8 +401,8 @@ func (m *MemoryDatastore) Abort(hasCommitted bool) error {
 			m.rollback(item)
 		}
 	}
-	m.readCache = make(map[string]txn.DataItem)
-	m.writeCache = make(map[string]txn.DataItem)
+	m.readCache = make(map[string]txn.DataItem2)
+	m.writeCache = make(map[string]txn.DataItem2)
 	return nil
 }
 
@@ -412,22 +412,22 @@ func (m *MemoryDatastore) Recover(key string) {
 }
 
 // rollback overwrites the record with the application data and metadata that found in field Prev
-func (m *MemoryDatastore) rollback(item txn.DataItem) (txn.DataItem, error) {
-	var newItem txn.DataItem
+func (m *MemoryDatastore) rollback(item txn.DataItem2) (txn.DataItem2, error) {
+	var newItem txn.DataItem2
 	err := json.Unmarshal([]byte(item.Prev), &newItem)
 	if err != nil {
-		return txn.DataItem{}, err
+		return txn.DataItem2{}, err
 	}
 	err = m.conn.Put(item.Key, newItem)
 	if err != nil {
-		return txn.DataItem{}, err
+		return txn.DataItem2{}, err
 	}
 
 	return newItem, err
 }
 
 // rollForward makes the record metadata with COMMITTED state
-func (m *MemoryDatastore) rollForward(item txn.DataItem) (txn.DataItem, error) {
+func (m *MemoryDatastore) rollForward(item txn.DataItem2) (txn.DataItem2, error) {
 	// var oldItem txn.DataItem
 	// m.conn.Get(item.Key, &oldItem)
 	item.TxnState = config.COMMITTED
