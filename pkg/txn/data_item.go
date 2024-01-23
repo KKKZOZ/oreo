@@ -11,7 +11,43 @@ import (
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
 
-type DataItem struct {
+type TxnItem interface {
+	TxnId() string
+
+	TxnState() config.State
+	SetTxnState(config.State)
+
+	TValid() time.Time
+	SetTValid(time.Time)
+
+	TLease() time.Time
+	SetTLease(time.Time)
+
+	Version() int
+	SetVersion(int)
+}
+
+type DataItem interface {
+	TxnItem
+	Key() string
+
+	Value() string
+	SetValue(string)
+
+	Prev() string
+	SetPrev(string)
+
+	LinkedLen() int
+	SetLinkedLen(int)
+
+	IsDeleted() bool
+	SetIsDeleted(bool)
+
+	Equal(other DataItem) bool
+	Empty() bool
+}
+
+type DataItem2 struct {
 	Key       string       `redis:"Key" bson:"_id"`
 	Value     string       `redis:"Value" bson:"Value"`
 	TxnId     string       `redis:"TxnId" bson:"TxnId"`
@@ -24,11 +60,11 @@ type DataItem struct {
 	Version   int          `redis:"Version" bson:"Version"`
 }
 
-func (m DataItem) GetKey() string {
+func (m DataItem2) GetKey() string {
 	return m.Key
 }
 
-func (r DataItem) String() string {
+func (r DataItem2) String() string {
 	return fmt.Sprintf(`DataItem{
     Key:       %s,
     Value:     %s,
@@ -45,7 +81,7 @@ func (r DataItem) String() string {
 		r.Prev, r.LinkedLen, r.IsDeleted, r.Version)
 }
 
-func (r *DataItem) Equal(other DataItem) bool {
+func (r *DataItem2) Equal(other DataItem2) bool {
 	return r.Key == other.Key &&
 		r.Value == other.Value &&
 		r.TxnId == other.TxnId &&
@@ -58,11 +94,11 @@ func (r *DataItem) Equal(other DataItem) bool {
 		r.Version == other.Version
 }
 
-func (r DataItem) MarshalBinary() (data []byte, err error) {
+func (r DataItem2) MarshalBinary() (data []byte, err error) {
 	return json.Marshal(r)
 }
 
-func (mi DataItem) MarshalBSONValue() (bsontype.Type, []byte, error) {
+func (mi DataItem2) MarshalBSONValue() (bsontype.Type, []byte, error) {
 	m := bson.M{
 		"Key":       mi.Key,
 		"Value":     mi.Value,
@@ -78,7 +114,7 @@ func (mi DataItem) MarshalBSONValue() (bsontype.Type, []byte, error) {
 	return bson.MarshalValue(m)
 }
 
-func (mi *DataItem) UnmarshalBSONValue(t bsontype.Type, raw []byte) error {
+func (mi *DataItem2) UnmarshalBSONValue(t bsontype.Type, raw []byte) error {
 	var m map[string]interface{}
 
 	err := bson.Unmarshal(raw, &m)

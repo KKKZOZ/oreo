@@ -7,6 +7,8 @@ import (
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
+var _ txn.Connector = (*MockMongoConnection)(nil)
+
 // MockMongoConnection is a mock of MongoConnection
 // When Put is called, it will return error when debugCounter is 0
 // Semantically, it means `Put()` call will succeed X times

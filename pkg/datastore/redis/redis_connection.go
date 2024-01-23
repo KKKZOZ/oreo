@@ -65,16 +65,16 @@ func (r *RedisConnection) Connect() error {
 // GetItem retrieves a txn.DataItem from the Redis database based on the specified key.
 // If the key is not found, it returns an empty txn.DataItem and an error.
 func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
-	var value txn.DataItem
+	var value RedisItem
 	err := r.rdb.HGetAll(context.Background(), key).Scan(&value)
 	if err != nil {
-		return txn.DataItem{}, err
+		return &RedisItem{}, err
 	}
 	// Check if returned value is an empty struct
-	if (txn.DataItem{}) == value {
-		return txn.DataItem{}, txn.KeyNotFound
+	if value.Empty() {
+		return &RedisItem{}, txn.KeyNotFound
 	}
-	return value, nil
+	return &value, nil
 }
 
 // PutItem puts an item into the Redis database with the specified key and value.
@@ -83,16 +83,16 @@ func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 func (r *RedisConnection) PutItem(key string, value txn.DataItem) error {
 	ctx := context.Background()
 	_, err := r.rdb.Pipelined(ctx, func(rdb redis.Pipeliner) error {
-		rdb.HSet(ctx, key, "Key", value.Key)
-		rdb.HSet(ctx, key, "Value", value.Value)
-		rdb.HSet(ctx, key, "TxnId", value.TxnId)
-		rdb.HSet(ctx, key, "TxnState", value.TxnState)
-		rdb.HSet(ctx, key, "TValid", value.TValid.Format(time.RFC3339Nano))
-		rdb.HSet(ctx, key, "TLease", value.TLease.Format(time.RFC3339Nano))
-		rdb.HSet(ctx, key, "Prev", value.Prev)
-		rdb.HSet(ctx, key, "LinkedLen", value.LinkedLen)
-		rdb.HSet(ctx, key, "IsDeleted", value.IsDeleted)
-		rdb.HSet(ctx, key, "Version", value.Version)
+		rdb.HSet(ctx, key, "Key", value.Key())
+		rdb.HSet(ctx, key, "Value", value.Value())
+		rdb.HSet(ctx, key, "TxnId", value.TxnId())
+		rdb.HSet(ctx, key, "TxnState", value.TxnState())
+		rdb.HSet(ctx, key, "TValid", value.TValid().Format(time.RFC3339Nano))
+		rdb.HSet(ctx, key, "TLease", value.TLease().Format(time.RFC3339Nano))
+		rdb.HSet(ctx, key, "Prev", value.Prev())
+		rdb.HSet(ctx, key, "LinkedLen", value.LinkedLen())
+		rdb.HSet(ctx, key, "IsDeleted", value.IsDeleted())
+		rdb.HSet(ctx, key, "Version", value.Version())
 		return nil
 	})
 
@@ -131,9 +131,9 @@ end
 			return err
 		}
 
-		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key}, value.Version, value.Key,
-			value.Value, value.TxnId, value.TxnState, value.TValid, value.TLease,
-			value.Version+1, value.Prev, value.LinkedLen, value.IsDeleted).Result()
+		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key()}, value.Version(), value.Key(),
+			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
+			value.Version()+1, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
 			return err
 		}
@@ -161,9 +161,9 @@ end
 			return err
 		}
 
-		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key}, value.Version, value.Key,
-			value.Value, value.TxnId, value.TxnState, value.TValid, value.TLease,
-			value.Version+1, value.Prev, value.LinkedLen, value.IsDeleted).Result()
+		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key()}, value.Version(), value.Key(),
+			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
+			value.Version()+1, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
 			return err
 		}
