@@ -7,6 +7,8 @@ import (
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
+var _ txn.Connector = (*MockMongoConnection)(nil)
+
 // MockMongoConnection is a mock of MongoConnection
 // When Put is called, it will return error when debugCounter is 0
 // Semantically, it means `Put()` call will succeed X times
@@ -36,7 +38,7 @@ func NewMockMongoConnection(address string, port int, limit int,
 	}
 }
 
-func (m *MockMongoConnection) GetItem(key string) (txn.DataItem2, error) {
+func (m *MockMongoConnection) GetItem(key string) (txn.DataItem, error) {
 	defer func() { m.GetTimes++ }()
 	return m.MongoConnection.GetItem(key)
 }
@@ -46,7 +48,7 @@ func (m *MockMongoConnection) Get(name string) (string, error) {
 	return m.MongoConnection.Get(name)
 }
 
-func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem2, doCreate bool) error {
+func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -58,7 +60,7 @@ func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem2,
 	return m.MongoConnection.ConditionalUpdate(key, value, doCreate)
 }
 
-func (m *MockMongoConnection) PutItem(key string, value txn.DataItem2) error {
+func (m *MockMongoConnection) PutItem(key string, value txn.DataItem) error {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
