@@ -9,5 +9,5 @@ type MongoDatastore struct {
 }
 
 func NewMongoDatastore(name string, conn txn.Connector) txn.Datastorer {
-	return txn.NewDatastore(name, conn)
+	return txn.NewDatastore(name, conn, &MongoItemFactory{})
 }

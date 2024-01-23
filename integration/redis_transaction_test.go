@@ -570,7 +570,7 @@ func TestRedis_ConcurrentTransaction(t *testing.T) {
 // Finally, it commits the transaction and checks that
 // the redis item has been updated to the committed state.
 func TestRedis_SimpleExpiredRead(t *testing.T) {
-	tarMemItem := txn.DataItem{
+	tarMemItem := redis.NewRedisItem(txn.ItemOptions{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestRedis_SimpleExpiredRead1",
@@ -578,9 +578,9 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-9 * time.Second),
 		Version:  1,
-	}
+	})
 
-	curMemItem := txn.DataItem{
+	curMemItem := redis.NewRedisItem(txn.ItemOptions{
 		Key:      "item1",
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "TestRedis_SimpleExpiredRead2",
@@ -589,7 +589,7 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 		TLease:   time.Now().Add(-4 * time.Second),
 		Prev:     util.ToJSONString(tarMemItem),
 		Version:  2,
-	}
+	})
 
 	conn := NewConnectionWithSetup(REDIS)
 	conn.PutItem("item1", curMemItem)
@@ -604,7 +604,7 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 	assert.NoError(t, err)
 	actual, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	tarMemItem.Version = 3
+	tarMemItem.SetVersion(3)
 	if !tarMemItem.Equal(actual) {
 		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
 	}
@@ -669,16 +669,16 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 	testConn := NewConnectionWithSetup(REDIS)
 	testConn.Connect()
 	memItem1, _ := testConn.GetItem("item1")
-	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value)
-	assert.Equal(t, memItem1.TxnState, config.PREPARED)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value())
+	assert.Equal(t, memItem1.TxnState(), config.PREPARED)
 
 	memItem2, _ := testConn.GetItem("item2")
-	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item2-slow")), memItem2.Value)
-	assert.Equal(t, memItem2.TxnState, config.PREPARED)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item2-slow")), memItem2.Value())
+	assert.Equal(t, memItem2.TxnState(), config.PREPARED)
 
 	memItem3, _ := testConn.GetItem("item3")
-	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value)
-	assert.Equal(t, memItem3.TxnState, config.COMMITTED)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value())
+	assert.Equal(t, memItem3.TxnState(), config.COMMITTED)
 
 	fastTxn := NewTransactionWithSetup(REDIS)
 	fastTxn.Start()
@@ -777,13 +777,13 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 		memItem, err := testConn.GetItem(item.Value)
 		assert.NoError(t, err)
 		if item.Value == "item5" {
-			assert.Equal(t, util.ToJSONString(testutil.NewTestItem(item.Value)), memItem.Value)
-			assert.Equal(t, memItem.TxnState, config.COMMITTED)
+			assert.Equal(t, util.ToJSONString(testutil.NewTestItem(item.Value)), memItem.Value())
+			assert.Equal(t, memItem.TxnState(), config.COMMITTED)
 			continue
 		}
 		itemValue := item.Value + "-slow"
-		assert.Equal(t, util.ToJSONString(testutil.NewTestItem(itemValue)), memItem.Value)
-		assert.Equal(t, memItem.TxnState, config.PREPARED)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem(itemValue)), memItem.Value())
+		assert.Equal(t, memItem.TxnState(), config.PREPARED)
 	}
 
 	fastTxn := NewTransactionWithSetup(REDIS)
@@ -903,8 +903,8 @@ func TestRedis_TransactionAbortWhenWritingTSR(t *testing.T) {
 	conn := NewConnectionWithSetup(REDIS)
 	memItem, err := conn.GetItem("item5")
 	assert.NoError(t, err)
-	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value)
-	assert.Equal(t, config.COMMITTED, memItem.TxnState)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value())
+	assert.Equal(t, config.COMMITTED, memItem.TxnState())
 }
 
 func TestRedis_LinkedRecord(t *testing.T) {
@@ -1020,26 +1020,26 @@ func TestRedis_RollbackConflict(t *testing.T) {
 	t.Run("the broken item has a valid Prev field", func(t *testing.T) {
 		conn := NewConnectionWithSetup(REDIS)
 
-		redisItem1 := txn.DataItem{
-			Key:       "item1",
-			Value:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			TxnId:     "TestRedis_RollbackConflict1",
-			TxnState:  config.COMMITTED,
-			TValid:    time.Now().Add(-5 * time.Second),
-			TLease:    time.Now().Add(-4 * time.Second),
-			LinkedLen: 1,
-			Version:   1,
+		redisItem1 := &redis.RedisItem{
+			RKey:       "item1",
+			RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RTxnId:     "TestRedis_RollbackConflict1",
+			RTxnState:  config.COMMITTED,
+			RTValid:    time.Now().Add(-5 * time.Second),
+			RTLease:    time.Now().Add(-4 * time.Second),
+			RLinkedLen: 1,
+			RVersion:   1,
 		}
-		redisItem2 := txn.DataItem{
-			Key:       "item1",
-			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			TxnId:     "TestRedis_RollbackConflict2",
-			TxnState:  config.PREPARED,
-			TValid:    time.Now().Add(-5 * time.Second),
-			TLease:    time.Now().Add(-4 * time.Second),
-			Prev:      util.ToJSONString(redisItem1),
-			LinkedLen: 2,
-			Version:   2,
+		redisItem2 := &redis.RedisItem{
+			RKey:       "item1",
+			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			RTxnId:     "TestRedis_RollbackConflict2",
+			RTxnState:  config.PREPARED,
+			RTValid:    time.Now().Add(-5 * time.Second),
+			RTLease:    time.Now().Add(-4 * time.Second),
+			RPrev:      util.ToJSONString(redisItem1),
+			RLinkedLen: 2,
+			RVersion:   2,
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1069,9 +1069,9 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		resItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
-		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
-		redisItem1.Version = 3
-		assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
+		redisItem1.RVersion = 3
+		assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev())
 	})
 
 	// there is a broken item
@@ -1083,16 +1083,16 @@ func TestRedis_RollbackConflict(t *testing.T) {
 	t.Run("the broken item has an empty Prev field", func(t *testing.T) {
 		conn := NewConnectionWithSetup(REDIS)
 
-		redisItem2 := txn.DataItem{
-			Key:       "item1",
-			Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			TxnId:     "TestRedis_RollbackConflict2-emptyField",
-			TxnState:  config.PREPARED,
-			TValid:    time.Now().Add(-5 * time.Second),
-			TLease:    time.Now().Add(-4 * time.Second),
-			Prev:      "",
-			LinkedLen: 1,
-			Version:   1,
+		redisItem2 := &redis.RedisItem{
+			RKey:       "item1",
+			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			RTxnId:     "TestRedis_RollbackConflict2-emptyField",
+			RTxnState:  config.PREPARED,
+			RTValid:    time.Now().Add(-5 * time.Second),
+			RTLease:    time.Now().Add(-4 * time.Second),
+			RPrev:      "",
+			RLinkedLen: 1,
+			RVersion:   1,
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1122,11 +1122,11 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		resItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
-		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
-		redisItem2.IsDeleted = true
-		redisItem2.TxnState = config.COMMITTED
-		redisItem2.Version++
-		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
+		redisItem2.RIsDeleted = true
+		redisItem2.RTxnState = config.COMMITTED
+		redisItem2.RVersion++
+		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 	})
 
 }
@@ -1140,25 +1140,25 @@ func TestRedis_RollbackConflict(t *testing.T) {
 func TestRedis_RollForwardConflict(t *testing.T) {
 	conn := NewConnectionWithSetup(REDIS)
 
-	redisItem1 := txn.DataItem{
-		Key:      "item1",
-		Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		TxnId:    "TestRedis_RollForwardConflict1",
-		TxnState: config.COMMITTED,
-		TValid:   time.Now().Add(-5 * time.Second),
-		TLease:   time.Now().Add(-4 * time.Second),
-		Version:  1,
+	redisItem1 := &redis.RedisItem{
+		RKey:      "item1",
+		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		RTxnId:    "TestRedis_RollForwardConflict1",
+		RTxnState: config.COMMITTED,
+		RTValid:   time.Now().Add(-5 * time.Second),
+		RTLease:   time.Now().Add(-4 * time.Second),
+		RVersion:  1,
 	}
-	redisItem2 := txn.DataItem{
-		Key:       "item1",
-		Value:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-		TxnId:     "TestRedis_RollForwardConflict2",
-		TxnState:  config.PREPARED,
-		TValid:    time.Now().Add(-5 * time.Second),
-		TLease:    time.Now().Add(-4 * time.Second),
-		Prev:      util.ToJSONString(redisItem1),
-		LinkedLen: 2,
-		Version:   2,
+	redisItem2 := &redis.RedisItem{
+		RKey:       "item1",
+		RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+		RTxnId:     "TestRedis_RollForwardConflict2",
+		RTxnState:  config.PREPARED,
+		RTValid:    time.Now().Add(-5 * time.Second),
+		RTLease:    time.Now().Add(-4 * time.Second),
+		RPrev:      util.ToJSONString(redisItem1),
+		RLinkedLen: 2,
+		RVersion:   2,
 	}
 	conn.PutItem("item1", redisItem2)
 	conn.Put("TestRedis_RollForwardConflict2", config.COMMITTED)
@@ -1188,12 +1188,12 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	resItem, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
-	redisItem2.TxnState = config.COMMITTED
-	redisItem2.Prev = ""
-	redisItem2.LinkedLen = 1
-	redisItem2.Version = 3
-	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev)
+	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
+	redisItem2.RTxnState = config.COMMITTED
+	redisItem2.RPrev = ""
+	redisItem2.RLinkedLen = 1
+	redisItem2.RVersion = 3
+	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 
 }
 
@@ -1470,7 +1470,7 @@ func TestRedis_RepeatableReadWhenDirtyRead(t *testing.T) {
 		// make sure txnA has committed
 		resItem, err := testConn.GetItem("item1")
 		assert.NoError(t, err)
-		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-A")), resItem.Value)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-A")), resItem.Value())
 
 		err = txnB.Read(REDIS, "item1", &itemB)
 		assert.EqualError(t, err, txn.KeyNotFound.Error())
@@ -1495,14 +1495,14 @@ func TestRedis_DeleteTimingProblems(t *testing.T) {
 	//  - txnA tries to delete the item -> should fail
 	t.Run("the item has an empty Prev field", func(t *testing.T) {
 		testConn := NewConnectionWithSetup(REDIS)
-		dbItem := txn.DataItem{
-			Key:      "item1",
-			Value:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			TxnId:    "TestRedis_DeleteTimingProblems",
-			TxnState: config.COMMITTED,
-			TValid:   time.Now().Add(-5 * time.Second),
-			TLease:   time.Now().Add(-4 * time.Second),
-			Version:  1,
+		dbItem := &redis.RedisItem{
+			RKey:      "item1",
+			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RTxnId:    "TestRedis_DeleteTimingProblems",
+			RTxnState: config.COMMITTED,
+			RTValid:   time.Now().Add(-5 * time.Second),
+			RTLease:   time.Now().Add(-4 * time.Second),
+			RVersion:  1,
 		}
 		testConn.PutItem("item1", dbItem)
 
@@ -1535,7 +1535,7 @@ func TestRedis_DeleteTimingProblems(t *testing.T) {
 		// post check
 		resItem, err := testConn.GetItem("item1")
 		assert.NoError(t, err)
-		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value)
+		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
 
 	})
 }

@@ -25,7 +25,7 @@ func main() {
 	})
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := txn.DataItem{
+	expectedItem := red.NewRedisItem(txn.ItemOptions{
 		Key:       key,
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",
@@ -35,7 +35,7 @@ func main() {
 		Prev:      "",
 		IsDeleted: false,
 		Version:   2,
-	}
+	})
 	err := conn.PutItem(key, expectedItem)
 	if err != nil {
 		fmt.Println(err)
@@ -49,7 +49,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	Log.Infow("Get success", "item.Value", item.Value)
+	Log.Infow("Get success", "item.Value", item.Value())
 	// testutil.Log.Infow("failed to fetch URL",
 	// 	// Structured context as loosely typed key-value pairs.
 	// 	"url", 12313123,
