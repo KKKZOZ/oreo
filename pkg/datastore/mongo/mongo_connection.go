@@ -12,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var _ txn.Connector = (*MongoConnection)(nil)
+
 type MongoConnection struct {
 	client       *mongo.Client
 	db           *mongo.Database
@@ -100,17 +102,17 @@ func (m *MongoConnection) Close() error {
 // If the key is not found, it returns an empty txn.DataItem and an error.
 func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 	if !m.hasConnected {
-		return txn.DataItem{}, fmt.Errorf("not connected to MongoDB")
+		return &MongoItem{}, fmt.Errorf("not connected to MongoDB")
 	}
-	var item txn.DataItem
+	var item MongoItem
 	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return txn.DataItem{}, txn.KeyNotFound
+			return &MongoItem{}, txn.KeyNotFound
 		}
-		return txn.DataItem{}, err
+		return &MongoItem{}, err
 	}
-	return item, nil
+	return &item, nil
 }
 
 // PutItem puts an item into the MongoDB database with the specified key and value.
@@ -148,25 +150,25 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		return m.atomicCreate(key, value)
 	}
 
-	filter := bson.M{"_id": key, "Version": value.Version}
+	filter := bson.M{"_id": key, "Version": value.Version()}
 	update := bson.D{
 		{Key: "$set", Value: bson.D{
-			{Key: "Value", Value: value.Value},
-			{Key: "TxnId", Value: value.TxnId},
-			{Key: "TxnState", Value: value.TxnState},
-			{Key: "TValid", Value: value.TValid.Format(time.RFC3339Nano)},
-			{Key: "TLease", Value: value.TLease.Format(time.RFC3339Nano)},
-			{Key: "Prev", Value: value.Prev},
-			{Key: "LinkedLen", Value: value.LinkedLen},
-			{Key: "IsDeleted", Value: value.IsDeleted},
-			{Key: "Version", Value: value.Version + 1},
+			{Key: "Value", Value: value.Value()},
+			{Key: "TxnId", Value: value.TxnId()},
+			{Key: "TxnState", Value: value.TxnState()},
+			{Key: "TValid", Value: value.TValid().Format(time.RFC3339Nano)},
+			{Key: "TLease", Value: value.TLease().Format(time.RFC3339Nano)},
+			{Key: "Prev", Value: value.Prev()},
+			{Key: "LinkedLen", Value: value.LinkedLen()},
+			{Key: "IsDeleted", Value: value.IsDeleted()},
+			{Key: "Version", Value: value.Version() + 1},
 		}},
 	}
 	after := options.After
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &after,
 	}
-	var updatedItem txn.DataItem
+	var updatedItem MongoItem
 	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -175,7 +177,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		return err
 	}
 
-	if updatedItem.Version != value.Version+1 {
+	if updatedItem.Version() != value.Version()+1 {
 		return txn.VersionMismatch
 	}
 
@@ -185,22 +187,22 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) error {
 	filter := bson.M{"_id": key}
 
-	var result txn.DataItem
+	var result MongoItem
 	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			_, err := m.coll.InsertOne(context.Background(), bson.D{
 				{Key: "_id", Value: key},
-				{Key: "Value", Value: value.Value},
-				{Key: "TxnId", Value: value.TxnId},
-				{Key: "TxnState", Value: value.TxnState},
-				{Key: "TValid", Value: value.TValid.Format(time.RFC3339Nano)},
-				{Key: "TLease", Value: value.TLease.Format(time.RFC3339Nano)},
-				{Key: "Prev", Value: value.Prev},
-				{Key: "LinkedLen", Value: value.LinkedLen},
-				{Key: "IsDeleted", Value: value.IsDeleted},
-				{Key: "Version", Value: value.Version + 1},
+				{Key: "Value", Value: value.Value()},
+				{Key: "TxnId", Value: value.TxnId()},
+				{Key: "TxnState", Value: value.TxnState()},
+				{Key: "TValid", Value: value.TValid().Format(time.RFC3339Nano)},
+				{Key: "TLease", Value: value.TLease().Format(time.RFC3339Nano)},
+				{Key: "Prev", Value: value.Prev()},
+				{Key: "LinkedLen", Value: value.LinkedLen()},
+				{Key: "IsDeleted", Value: value.IsDeleted()},
+				{Key: "Version", Value: value.Version() + 1},
 			})
 			return err
 		}

@@ -1,3 +1,4 @@
+// a pure interface version
 package txn
 
 import (
@@ -33,11 +34,14 @@ type Datastore struct {
 
 	// se is the serializer used for serializing and deserializing data in Datastore.
 	se serializer.Serializer
+
+	// itemFactory is the factory used for creating DataItems.
+	itemFactory DataItemFactory
 }
 
 // NewDatastore creates a new instance of Datastore with the given name and connection.
 // It initializes the read and write caches, as well as the serializer.
-func NewDatastore(name string, conn Connector) *Datastore {
+func NewDatastore(name string, conn Connector, factory DataItemFactory) *Datastore {
 	return &Datastore{
 		Name:         name,
 		conn:         conn,
@@ -45,6 +49,7 @@ func NewDatastore(name string, conn Connector) *Datastore {
 		writeCache:   make(map[string]DataItem),
 		invisibleSet: make(map[string]bool),
 		se:           config.Config.Serializer,
+		itemFactory:  factory,
 	}
 }
 
@@ -59,7 +64,7 @@ func (r *Datastore) Read(key string, value any) error {
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
 		// if the record is marked as deleted
-		if item.IsDeleted {
+		if item.IsDeleted() {
 			return KeyNotFound
 		}
 		return r.getValue(item, value)
@@ -87,7 +92,7 @@ func (r *Datastore) Read(key string, value any) error {
 
 	logicFunc := func(curItem DataItem, isFound bool) error {
 		// if the record has been deleted
-		if !isFound || curItem.IsDeleted {
+		if !isFound || curItem.IsDeleted() {
 			return KeyNotFound
 		}
 
@@ -96,7 +101,7 @@ func (r *Datastore) Read(key string, value any) error {
 			return err
 			// return DeserializeError.Join(err)
 		}
-		r.readCache[curItem.Key] = curItem
+		r.readCache[curItem.Key()] = curItem
 		return nil
 	}
 
@@ -105,8 +110,8 @@ func (r *Datastore) Read(key string, value any) error {
 
 // dirtyReadChecker will drop an item if it violates repeatable read rules.
 func (r *Datastore) dirtyReadChecker(item DataItem) (DataItem, error) {
-	if _, ok := r.invisibleSet[item.Key]; ok {
-		return DataItem{}, KeyNotFound
+	if _, ok := r.invisibleSet[item.Key()]; ok {
+		return nil, KeyNotFound
 	} else {
 		return item, nil
 	}
@@ -119,11 +124,16 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 	rollbackFunc := func() (DataItem, error) {
 		item, err := r.rollback(item)
 		if err != nil {
-			return DataItem{}, err
+			return nil, err
 		}
-		if item.Equal(DataItem{}) {
-			return DataItem{}, KeyNotFound
+
+		if item.Empty() {
+			return nil, KeyNotFound
 		}
+
+		// if item.Equal(DataItem{}) {
+		// 	return DataItem{}, KeyNotFound
+		// }
 		return item, err
 	}
 
@@ -131,16 +141,16 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 	rollforwardFunc := func() (DataItem, error) {
 		item, err := r.rollForward(item)
 		if err != nil {
-			return DataItem{}, err
+			return nil, err
 		}
 		return item, nil
 	}
 
-	if item.TxnState == config.COMMITTED {
+	if item.TxnState() == config.COMMITTED {
 		return item, nil
 	}
-	if item.TxnState == config.PREPARED {
-		state, err := r.Txn.GetTSRState(item.TxnId)
+	if item.TxnState() == config.PREPARED {
+		state, err := r.Txn.GetTSRState(item.TxnId())
 		if err == nil {
 			switch state {
 			// if TSR exists and the TSR is in COMMITTED state
@@ -157,12 +167,12 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		// if TSR does not exist
 		// and if t_lease has expired
 		// we should roll back the record
-		if item.TLease.Before(r.Txn.TxnStartTime) {
+		if item.TLease().Before(r.Txn.TxnStartTime) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
-			err := r.Txn.WriteTSR(item.TxnId, config.ABORTED)
+			err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
 			if err != nil {
-				return DataItem{}, err
+				return nil, err
 			}
 			return rollbackFunc()
 		}
@@ -175,16 +185,16 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		// if the record can be found in the treatAsCommitted,
 		// it will be stored in the readCache,
 		// so we don't bother dirtyReadChecker anymore.
-		r.invisibleSet[item.Key] = true
+		r.invisibleSet[item.Key()] = true
 		// if prev is empty
-		if item.Prev == "" {
-			return DataItem{}, KeyNotFound
+		if item.Prev() == "" {
+			return nil, KeyNotFound
 		}
 
 		return r.getPrevItem(item)
 		// return DataItem{}, DirtyRead
 	}
-	return DataItem{}, KeyNotFound
+	return nil, KeyNotFound
 }
 
 // treatAsCommitted treats a DataItem as committed, finds a corresponding version
@@ -193,7 +203,7 @@ func (r *Datastore) treatAsCommitted(item DataItem, logicFunc func(DataItem, boo
 	curItem := item
 	for i := 1; i <= config.Config.MaxRecordLength; i++ {
 
-		if curItem.TValid.Before(r.Txn.TxnStartTime) {
+		if curItem.TValid().Before(r.Txn.TxnStartTime) {
 			// find the corresponding version,
 			// do some bussiness logic.
 			return logicFunc(curItem, true)
@@ -202,7 +212,7 @@ func (r *Datastore) treatAsCommitted(item DataItem, logicFunc func(DataItem, boo
 			break
 		}
 		// if prev is empty
-		if curItem.Prev == "" {
+		if curItem.Prev() == "" {
 			return logicFunc(curItem, false)
 		}
 
@@ -226,17 +236,18 @@ func (r *Datastore) Write(key string, value any) error {
 	str := string(bs)
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
-		item.Value, item.IsDeleted = str, false
+		item.SetValue(str)
+		item.SetIsDeleted(false)
 		r.writeCache[key] = item
 		return nil
 	}
 
 	// else write a new record to the cache
-	cacheItem := DataItem{
+	cacheItem := r.itemFactory.NewDataItem(ItemOptions{
 		Key:   key,
 		Value: str,
 		TxnId: r.Txn.TxnId,
-	}
+	})
 	return r.writeToCache(cacheItem)
 }
 
@@ -249,14 +260,14 @@ func (r *Datastore) Write(key string, value any) error {
 func (r *Datastore) writeToCache(cacheItem DataItem) error {
 
 	// check if it follows read-modified-commit pattern
-	if oldItem, ok := r.readCache[cacheItem.Key]; ok {
-		cacheItem.Version = oldItem.Version
+	if oldItem, ok := r.readCache[cacheItem.Key()]; ok {
+		cacheItem.SetVersion(oldItem.Version())
 	} else {
 		// else we set it to -1, indicating this is a direct write
-		cacheItem.Version = -1
+		cacheItem.SetVersion(-1)
 	}
 
-	r.writeCache[cacheItem.Key] = cacheItem
+	r.writeCache[cacheItem.Key()] = cacheItem
 	return nil
 }
 
@@ -265,21 +276,20 @@ func (r *Datastore) writeToCache(cacheItem DataItem) error {
 func (r *Datastore) Delete(key string) error {
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
-		if item.IsDeleted {
+		if item.IsDeleted() {
 			return KeyNotFound
 		}
-		item.IsDeleted = true
+		item.SetIsDeleted(true)
 		r.writeCache[key] = item
 		return nil
 	}
 
 	// else write a new record to the cache
-	cacheItem := DataItem{
+	cacheItem := r.itemFactory.NewDataItem(ItemOptions{
 		Key:       key,
 		TxnId:     r.Txn.TxnId,
 		IsDeleted: true,
-	}
-
+	})
 	return r.writeToCache(cacheItem)
 }
 
@@ -287,16 +297,16 @@ func (r *Datastore) Delete(key string) error {
 func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) error {
 
 	// if this item will be created
-	if dbItem.Equal(DataItem{}) {
+	if dbItem == nil {
 		newItem, err := r.updateMetadata(cacheItem, dbItem)
 		if err != nil {
 			return err
 		}
-		if err = r.conn.ConditionalUpdate(newItem.Key, newItem, true); err != nil {
+		if err = r.conn.ConditionalUpdate(newItem.Key(), newItem, true); err != nil {
 			return err
 		}
-		newItem.Version++
-		r.writeCache[newItem.Key] = newItem
+		newItem.SetVersion(newItem.Version() + 1)
+		r.writeCache[newItem.Key()] = newItem
 		return nil
 	}
 
@@ -312,11 +322,11 @@ func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) err
 		if err != nil {
 			return err
 		}
-		if err = r.conn.ConditionalUpdate(newItem.Key, newItem, false); err != nil {
+		if err = r.conn.ConditionalUpdate(newItem.Key(), newItem, false); err != nil {
 			return err
 		}
-		newItem.Version++
-		r.writeCache[newItem.Key] = newItem
+		newItem.SetVersion(newItem.Version() + 1)
+		r.writeCache[newItem.Key()] = newItem
 		return nil
 	}
 
@@ -332,15 +342,15 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 
 	// if the cacheItem follows read-modified-write pattern,
 	// it already has a valid version, we can skip the read step.
-	if cacheItem.Version != -1 {
-		dbItem := r.readCache[cacheItem.Key]
+	if cacheItem.Version() != -1 {
+		dbItem := r.readCache[cacheItem.Key()]
 		return r.doConditionalUpdate(cacheItem, dbItem)
 	}
 
-	dbItem, err := r.conn.GetItem(cacheItem.Key)
+	dbItem, err := r.conn.GetItem(cacheItem.Key())
 	if err != nil {
 		if err == KeyNotFound {
-			return r.doConditionalUpdate(cacheItem, DataItem{})
+			return r.doConditionalUpdate(cacheItem, nil)
 		}
 		return err
 	}
@@ -362,17 +372,17 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 // It then updates the Prev and LinkedLen fields of the DataItems in the stack accordingly.
 // Finally, it returns the last popped DataItem as the truncated DataItem.
 // If the length of the linked list is less than or equal to the maximum record length, it returns the input DataItem as is.
-func (r *Datastore) truncate(newItem *DataItem) (DataItem, error) {
+func (r *Datastore) truncate(newItem DataItem) (DataItem, error) {
 	maxLen := config.Config.MaxRecordLength
 
-	if newItem.LinkedLen > maxLen {
+	if newItem.LinkedLen() > maxLen {
 		stack := util.NewStack[DataItem]()
-		stack.Push(*newItem)
-		curItem := newItem
+		stack.Push(newItem)
+		curItem := &newItem
 		for i := 1; i <= maxLen-1; i++ {
 			preItem, err := r.getPrevItem(*curItem)
 			if err != nil {
-				return DataItem{}, errors.New("Unmarshal error: " + err.Error())
+				return nil, errors.New("Unmarshal error: " + err.Error())
 			}
 			curItem = &preItem
 			stack.Push(*curItem)
@@ -380,27 +390,27 @@ func (r *Datastore) truncate(newItem *DataItem) (DataItem, error) {
 
 		tarItem, err := stack.Pop()
 		if err != nil {
-			return DataItem{}, errors.New("Pop error: " + err.Error())
+			return nil, errors.New("Pop error: " + err.Error())
 		}
-		tarItem.Prev = ""
-		tarItem.LinkedLen = 1
+		tarItem.SetPrev("")
+		tarItem.SetLinkedLen(1)
 
 		for !stack.IsEmpty() {
 			item, err := stack.Pop()
 			if err != nil {
-				return DataItem{}, errors.New("Pop error: " + err.Error())
+				return nil, errors.New("Pop error: " + err.Error())
 			}
 			bs, err := r.se.Serialize(tarItem)
 			if err != nil {
-				return DataItem{}, errors.New("Serialize error: " + err.Error())
+				return nil, errors.New("Serialize error: " + err.Error())
 			}
-			item.Prev = string(bs)
-			item.LinkedLen = tarItem.LinkedLen + 1
+			item.SetPrev(string(bs))
+			item.SetLinkedLen(tarItem.LinkedLen() + 1)
 			tarItem = item
 		}
 		return tarItem, nil
 	} else {
-		return *newItem, nil
+		return newItem, nil
 	}
 }
 
@@ -410,27 +420,27 @@ func (r *Datastore) truncate(newItem *DataItem) (DataItem, error) {
 // It then truncates the record using the truncate method and sets the TxnState, TValid, and TLease fields of the newItem.
 // Finally, it returns the updated newItem and any error that occurred during the process.
 func (r *Datastore) updateMetadata(newItem DataItem, oldItem DataItem) (DataItem, error) {
-	if oldItem == (DataItem{}) {
-		newItem.LinkedLen = 1
+	if oldItem == nil {
+		newItem.SetLinkedLen(1)
 	} else {
-		newItem.LinkedLen = oldItem.LinkedLen + 1
+		newItem.SetLinkedLen(oldItem.LinkedLen() + 1)
 		bs, err := r.se.Serialize(oldItem)
 		if err != nil {
-			return DataItem{}, err
+			return nil, err
 		}
-		newItem.Prev = string(bs)
-		newItem.Version = oldItem.Version
+		newItem.SetPrev(string(bs))
+		newItem.SetVersion(oldItem.Version())
 	}
 
 	// truncate the record
-	newItem, err := r.truncate(&newItem)
+	newItem, err := r.truncate(newItem)
 	if err != nil {
-		return DataItem{}, err
+		return nil, err
 	}
 
-	newItem.TxnState = config.PREPARED
-	newItem.TValid = r.Txn.TxnCommitTime
-	newItem.TLease = r.Txn.TxnCommitTime.Add(config.Config.LeaseTime)
+	newItem.SetTxnState(config.PREPARED)
+	newItem.SetTValid(r.Txn.TxnCommitTime)
+	newItem.SetTLease(r.Txn.TxnCommitTime.Add(config.Config.LeaseTime))
 	return newItem, nil
 }
 
@@ -443,7 +453,7 @@ func (r *Datastore) Prepare() error {
 	// sort records by key
 	slices.SortFunc(
 		items, func(i, j DataItem) int {
-			return cmp.Compare(i.Key, j.Key)
+			return cmp.Compare(i.Key(), j.Key())
 		},
 	)
 	for _, item := range items {
@@ -462,8 +472,8 @@ func (r *Datastore) Prepare() error {
 func (r *Datastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
 	for _, item := range r.writeCache {
-		item.TxnState = config.COMMITTED
-		err := r.conn.PutItem(item.Key, item)
+		item.SetTxnState(config.COMMITTED)
+		err := r.conn.PutItem(item.Key(), item)
 		if err != nil {
 			return err
 		}
@@ -488,13 +498,13 @@ func (r *Datastore) Abort(hasCommitted bool) error {
 	}
 
 	for _, v := range r.writeCache {
-		item, err := r.conn.GetItem(v.Key)
+		item, err := r.conn.GetItem(v.Key())
 		if err != nil {
 			return err
 		}
 		// if the record has been modified by this transaction
 		curTxnId := r.Txn.TxnId
-		if item.TxnId == curTxnId {
+		if item.TxnId() == curTxnId {
 			r.rollback(item)
 		}
 	}
@@ -509,30 +519,31 @@ func (r *Datastore) Abort(hasCommitted bool) error {
 // if the `Prev` is empty, it simply deletes the record
 func (r *Datastore) rollback(item DataItem) (DataItem, error) {
 
-	if item.Prev == "" {
-		item.IsDeleted = true
-		item.TxnState = config.COMMITTED
-		err := r.conn.ConditionalUpdate(item.Key, item, false)
+	if item.Prev() == "" {
+		item.SetIsDeleted(true)
+		item.SetTxnState(config.COMMITTED)
+		err := r.conn.ConditionalUpdate(item.Key(), item, false)
 		if err != nil {
-			return DataItem{}, errors.Join(errors.New("rollback failed"), err)
+			return nil, errors.Join(errors.New("rollback failed"), err)
 		}
-		item.Version++
+		item.SetVersion(item.Version() + 1)
 		return item, err
 	}
 
 	newItem, err := r.getPrevItem(item)
 	if err != nil {
-		return DataItem{}, errors.Join(errors.New("rollback failed"), err)
+		return nil, errors.Join(errors.New("rollback failed"), err)
 	}
 	// try to rollback through ConditionalUpdate
-	newItem.Version = item.Version
-	err = r.conn.ConditionalUpdate(item.Key, newItem, false)
+	newItem.SetVersion(item.Version())
+	err = r.conn.ConditionalUpdate(item.Key(), newItem, false)
 	// err = r.conn.PutItem(item.Key, newItem)
 	if err != nil {
-		return DataItem{}, errors.Join(errors.New("rollback failed"), err)
+		return nil, errors.Join(errors.New("rollback failed"), err)
 	}
 	// update the version
-	newItem.Version++
+	newItem.SetVersion(newItem.Version() + 1)
+
 	return newItem, err
 }
 
@@ -540,12 +551,13 @@ func (r *Datastore) rollback(item DataItem) (DataItem, error) {
 func (r *Datastore) rollForward(item DataItem) (DataItem, error) {
 	// var oldItem DataItem
 	// r.conn.Get(item.Key, &oldItem)
-	item.TxnState = config.COMMITTED
-	err := r.conn.ConditionalUpdate(item.Key, item, false)
+	item.SetTxnState(config.COMMITTED)
+	err := r.conn.ConditionalUpdate(item.Key(), item, false)
 	if err != nil {
-		return DataItem{}, errors.Join(errors.New("rollForward failed"), err)
+		return nil, errors.Join(errors.New("rollForward failed"), err)
 	}
-	item.Version++
+	item.SetVersion(item.Version() + 1)
+
 	// err := r.conn.PutItem(item.Key, item)
 	return item, err
 }
@@ -554,10 +566,10 @@ func (r *Datastore) rollForward(item DataItem) (DataItem, error) {
 // It deserializes the "Prev" field of the item and returns the deserialized DataItem.
 // If there is an error during deserialization, it returns an empty DataItem and the error.
 func (r *Datastore) getPrevItem(item DataItem) (DataItem, error) {
-	var preItem DataItem
-	err := r.se.Deserialize([]byte(item.Prev), &preItem)
+	preItem := r.itemFactory.NewDataItem(ItemOptions{})
+	err := r.se.Deserialize([]byte(item.Prev()), &preItem)
 	if err != nil {
-		return DataItem{}, err
+		return nil, err
 	}
 	return preItem, nil
 }
@@ -566,7 +578,7 @@ func (r *Datastore) getPrevItem(item DataItem) (DataItem, error) {
 // It uses the Datastore's serializer to deserialize the value.
 // If an error occurs during deserialization, it is returned.
 func (r *Datastore) getValue(item DataItem, value any) error {
-	return r.se.Deserialize([]byte(item.Value), value)
+	return r.se.Deserialize([]byte(item.Value()), value)
 }
 
 // GetName returns the name of the MemoryDatastore.
@@ -613,5 +625,5 @@ func (r *Datastore) DeleteTSR(txnId string) error {
 // Copy returns a new instance of Datastore with the same name and connection.
 // It is used to create a copy of the Datastore object.
 func (r *Datastore) Copy() Datastorer {
-	return NewDatastore(r.Name, r.conn)
+	return NewDatastore(r.Name, r.conn, r.itemFactory)
 }
