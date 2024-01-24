@@ -34,7 +34,7 @@ func main() {
 		TLease:    time.Now().Add(-2 * time.Second),
 		Prev:      "",
 		IsDeleted: false,
-		Version:   2,
+		Version:   "2",
 	})
 	err := conn.PutItem(key, expectedItem)
 	if err != nil {

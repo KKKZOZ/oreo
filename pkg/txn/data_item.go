@@ -23,8 +23,8 @@ type TxnItem interface {
 	TLease() time.Time
 	SetTLease(time.Time)
 
-	Version() int
-	SetVersion(int)
+	Version() string
+	SetVersion(string)
 }
 
 type DataItem interface {

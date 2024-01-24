@@ -61,7 +61,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -108,7 +108,7 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(+10 * time.Second),
 		RTLease:   time.Now().Add(+5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -155,7 +155,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 	curRedisItem := &RedisItem{
 		RKey:      "John",
@@ -164,7 +164,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(10 * time.Second),
 		RTLease:   time.Now().Add(5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 		RPrev:     util.ToJSONString(preRedisItem),
 	}
 
@@ -216,7 +216,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(10 * time.Second),
 		RTLease:   time.Now().Add(5 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 	curRedisItem := &RedisItem{
 		RKey:      "John",
@@ -225,7 +225,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(20 * time.Second),
 		RTLease:   time.Now().Add(15 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 		RPrev:     util.ToJSONString(preRedisItem),
 	}
 
@@ -269,7 +269,7 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		RTxnState: config.PREPARED,
 		RTValid:   time.Now(),
 		RTLease:   time.Now(),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -318,7 +318,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 
 	curMemItem := &RedisItem{
@@ -329,7 +329,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		RTValid:   time.Now().Add(-5 * time.Second),
 		RTLease:   time.Now().Add(-4 * time.Second),
 		RPrev:     util.ToJSONString(tarMemItem),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "item1"
@@ -381,7 +381,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	expectedStr := util.ToJSONString(expectedRedisItem)
@@ -398,7 +398,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		RTxnState: config.PREPARED,
 		RTValid:   time.Now().Add(-3 * time.Second),
 		RTLease:   time.Now().Add(-1 * time.Second),
-		RVersion:  3,
+		RVersion:  "3",
 		RPrev:     expectedStr,
 	}
 
@@ -433,7 +433,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		RTValid:    time.Now().Add(-2 * time.Second),
 		RTLease:    time.Now().Add(-1 * time.Second),
 		RLinkedLen: 1,
-		RVersion:   1,
+		RVersion:   "1",
 	}
 
 	dbItem2 := &RedisItem{
@@ -445,7 +445,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		RTLease:    time.Now().Add(2 * time.Second),
 		RPrev:      util.ToJSONString(dbItem1),
 		RLinkedLen: 2,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 
 	t.Run("when the item has a valid Prev field", func(t *testing.T) {
@@ -484,7 +484,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 		RTValid:    time.Now().Add(-2 * time.Second),
 		RTLease:    time.Now().Add(-1 * time.Second),
 		RLinkedLen: 1,
-		RVersion:   1,
+		RVersion:   "1",
 		RIsDeleted: true,
 	}
 
@@ -626,7 +626,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -689,7 +689,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -751,7 +751,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -799,7 +799,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -894,7 +894,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -957,7 +957,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	key := "John"
@@ -1126,7 +1126,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		RTxnState:  config.COMMITTED,
 		RTValid:    time.Now().Add(-10 * time.Second),
 		RTLease:    time.Now().Add(-9 * time.Second),
-		RVersion:   1,
+		RVersion:   "1",
 		RLinkedLen: 1,
 	}
 
@@ -1138,7 +1138,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		RTxnState:  config.COMMITTED,
 		RTValid:    time.Now().Add(5 * time.Second),
 		RTLease:    time.Now().Add(6 * time.Second),
-		RVersion:   2,
+		RVersion:   "2",
 		RPrev:      util.ToJSONString(memItem1_1),
 		RLinkedLen: 2,
 	}
@@ -1151,7 +1151,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		RTxnState:  config.COMMITTED,
 		RTValid:    time.Now().Add(10 * time.Second),
 		RTLease:    time.Now().Add(11 * time.Second),
-		RVersion:   3,
+		RVersion:   "3",
 		RPrev:      util.ToJSONString(memItem1_2),
 		RLinkedLen: 3,
 	}
@@ -1332,7 +1332,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			RTValid:    time.Now().Add(-10 * time.Second),
 			RTLease:    time.Now().Add(-9 * time.Second),
 			RLinkedLen: 1,
-			RVersion:   1,
+			RVersion:   "1",
 		}
 
 		curItem := &RedisItem{
@@ -1344,7 +1344,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RPrev:      util.ToJSONString(tarItem),
 			RLinkedLen: 2,
-			RVersion:   2,
+			RVersion:   "2",
 		}
 
 		conn.PutItem(tarItem.Key(), curItem)
@@ -1370,7 +1370,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		// Second, we check the final record's Prev field is correct
 		finalRedisItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
-		tarItem.SetVersion(3)
+		tarItem.SetVersion("3")
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
 
@@ -1385,7 +1385,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			RTxnState: config.PREPARED,
 			RTValid:   time.Now().Add(-10 * time.Second),
 			RTLease:   time.Now().Add(-9 * time.Second),
-			RVersion:  1,
+			RVersion:  "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1413,7 +1413,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		assert.NoError(t, err)
 		tarItem.SetIsDeleted(true)
 		tarItem.SetTxnState(config.COMMITTED)
-		tarItem.SetVersion(tarItem.RVersion + 1)
+		tarItem.SetVersion(util.AddToString(tarItem.Version(), 1))
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
 
@@ -1434,7 +1434,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			RTValid:    time.Now().Add(-10 * time.Second),
 			RTLease:    time.Now().Add(-9 * time.Second),
 			RLinkedLen: 1,
-			RVersion:   1,
+			RVersion:   "1",
 		}
 
 		curItem := &RedisItem{
@@ -1445,7 +1445,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			RTValid:    time.Now().Add(-5 * time.Second),
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RLinkedLen: 2,
-			RVersion:   2,
+			RVersion:   "2",
 			RPrev:      util.ToJSONString(tarItem),
 		}
 
@@ -1477,7 +1477,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		curItem.SetPrev("")
 		curItem.SetLinkedLen(1)
 		curItem.SetTxnState(config.COMMITTED)
-		curItem.SetVersion(3)
+		curItem.SetVersion("3")
 		assert.Equal(t, util.ToJSONString(curItem), finalRedisItem.Prev())
 	})
 
@@ -1492,7 +1492,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			RTxnState: config.PREPARED,
 			RTValid:   time.Now().Add(-10 * time.Second),
 			RTLease:   time.Now().Add(-9 * time.Second),
-			RVersion:  1,
+			RVersion:  "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1520,7 +1520,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		finalRedisItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 
-		tarItem.SetVersion(2)
+		tarItem.SetVersion("2")
 		tarItem.SetTxnState(config.COMMITTED)
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
@@ -1539,7 +1539,7 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 		RTxnState: config.PREPARED,
 		RTValid:   time.Now().Add(2 * time.Second),
 		RTLease:   time.Now().Add(1 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1563,7 +1563,7 @@ func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 		RTValid:    time.Now().Add(3 * time.Second),
 		RTLease:    time.Now().Add(4 * time.Second),
 		RLinkedLen: 1,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 	conn.PutItem(dbItem1.Key(), dbItem1)
 
@@ -1595,7 +1595,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 
 	item1 := &RedisItem{
@@ -1605,7 +1605,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		RTxnState: config.PREPARED,
 		RTValid:   time.Now().Add(-5 * time.Second),
 		RTLease:   time.Now().Add(-4 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when reading", func(t *testing.T) {
@@ -1660,7 +1660,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 
 	item1 := &RedisItem{
@@ -1670,7 +1670,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		RTxnState: config.PREPARED,
 		RTValid:   time.Now().Add(-5 * time.Second),
 		RTLease:   time.Now().Add(-4 * time.Second),
-		RVersion:  2,
+		RVersion:  "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when writing", func(t *testing.T) {
@@ -1692,7 +1692,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(item), res.Value())
 		tarItem := item1Pre
-		tarItem.SetVersion(3)
+		tarItem.SetVersion("3")
 		assert.Equal(t, util.ToJSONString(tarItem), res.Prev())
 
 	})
@@ -1732,7 +1732,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 
 		item1.SetIsDeleted(true)
 		item1.SetTxnState(config.COMMITTED)
-		item1.SetVersion(item1.RVersion + 1)
+		item1.SetVersion(util.AddToString(item1.Version(), 1))
 		assert.Equal(t, util.ToJSONString(item1), res.Prev())
 	})
 }
@@ -1748,7 +1748,7 @@ func TestRollForwardWhenReading(t *testing.T) {
 		RTxnState: config.PREPARED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1764,7 +1764,7 @@ func TestRollForwardWhenReading(t *testing.T) {
 	res, err := conn.GetItem(tarItem.Key())
 	assert.NoError(t, err)
 	tarItem.SetTxnState(config.COMMITTED)
-	tarItem.SetVersion(2)
+	tarItem.SetVersion("2")
 	if !res.Equal(tarItem) {
 		t.Errorf("\ngot\n %v \nwant\n %v", res, tarItem)
 	}
@@ -1781,7 +1781,7 @@ func TestRollForwardWhenWriting(t *testing.T) {
 		RTxnState: config.PREPARED,
 		RTValid:   time.Now().Add(-10 * time.Second),
 		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1799,7 +1799,7 @@ func TestRollForwardWhenWriting(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(item), res.Value())
 	tarItem.SetTxnState(config.COMMITTED)
-	tarItem.SetVersion(2)
+	tarItem.SetVersion("2")
 	tarPrev := util.ToJSONString(tarItem)
 	assert.Equal(t, tarPrev, res.Prev())
 }
@@ -1816,7 +1816,7 @@ func TestItemVersionUpdate(t *testing.T) {
 			RTValid:    time.Now().Add(-10 * time.Second),
 			RTLease:    time.Now().Add(-9 * time.Second),
 			RLinkedLen: 1,
-			RVersion:   1,
+			RVersion:   "1",
 		}
 		conn.PutItem(dbItem.Key(), dbItem)
 
@@ -1832,6 +1832,6 @@ func TestItemVersionUpdate(t *testing.T) {
 
 		res, err := conn.GetItem(dbItem.Key())
 		assert.NoError(t, err)
-		assert.Equal(t, dbItem.Version()+1, res.Version())
+		assert.Equal(t, util.AddToString(dbItem.Version(), 1), res.Version())
 	})
 }

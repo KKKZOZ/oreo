@@ -78,7 +78,7 @@ func TestRedisConnection_GetItem(t *testing.T) {
 		RTLease:    tLease,
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 	itemMap := map[string]string{
 		"Key":       key,
@@ -130,7 +130,7 @@ func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
 		RTLease:    time.Now().Add(-2 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 
 	err := conn.PutItem(key, expectedItem)
@@ -158,7 +158,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 		RTLease:    time.Now().Add(-2 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 
 	err := conn.PutItem(key, olderItem)
@@ -175,7 +175,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 		RTLease:    time.Now().Add(1 * time.Second),
 		RPrev:      util.ToJSONString(olderItem),
 		RIsDeleted: false,
-		RVersion:   3,
+		RVersion:   "3",
 	}
 
 	err = conn.PutItem(key, newerItem)
@@ -202,7 +202,7 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 		RTLease:    time.Now().Add(-2 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 	err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
@@ -218,16 +218,17 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 		RTLease:    time.Now().Add(-1 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 
-	err = conn.ConditionalUpdate(key, newerItem, false)
+	_, err = conn.ConditionalUpdate(key, newerItem, false)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
 	assert.NoError(t, err)
 
-	newerItem.RVersion++
+	newerItem.RVersion = util.AddToString(newerItem.RVersion, 1)
+
 	if !item.Equal(newerItem) {
 		t.Errorf("\nexpect: \n%v, \nactual: \n%v", newerItem, item)
 	}
@@ -247,7 +248,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 		RTLease:    time.Now().Add(-2 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 	err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
@@ -263,10 +264,10 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 		RTLease:    time.Now().Add(-1 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   3,
+		RVersion:   "3",
 	}
 
-	err = conn.ConditionalUpdate(key, newerItem, false)
+	_, err = conn.ConditionalUpdate(key, newerItem, false)
 	assert.EqualError(t, err, "version mismatch")
 
 	item, err := conn.GetItem(key)
@@ -292,16 +293,16 @@ func TestRedisConnectionConditionalUpdateNonExist(t *testing.T) {
 		RTLease:    time.Now().Add(-1 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   1,
+		RVersion:   "1",
 	}
 
-	err := conn.ConditionalUpdate(key, newerItem, true)
+	_, err := conn.ConditionalUpdate(key, newerItem, true)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
 	assert.NoError(t, err)
 
-	newerItem.RVersion++
+	newerItem.RVersion = util.AddToString(newerItem.RVersion, 1)
 	if !item.Equal(newerItem) {
 		t.Errorf("\nexpect: \n%v, \nactual: \n%v", newerItem, item)
 	}
@@ -323,7 +324,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 			RTLease:    time.Now().Add(-2 * time.Second),
 			RPrev:      "",
 			RIsDeleted: false,
-			RVersion:   2,
+			RVersion:   "2",
 		}
 		err := conn.PutItem(key, olderItem)
 		assert.NoError(t, err)
@@ -344,10 +345,10 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 					RTLease:    time.Now().Add(-1 * time.Second),
 					RPrev:      "",
 					RIsDeleted: false,
-					RVersion:   2,
+					RVersion:   "2",
 				}
 
-				err = conn.ConditionalUpdate(key, newerItem, false)
+				_, err = conn.ConditionalUpdate(key, newerItem, false)
 				if err == nil {
 					globalId = id
 					resChan <- true
@@ -393,10 +394,10 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 					RTLease:    time.Now().Add(-1 * time.Second),
 					RPrev:      "",
 					RIsDeleted: false,
-					RVersion:   2,
+					RVersion:   "2",
 				}
 
-				err := conn.ConditionalUpdate(key, newerItem, true)
+				_, err := conn.ConditionalUpdate(key, newerItem, true)
 				if err == nil {
 					globalId = id
 					resChan <- true
@@ -437,7 +438,7 @@ func TestRedisConnectionPutAndGet(t *testing.T) {
 		RTLease:    time.Now().Add(-2 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 	bs, err := se.Serialize(item)
 	assert.NoError(t, err)
@@ -469,14 +470,14 @@ func TestRedisConnectionReplaceAndGet(t *testing.T) {
 		RTLease:    time.Now().Add(-2 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 	bs, err := se.Serialize(item)
 	assert.NoError(t, err)
 	err = conn.Put(key, bs)
 	assert.NoError(t, err)
 
-	item.RVersion++
+	item.RVersion = util.AddToString(item.RVersion, 1)
 	bs, _ = se.Serialize(item)
 	err = conn.Put(key, bs)
 	assert.NoError(t, err)
@@ -517,7 +518,7 @@ func TestRedisConnectionPutDirectItem(t *testing.T) {
 		RTLease:    time.Now().Add(-2 * time.Second),
 		RPrev:      "",
 		RIsDeleted: false,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 
 	err := conn.Put(key, item)
@@ -556,7 +557,7 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		RPrev:      "",
 		RIsDeleted: false,
 		RLinkedLen: 1,
-		RVersion:   1,
+		RVersion:   "1",
 	}
 
 	cacheItem := &RedisItem{
@@ -568,14 +569,14 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		RTLease:    time.Now().Add(-1 * time.Second),
 		RPrev:      util.ToJSONString(dbItem),
 		RLinkedLen: 2,
-		RVersion:   1,
+		RVersion:   "1",
 	}
 
 	t.Run("there is no item and doCreate is true ", func(t *testing.T) {
 		conn := NewRedisConnection(nil)
 		conn.Delete(cacheItem.Key())
 
-		err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, true)
+		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, true)
 		assert.NoError(t, err)
 	})
 
@@ -583,7 +584,7 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		conn := NewRedisConnection(nil)
 		conn.PutItem(dbItem.Key(), dbItem)
 
-		err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, true)
+		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, true)
 		assert.EqualError(t, err, txn.VersionMismatch.Error())
 	})
 
@@ -591,7 +592,7 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		conn := NewRedisConnection(nil)
 		conn.Delete(cacheItem.Key())
 
-		err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, false)
+		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, false)
 		assert.EqualError(t, err, txn.VersionMismatch.Error())
 	})
 
@@ -599,7 +600,7 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		conn := NewRedisConnection(nil)
 		conn.PutItem(dbItem.Key(), dbItem)
 
-		err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, false)
+		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, false)
 		assert.NoError(t, err)
 	})
 
