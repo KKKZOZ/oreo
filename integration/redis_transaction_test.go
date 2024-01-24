@@ -577,7 +577,7 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 		TxnState: config.COMMITTED,
 		TValid:   time.Now().Add(-10 * time.Second),
 		TLease:   time.Now().Add(-9 * time.Second),
-		Version:  1,
+		Version:  "1",
 	})
 
 	curMemItem := redis.NewRedisItem(txn.ItemOptions{
@@ -588,7 +588,7 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 		TValid:   time.Now().Add(-5 * time.Second),
 		TLease:   time.Now().Add(-4 * time.Second),
 		Prev:     util.ToJSONString(tarMemItem),
-		Version:  2,
+		Version:  "2",
 	})
 
 	conn := NewConnectionWithSetup(REDIS)
@@ -604,7 +604,7 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 	assert.NoError(t, err)
 	actual, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	tarMemItem.SetVersion(3)
+	tarMemItem.SetVersion("3")
 	if !tarMemItem.Equal(actual) {
 		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
 	}
@@ -1028,7 +1028,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 			RTValid:    time.Now().Add(-5 * time.Second),
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RLinkedLen: 1,
-			RVersion:   1,
+			RVersion:   "1",
 		}
 		redisItem2 := &redis.RedisItem{
 			RKey:       "item1",
@@ -1039,7 +1039,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RPrev:      util.ToJSONString(redisItem1),
 			RLinkedLen: 2,
-			RVersion:   2,
+			RVersion:   "2",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1070,7 +1070,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		resItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-		redisItem1.RVersion = 3
+		redisItem1.RVersion = "3"
 		assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev())
 	})
 
@@ -1092,7 +1092,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RPrev:      "",
 			RLinkedLen: 1,
-			RVersion:   1,
+			RVersion:   "1",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1125,7 +1125,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
 		redisItem2.RIsDeleted = true
 		redisItem2.RTxnState = config.COMMITTED
-		redisItem2.RVersion++
+		redisItem2.RVersion = util.AddToString(redisItem2.RVersion, 1)
 		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 	})
 
@@ -1147,7 +1147,7 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 		RTxnState: config.COMMITTED,
 		RTValid:   time.Now().Add(-5 * time.Second),
 		RTLease:   time.Now().Add(-4 * time.Second),
-		RVersion:  1,
+		RVersion:  "1",
 	}
 	redisItem2 := &redis.RedisItem{
 		RKey:       "item1",
@@ -1158,7 +1158,7 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 		RTLease:    time.Now().Add(-4 * time.Second),
 		RPrev:      util.ToJSONString(redisItem1),
 		RLinkedLen: 2,
-		RVersion:   2,
+		RVersion:   "2",
 	}
 	conn.PutItem("item1", redisItem2)
 	conn.Put("TestRedis_RollForwardConflict2", config.COMMITTED)
@@ -1192,7 +1192,7 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 	redisItem2.RTxnState = config.COMMITTED
 	redisItem2.RPrev = ""
 	redisItem2.RLinkedLen = 1
-	redisItem2.RVersion = 3
+	redisItem2.RVersion = "3"
 	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 
 }
@@ -1502,7 +1502,7 @@ func TestRedis_DeleteTimingProblems(t *testing.T) {
 			RTxnState: config.COMMITTED,
 			RTValid:   time.Now().Add(-5 * time.Second),
 			RTLease:   time.Now().Add(-4 * time.Second),
-			RVersion:  1,
+			RVersion:  "1",
 		}
 		testConn.PutItem("item1", dbItem)
 

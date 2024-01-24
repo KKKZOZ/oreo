@@ -102,7 +102,7 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) error {
 
 Consider using CouchDB's conflict resolution system by checking for conflicts on Get(), or apply updates using previous _rev as a reference to ensure atomicity
 */
-func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
+func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
 
 	if doCreate {
 
