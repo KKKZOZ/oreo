@@ -2,12 +2,17 @@ package couchdb
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/go-kivik/kivik/v4"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/kkkzoz/oreo/pkg/txn"
+
+	_ "github.com/go-kivik/kivik/v4/couchdb"
 )
+
+var _ txn.Connector = (*CouchDBConnection)(nil)
 
 type CouchDBConnection struct {
 	client  *kivik.Client
@@ -28,8 +33,10 @@ type ConnectionOptions struct {
 func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 	if config == nil {
 		config = &ConnectionOptions{
-			Address: "http://localhost:5984",
-			DBName:  "dbname",
+			Address:  "http://admin:password@localhost:5984",
+			DBName:   "oreo",
+			Username: "admin",
+			Password: "password",
 		}
 	}
 	if config.Address == "" {
@@ -41,38 +48,48 @@ func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 	}
 
 	client, _ := kivik.New("couch", config.Address)
+
+	// Set the basic authorization header
+
 	return &CouchDBConnection{
 		client:  client,
 		Address: config.Address,
+		config:  *config,
 		se:      config.se,
 	}
 }
 
 // Connect establishes a connection to the CouchDB server and selects database
 func (r *CouchDBConnection) Connect() error {
+	err := r.client.CreateDB(context.Background(), r.config.DBName, nil)
+	// if the error is not 'PreconditionFailed' which means the DB already exists, return the error.
+	if err != nil && kivik.HTTPStatus(err) != http.StatusPreconditionFailed {
+		return err
+	}
+
 	db := r.client.DB(r.config.DBName)
-	if db.Err() != nil {
-		return db.Err()
+	if dbErr := db.Err(); dbErr != nil {
+		return dbErr
 	}
 	r.db = db
 	return nil
 }
 
-func (r *CouchDBConnection) GetItem(key string) (txn.DataItem2, error) {
+func (r *CouchDBConnection) GetItem(key string) (txn.DataItem, error) {
 	row := r.db.Get(context.Background(), key)
-	var value txn.DataItem2
+	var value CouchDBItem
 	err := row.ScanDoc(&value)
 	if err != nil {
 		if kivik.HTTPStatus(err) == http.StatusNotFound {
-			return txn.DataItem2{}, txn.KeyNotFound
+			return &CouchDBItem{}, txn.KeyNotFound
 		}
 		// For all other errors, return as is
-		return txn.DataItem2{}, err
+		return &CouchDBItem{}, err
 	}
-	return value, nil
+	return &value, nil
 }
 
-func (r *CouchDBConnection) PutItem(key string, value txn.DataItem2) error {
+func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) error {
 	_, err := r.db.Put(context.Background(), key, value)
 	if err != nil {
 		return err
@@ -85,9 +102,31 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem2) error {
 
 Consider using CouchDB's conflict resolution system by checking for conflicts on Get(), or apply updates using previous _rev as a reference to ensure atomicity
 */
-func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem2) error {
-	// Dummy function, needs to be appropriately implemented
-	return nil
+func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
+
+	if doCreate {
+
+	}
+
+	// Get the existing document
+	row := r.db.Get(context.Background(), key)
+	var existing Item
+	if err = row.ScanDoc(&existing); err != nil {
+		return err
+	}
+
+	// Check if the version is the same
+	if existing.Version != item.Version {
+		return errors.New("version mismatch")
+	}
+
+	// Use the existing document revision
+	item.Rev = existing.Rev
+
+	// Update the document
+	_, err = r.db.Put(context.Background(), key, item)
+
+	return err
 }
 
 // Retrieve the value associated with the given key
