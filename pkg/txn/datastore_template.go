@@ -11,6 +11,10 @@ import (
 	"github.com/kkkzoz/oreo/pkg/serializer"
 )
 
+const (
+	EMPTY string = ""
+)
+
 // Datastore represents a datastorer implementation using the underlying connector.
 type Datastore struct {
 
@@ -263,8 +267,8 @@ func (r *Datastore) writeToCache(cacheItem DataItem) error {
 	if oldItem, ok := r.readCache[cacheItem.Key()]; ok {
 		cacheItem.SetVersion(oldItem.Version())
 	} else {
-		// else we set it to -1, indicating this is a direct write
-		cacheItem.SetVersion(-1)
+		// else we set it to empty, indicating this is a direct write
+		cacheItem.SetVersion("")
 	}
 
 	r.writeCache[cacheItem.Key()] = cacheItem
@@ -302,10 +306,11 @@ func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) err
 		if err != nil {
 			return err
 		}
-		if err = r.conn.ConditionalUpdate(newItem.Key(), newItem, true); err != nil {
+		newVer, err := r.conn.ConditionalUpdate(newItem.Key(), newItem, true)
+		if err != nil {
 			return err
 		}
-		newItem.SetVersion(newItem.Version() + 1)
+		newItem.SetVersion(newVer)
 		r.writeCache[newItem.Key()] = newItem
 		return nil
 	}
@@ -322,10 +327,11 @@ func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) err
 		if err != nil {
 			return err
 		}
-		if err = r.conn.ConditionalUpdate(newItem.Key(), newItem, false); err != nil {
+		newVer, err := r.conn.ConditionalUpdate(newItem.Key(), newItem, false)
+		if err != nil {
 			return err
 		}
-		newItem.SetVersion(newItem.Version() + 1)
+		newItem.SetVersion(newVer)
 		r.writeCache[newItem.Key()] = newItem
 		return nil
 	}
@@ -342,7 +348,7 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 
 	// if the cacheItem follows read-modified-write pattern,
 	// it already has a valid version, we can skip the read step.
-	if cacheItem.Version() != -1 {
+	if cacheItem.Version() != "" {
 		dbItem := r.readCache[cacheItem.Key()]
 		return r.doConditionalUpdate(cacheItem, dbItem)
 	}
@@ -522,11 +528,11 @@ func (r *Datastore) rollback(item DataItem) (DataItem, error) {
 	if item.Prev() == "" {
 		item.SetIsDeleted(true)
 		item.SetTxnState(config.COMMITTED)
-		err := r.conn.ConditionalUpdate(item.Key(), item, false)
+		newVer, err := r.conn.ConditionalUpdate(item.Key(), item, false)
 		if err != nil {
 			return nil, errors.Join(errors.New("rollback failed"), err)
 		}
-		item.SetVersion(item.Version() + 1)
+		item.SetVersion(newVer)
 		return item, err
 	}
 
@@ -536,13 +542,13 @@ func (r *Datastore) rollback(item DataItem) (DataItem, error) {
 	}
 	// try to rollback through ConditionalUpdate
 	newItem.SetVersion(item.Version())
-	err = r.conn.ConditionalUpdate(item.Key(), newItem, false)
+	newVer, err := r.conn.ConditionalUpdate(item.Key(), newItem, false)
 	// err = r.conn.PutItem(item.Key, newItem)
 	if err != nil {
 		return nil, errors.Join(errors.New("rollback failed"), err)
 	}
 	// update the version
-	newItem.SetVersion(newItem.Version() + 1)
+	newItem.SetVersion(newVer)
 
 	return newItem, err
 }
@@ -552,11 +558,11 @@ func (r *Datastore) rollForward(item DataItem) (DataItem, error) {
 	// var oldItem DataItem
 	// r.conn.Get(item.Key, &oldItem)
 	item.SetTxnState(config.COMMITTED)
-	err := r.conn.ConditionalUpdate(item.Key(), item, false)
+	newVer, err := r.conn.ConditionalUpdate(item.Key(), item, false)
 	if err != nil {
 		return nil, errors.Join(errors.New("rollForward failed"), err)
 	}
-	item.SetVersion(item.Version() + 1)
+	item.SetVersion(newVer)
 
 	// err := r.conn.PutItem(item.Key, item)
 	return item, err

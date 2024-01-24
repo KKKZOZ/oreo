@@ -141,14 +141,16 @@ func (m *MongoConnection) PutItem(key string, value txn.DataItem) error {
 // If the item's version does not match, it returns a version mismatch error.
 // Note: if the previous version of the item is not found, it will return a key not found error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreat bool) error {
+func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreat bool) (string, error) {
 	if !m.hasConnected {
-		return fmt.Errorf("not connected to MongoDB")
+		return "", fmt.Errorf("not connected to MongoDB")
 	}
 
 	if doCreat {
 		return m.atomicCreate(key, value)
 	}
+
+	newVer := util.AddToString(value.Version(), 1)
 
 	filter := bson.M{"_id": key, "Version": value.Version()}
 	update := bson.D{
@@ -161,7 +163,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 			{Key: "Prev", Value: value.Prev()},
 			{Key: "LinkedLen", Value: value.LinkedLen()},
 			{Key: "IsDeleted", Value: value.IsDeleted()},
-			{Key: "Version", Value: value.Version() + 1},
+			{Key: "Version", Value: newVer},
 		}},
 	}
 	after := options.After
@@ -172,23 +174,25 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return txn.VersionMismatch
+			return "", txn.VersionMismatch
 		}
-		return err
+		return "", err
 	}
 
-	if updatedItem.Version() != value.Version()+1 {
-		return txn.VersionMismatch
+	if updatedItem.Version() != newVer {
+		return "", txn.VersionMismatch
 	}
 
-	return nil
+	return newVer, nil
 }
 
-func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) error {
+func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) (string, error) {
 	filter := bson.M{"_id": key}
 
 	var result MongoItem
 	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
+
+	newVer := util.AddToString(value.Version(), 1)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -202,14 +206,17 @@ func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) error {
 				{Key: "Prev", Value: value.Prev()},
 				{Key: "LinkedLen", Value: value.LinkedLen()},
 				{Key: "IsDeleted", Value: value.IsDeleted()},
-				{Key: "Version", Value: value.Version() + 1},
+				{Key: "Version", Value: newVer},
 			})
-			return err
+			if err != nil {
+				return "", err
+			}
+			return newVer, nil
 		}
-		return err
+		return "", err
 	}
 
-	return txn.VersionMismatch
+	return "", txn.VersionMismatch
 }
 
 // Get retrieves the value associated with the given key from the MongoDB database.
