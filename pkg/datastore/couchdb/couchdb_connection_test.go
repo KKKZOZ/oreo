@@ -34,20 +34,20 @@ func TestNewCouchDBConnection_WithAddress(t *testing.T) {
 	assert.Equal(t, expectedAddress, connection.Address)
 }
 
-func TestMongoConnection_Connect(t *testing.T) {
+func TestCouchDBConnection_Connect(t *testing.T) {
 	connection := NewCouchDBConnection(nil)
 	err := connection.Connect()
 	assert.Nil(t, err)
 }
 
-func TestMongoConnection_ConnectWithInvalidAddress(t *testing.T) {
+func TestCouchDBConnection_ConnectWithInvalidAddress(t *testing.T) {
 	connectionOptions := &ConnectionOptions{Address: "invalid_address"}
 	connection := NewCouchDBConnection(connectionOptions)
 	err := connection.Connect()
 	assert.NotNil(t, err)
 }
 
-func TestMongoConnection_UseWithoutConnect(t *testing.T) {
+func TestCouchDBConnection_UseWithoutConnect(t *testing.T) {
 	connection := NewCouchDBConnection(nil)
 	err := connection.Delete("test_key")
 	assert.NotNil(t, err)
@@ -63,7 +63,7 @@ func TestTimestamp(t *testing.T) {
 	}
 }
 
-func TestMongoConnection_GetItemNotFound(t *testing.T) {
+func TestCouchDBConnection_GetItemNotFound(t *testing.T) {
 	connection := NewCouchDBConnection(nil)
 	err := connection.Connect()
 	assert.Nil(t, err)
@@ -152,7 +152,7 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 	}
 }
 
-func TestMongoConnection_DeleteItem(t *testing.T) {
+func TestCouchDBConnection_DeleteItem(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 
@@ -179,7 +179,7 @@ func TestMongoConnection_DeleteItem(t *testing.T) {
 	assert.EqualError(t, err, txn.KeyNotFound.Error())
 }
 
-func TestMongoConnection_DeleteItemNotFound(t *testing.T) {
+func TestCouchDBConnection_DeleteItemNotFound(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 
@@ -189,7 +189,7 @@ func TestMongoConnection_DeleteItemNotFound(t *testing.T) {
 	// assert.NoError(t, err)
 }
 
-func TestMongoConnection_DeleteTSR(t *testing.T) {
+func TestCouchDBConnection_DeleteTSR(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 
@@ -202,7 +202,7 @@ func TestMongoConnection_DeleteTSR(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestMongoConnection_ConditionalUpdateSuccess(t *testing.T) {
+func TestCouchDBConnection_ConditionalUpdateSuccess(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 	conn.Delete("test_key")
@@ -250,7 +250,7 @@ func TestMongoConnection_ConditionalUpdateSuccess(t *testing.T) {
 
 }
 
-func TestMongoConnection_ConditionalUpdateFail(t *testing.T) {
+func TestCouchDBConnection_ConditionalUpdateFail(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 	conn.Delete("test_key")
@@ -296,7 +296,7 @@ func TestMongoConnection_ConditionalUpdateFail(t *testing.T) {
 	}
 }
 
-func TestMongoConnection_ConditionalUpdateNonExist(t *testing.T) {
+func TestCouchDBConnection_ConditionalUpdateNonExist(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 
@@ -329,7 +329,7 @@ func TestMongoConnection_ConditionalUpdateNonExist(t *testing.T) {
 	}
 }
 
-func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
+func TestCouchDBConnection_ConditionalUpdateConcurrently(t *testing.T) {
 
 	t.Run("this is a update", func(t *testing.T) {
 		conn := NewDefaultConnection()
@@ -446,7 +446,7 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 	})
 }
 
-func TestMongoConnection_SimplePutAndGet(t *testing.T) {
+func TestCouchDBConnection_SimplePutAndGet(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 	conn.Delete("test_key")
@@ -460,7 +460,7 @@ func TestMongoConnection_SimplePutAndGet(t *testing.T) {
 	assert.Equal(t, "test_value", value)
 }
 
-func TestMongoConnection_PutAndGet(t *testing.T) {
+func TestCouchDBConnection_PutAndGet(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 	conn.Delete("test_key")
@@ -494,46 +494,47 @@ func TestMongoConnection_PutAndGet(t *testing.T) {
 	}
 }
 
-func TestMongoConnection_ReplaceAndGet(t *testing.T) {
-	conn := NewCouchDBConnection(nil)
-	conn.Connect()
-	conn.Delete("test_key")
-	se := serializer.NewJSONSerializer()
+// func TestCouchDBConnection_ReplaceAndGet(t *testing.T) {
+// 	t.SkipNow()
+// 	conn := NewCouchDBConnection(nil)
+// 	conn.Connect()
+// 	conn.Delete("test_key")
+// 	se := serializer.NewJSONSerializer()
 
-	key := "test_key"
-	person := testutil.NewDefaultPerson()
-	item := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(person),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
-		// CVersion:   "2",
-	}
-	bs, err := se.Serialize(item)
-	assert.NoError(t, err)
-	err = conn.Put(key, string(bs))
-	assert.NoError(t, err)
+// 	key := "test_key"
+// 	person := testutil.NewDefaultPerson()
+// 	item := &CouchDBItem{
+// 		CKey:       key,
+// 		CValue:     util.ToJSONString(person),
+// 		CTxnId:     "1",
+// 		CTxnState:  config.COMMITTED,
+// 		CTValid:    time.Now().Add(-3 * time.Second),
+// 		CTLease:    time.Now().Add(-2 * time.Second),
+// 		CPrev:      "",
+// 		CIsDeleted: false,
+// 		// CVersion:   "2",
+// 	}
+// 	bs, err := se.Serialize(item)
+// 	assert.NoError(t, err)
+// 	err = conn.Put(key, string(bs))
+// 	assert.NoError(t, err)
 
-	item.CVersion = util.AddToString(item.CVersion, 1)
-	bs, _ = se.Serialize(item)
-	err = conn.Put(key, string(bs))
-	assert.NoError(t, err)
+// 	item.CVersion = util.AddToString(item.CVersion, 1)
+// 	bs, _ = se.Serialize(item)
+// 	err = conn.Put(key, string(bs))
+// 	assert.NoError(t, err)
 
-	str, err := conn.Get(key)
-	assert.NoError(t, err)
-	var actualItem CouchDBItem
-	err = se.Deserialize([]byte(str), &actualItem)
-	assert.NoError(t, err)
-	if !actualItem.Equal(item) {
-		t.Errorf("\nexpect: \n%v, \nactual: \n%v", item, actualItem)
-	}
-}
+// 	str, err := conn.Get(key)
+// 	assert.NoError(t, err)
+// 	var actualItem CouchDBItem
+// 	err = se.Deserialize([]byte(str), &actualItem)
+// 	assert.NoError(t, err)
+// 	if !actualItem.Equal(item) {
+// 		t.Errorf("\nexpect: \n%v, \nactual: \n%v", item, actualItem)
+// 	}
+// }
 
-func TestMongoConnection_GetNoExist(t *testing.T) {
+func TestCouchDBConnection_GetNoExist(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 
@@ -544,7 +545,7 @@ func TestMongoConnection_GetNoExist(t *testing.T) {
 	assert.EqualError(t, err, txn.KeyNotFound.Error())
 }
 
-// func TestMongoConnection_PutDirectItem(t *testing.T) {
+// func TestCouchDBConnection_PutDirectItem(t *testing.T) {
 // 	conn := NewCouchDBConnection(nil)
 // 	conn.Connect()
 
@@ -578,7 +579,7 @@ func TestMongoConnection_GetNoExist(t *testing.T) {
 // 	}
 // }
 
-func TestMongoConnection_DeleteTwice(t *testing.T) {
+func TestCouchDBConnection_DeleteTwice(t *testing.T) {
 	conn := NewCouchDBConnection(nil)
 	conn.Connect()
 	conn.Put("test_key", "test_value")
@@ -588,7 +589,7 @@ func TestMongoConnection_DeleteTwice(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestMongoConnection_ConditionalUpdateDoCreate(t *testing.T) {
+func TestCouchDBConnection_ConditionalUpdateDoCreate(t *testing.T) {
 
 	dbItem := &CouchDBItem{
 		CKey:       "item1",

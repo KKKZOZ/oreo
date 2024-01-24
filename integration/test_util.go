@@ -2,6 +2,7 @@ package integration
 
 import (
 	"github.com/kkkzoz/oreo/internal/mock"
+	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
 	"github.com/kkkzoz/oreo/pkg/datastore/memory"
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
@@ -13,6 +14,7 @@ const (
 	REDIS   = "redis"
 	MONGO   = "mongo"
 	KVROCKS = "kvrocks"
+	COUCHDB = "couchdb"
 )
 
 func NewConnectionWithSetup(dsType string) txn.Connector {
@@ -31,6 +33,12 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 			Password:       "",
 			DBName:         "oreo",
 			CollectionName: "records",
+		})
+	}
+	if dsType == "couchdb" {
+		conn = couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
+			Address: "http://admin:password@localhost:5984",
+			DBName:  "oreo",
 		})
 	}
 
@@ -71,6 +79,15 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 		txn.AddDatastore(mds)
 		txn.SetGlobalDatastore(mds)
 	}
+	if dsType == "couchdb" {
+		conn := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
+			Address: "http://admin:password@localhost:5984",
+			DBName:  "oreo",
+		})
+		cds := couchdb.NewCouchDBDatastore("couchdb", conn)
+		txn.AddDatastore(cds)
+		txn.SetGlobalDatastore(cds)
+	}
 	if dsType == "kvrocks" {
 		conn := redis.NewRedisConnection(&redis.ConnectionOptions{
 			Address: "localhost:6666",
@@ -102,6 +119,14 @@ func NewTransactionWithMockConn(dsType string, limit int,
 		mds := mongo.NewMongoDatastore("mongo", mockConn)
 		txn.AddDatastore(mds)
 		txn.SetGlobalDatastore(mds)
+	}
+
+	if dsType == "couchdb" {
+		mockConn := mock.NewMockCouchDBConnection(
+			"localhost", 5984, limit, isReturned, debugFunc)
+		cds := couchdb.NewCouchDBDatastore("couchdb", mockConn)
+		txn.AddDatastore(cds)
+		txn.SetGlobalDatastore(cds)
 	}
 
 	if dsType == "kvrocks" {
