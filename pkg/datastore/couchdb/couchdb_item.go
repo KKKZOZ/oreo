@@ -21,7 +21,7 @@ type CouchDBItem struct {
 	CPrev      string       `json:"Prev"`
 	CLinkedLen int          `json:"LinkedLen"`
 	CIsDeleted bool         `json:"IsDeleted"`
-	CVersion   int          `json:"Version"`
+	CVersion   string       `json:"Version"`
 	Rev        string       `json:"_rev,omitempty"`
 }
 
@@ -104,11 +104,11 @@ func (c *CouchDBItem) SetIsDeleted(isDeleted bool) {
 	c.CIsDeleted = isDeleted
 }
 
-func (c *CouchDBItem) Version() int {
+func (c *CouchDBItem) Version() string {
 	return c.CVersion
 }
 
-func (c *CouchDBItem) SetVersion(version int) {
+func (c *CouchDBItem) SetVersion(version string) {
 	c.CVersion = version
 }
 

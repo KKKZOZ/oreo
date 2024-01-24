@@ -67,7 +67,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -112,7 +112,7 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(+10 * time.Second),
 		MTLease:   time.Now().Add(+5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -157,7 +157,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 	curRedisItem := &MongoItem{
 		MKey:      "John",
@@ -166,7 +166,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(10 * time.Second),
 		MTLease:   time.Now().Add(5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 		MPrev:     util.ToJSONString(preRedisItem),
 	}
 
@@ -216,7 +216,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(10 * time.Second),
 		MTLease:   time.Now().Add(5 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 	curRedisItem := &MongoItem{
 		MKey:      "John",
@@ -225,7 +225,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(20 * time.Second),
 		MTLease:   time.Now().Add(15 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 		MPrev:     util.ToJSONString(preRedisItem),
 	}
 
@@ -267,7 +267,7 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		MTxnState: config.PREPARED,
 		MTValid:   time.Now(),
 		MTLease:   time.Now(),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -314,7 +314,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 
 	curMemItem := &MongoItem{
@@ -325,7 +325,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		MTValid:   time.Now().Add(-5 * time.Second),
 		MTLease:   time.Now().Add(-4 * time.Second),
 		MPrev:     util.ToJSONString(tarMemItem),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "item1"
@@ -375,7 +375,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	expectedStr := util.ToJSONString(expectedRedisItem)
@@ -392,7 +392,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		MTxnState: config.PREPARED,
 		MTValid:   time.Now().Add(-3 * time.Second),
 		MTLease:   time.Now().Add(-1 * time.Second),
-		MVersion:  3,
+		MVersion:  "3",
 		MPrev:     expectedStr,
 	}
 
@@ -427,7 +427,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		MTValid:    time.Now().Add(-2 * time.Second),
 		MTLease:    time.Now().Add(-1 * time.Second),
 		MLinkedLen: 1,
-		MVersion:   1,
+		MVersion:   "1",
 	}
 
 	dbItem2 := &MongoItem{
@@ -439,7 +439,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		MTLease:    time.Now().Add(2 * time.Second),
 		MPrev:      util.ToJSONString(dbItem1),
 		MLinkedLen: 2,
-		MVersion:   2,
+		MVersion:   "2",
 	}
 
 	t.Run("when the item has a valid Prev field", func(t *testing.T) {
@@ -478,7 +478,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 		MTValid:    time.Now().Add(-2 * time.Second),
 		MTLease:    time.Now().Add(-1 * time.Second),
 		MLinkedLen: 1,
-		MVersion:   1,
+		MVersion:   "1",
 		MIsDeleted: true,
 	}
 
@@ -616,7 +616,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -677,7 +677,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -737,7 +737,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -783,7 +783,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -876,7 +876,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -937,7 +937,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	key := "John"
@@ -1106,7 +1106,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		MTxnState:  config.COMMITTED,
 		MTValid:    time.Now().Add(-10 * time.Second),
 		MTLease:    time.Now().Add(-9 * time.Second),
-		MVersion:   1,
+		MVersion:   "1",
 		MLinkedLen: 1,
 	}
 
@@ -1118,7 +1118,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		MTxnState:  config.COMMITTED,
 		MTValid:    time.Now().Add(5 * time.Second),
 		MTLease:    time.Now().Add(6 * time.Second),
-		MVersion:   2,
+		MVersion:   "2",
 		MPrev:      util.ToJSONString(memItem1_1),
 		MLinkedLen: 2,
 	}
@@ -1131,7 +1131,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		MTxnState:  config.COMMITTED,
 		MTValid:    time.Now().Add(10 * time.Second),
 		MTLease:    time.Now().Add(11 * time.Second),
-		MVersion:   3,
+		MVersion:   "3",
 		MPrev:      util.ToJSONString(memItem1_2),
 		MLinkedLen: 3,
 	}
@@ -1304,7 +1304,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			MTValid:    time.Now().Add(-10 * time.Second),
 			MTLease:    time.Now().Add(-9 * time.Second),
 			MLinkedLen: 1,
-			MVersion:   1,
+			MVersion:   "1",
 		}
 
 		curItem := &MongoItem{
@@ -1316,7 +1316,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MPrev:      util.ToJSONString(tarItem),
 			MLinkedLen: 2,
-			MVersion:   2,
+			MVersion:   "2",
 		}
 
 		conn.PutItem(tarItem.Key(), curItem)
@@ -1342,7 +1342,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		// Second, we check the final record's Prev field is correct
 		finalRedisItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
-		tarItem.SetVersion(3)
+		tarItem.SetVersion("3")
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
 
@@ -1357,7 +1357,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			MTxnState: config.PREPARED,
 			MTValid:   time.Now().Add(-10 * time.Second),
 			MTLease:   time.Now().Add(-9 * time.Second),
-			MVersion:  1,
+			MVersion:  "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1385,7 +1385,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		assert.NoError(t, err)
 		tarItem.SetIsDeleted(true)
 		tarItem.SetTxnState(config.COMMITTED)
-		tarItem.SetVersion(tarItem.MVersion + 1)
+		tarItem.SetVersion(util.AddToString(tarItem.Version(), 1))
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
 
@@ -1406,7 +1406,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			MTValid:    time.Now().Add(-10 * time.Second),
 			MTLease:    time.Now().Add(-9 * time.Second),
 			MLinkedLen: 1,
-			MVersion:   1,
+			MVersion:   "1",
 		}
 
 		curItem := &MongoItem{
@@ -1417,7 +1417,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			MTValid:    time.Now().Add(-5 * time.Second),
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MLinkedLen: 2,
-			MVersion:   2,
+			MVersion:   "2",
 			MPrev:      util.ToJSONString(tarItem),
 		}
 
@@ -1449,7 +1449,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		curItem.SetPrev("")
 		curItem.SetLinkedLen(1)
 		curItem.SetTxnState(config.COMMITTED)
-		curItem.SetVersion(3)
+		curItem.SetVersion("3")
 		assert.Equal(t, util.ToJSONString(curItem), finalRedisItem.Prev())
 	})
 
@@ -1464,7 +1464,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			MTxnState: config.PREPARED,
 			MTValid:   time.Now().Add(-10 * time.Second),
 			MTLease:   time.Now().Add(-9 * time.Second),
-			MVersion:  1,
+			MVersion:  "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1492,7 +1492,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		finalRedisItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 
-		tarItem.SetVersion(2)
+		tarItem.SetVersion("2")
 		tarItem.SetTxnState(config.COMMITTED)
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
@@ -1511,7 +1511,7 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 		MTxnState: config.PREPARED,
 		MTValid:   time.Now().Add(2 * time.Second),
 		MTLease:   time.Now().Add(1 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1535,7 +1535,7 @@ func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 		MTValid:    time.Now().Add(3 * time.Second),
 		MTLease:    time.Now().Add(4 * time.Second),
 		MLinkedLen: 1,
-		MVersion:   2,
+		MVersion:   "2",
 	}
 	conn.PutItem(dbItem1.Key(), dbItem1)
 
@@ -1567,7 +1567,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 
 	item1 := &MongoItem{
@@ -1577,7 +1577,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		MTxnState: config.PREPARED,
 		MTValid:   time.Now().Add(-5 * time.Second),
 		MTLease:   time.Now().Add(-4 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when reading", func(t *testing.T) {
@@ -1632,7 +1632,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 
 	item1 := &MongoItem{
@@ -1642,7 +1642,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		MTxnState: config.PREPARED,
 		MTValid:   time.Now().Add(-5 * time.Second),
 		MTLease:   time.Now().Add(-4 * time.Second),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when writing", func(t *testing.T) {
@@ -1664,7 +1664,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(item), res.Value())
 		tarItem := item1Pre
-		tarItem.SetVersion(3)
+		tarItem.SetVersion("3")
 		assert.Equal(t, util.ToJSONString(tarItem), res.Prev())
 
 	})
@@ -1704,7 +1704,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 
 		item1.SetIsDeleted(true)
 		item1.SetTxnState(config.COMMITTED)
-		item1.SetVersion(item1.MVersion + 1)
+		item1.SetVersion(util.AddToString(item1.MVersion, 1))
 		assert.Equal(t, util.ToJSONString(item1), res.Prev())
 	})
 }
@@ -1720,7 +1720,7 @@ func TestRollForwardWhenReading(t *testing.T) {
 		MTxnState: config.PREPARED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1736,7 +1736,7 @@ func TestRollForwardWhenReading(t *testing.T) {
 	res, err := conn.GetItem(tarItem.Key())
 	assert.NoError(t, err)
 	tarItem.SetTxnState(config.COMMITTED)
-	tarItem.SetVersion(2)
+	tarItem.SetVersion("2")
 	if !res.Equal(tarItem) {
 		t.Errorf("\ngot\n %v \nwant\n %v", res, tarItem)
 	}
@@ -1753,7 +1753,7 @@ func TestRollForwardWhenWriting(t *testing.T) {
 		MTxnState: config.PREPARED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1771,7 +1771,7 @@ func TestRollForwardWhenWriting(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(item), res.Value())
 	tarItem.SetTxnState(config.COMMITTED)
-	tarItem.SetVersion(2)
+	tarItem.SetVersion("2")
 	tarPrev := util.ToJSONString(tarItem)
 	assert.Equal(t, tarPrev, res.Prev())
 }
@@ -1788,7 +1788,7 @@ func TestItemVersionUpdate(t *testing.T) {
 			MTValid:    time.Now().Add(-10 * time.Second),
 			MTLease:    time.Now().Add(-9 * time.Second),
 			MLinkedLen: 1,
-			MVersion:   1,
+			MVersion:   "1",
 		}
 		conn.PutItem(dbItem.Key(), dbItem)
 
@@ -1804,6 +1804,6 @@ func TestItemVersionUpdate(t *testing.T) {
 
 		res, err := conn.GetItem(dbItem.Key())
 		assert.NoError(t, err)
-		assert.Equal(t, dbItem.Version()+1, res.Version())
+		assert.Equal(t, util.AddToString(dbItem.Version(), 1), res.Version())
 	})
 }

@@ -578,7 +578,7 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-10 * time.Second),
 		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 
 	curMemItem := &mongo.MongoItem{
@@ -589,7 +589,7 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 		MTValid:   time.Now().Add(-5 * time.Second),
 		MTLease:   time.Now().Add(-4 * time.Second),
 		MPrev:     util.ToJSONString(tarMemItem),
-		MVersion:  2,
+		MVersion:  "2",
 	}
 
 	conn := NewConnectionWithSetup(MONGO)
@@ -605,7 +605,7 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 	assert.NoError(t, err)
 	actual, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	tarMemItem.MVersion = 3
+	tarMemItem.MVersion = "3"
 	if !tarMemItem.Equal(actual) {
 		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
 	}
@@ -1029,7 +1029,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 			MTValid:    time.Now().Add(-5 * time.Second),
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MLinkedLen: 1,
-			MVersion:   1,
+			MVersion:   "1",
 		}
 		redisItem2 := &mongo.MongoItem{
 			MKey:       "item1",
@@ -1040,7 +1040,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MPrev:      util.ToJSONString(redisItem1),
 			MLinkedLen: 2,
-			MVersion:   2,
+			MVersion:   "2",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1071,7 +1071,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 		resItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-		redisItem1.MVersion = 3
+		redisItem1.MVersion = "3"
 		assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev())
 	})
 
@@ -1093,7 +1093,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MPrev:      "",
 			MLinkedLen: 1,
-			MVersion:   1,
+			MVersion:   "1",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1126,7 +1126,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
 		redisItem2.MIsDeleted = true
 		redisItem2.MTxnState = config.COMMITTED
-		redisItem2.MVersion++
+		redisItem2.MVersion = util.AddToString(redisItem2.MVersion, 1)
 		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 	})
 
@@ -1148,7 +1148,7 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 		MTxnState: config.COMMITTED,
 		MTValid:   time.Now().Add(-5 * time.Second),
 		MTLease:   time.Now().Add(-4 * time.Second),
-		MVersion:  1,
+		MVersion:  "1",
 	}
 	redisItem2 := &mongo.MongoItem{
 		MKey:       "item1",
@@ -1159,7 +1159,7 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 		MTLease:    time.Now().Add(-4 * time.Second),
 		MPrev:      util.ToJSONString(redisItem1),
 		MLinkedLen: 2,
-		MVersion:   2,
+		MVersion:   "2",
 	}
 	conn.PutItem("item1", redisItem2)
 	conn.Put("TestMongo_RollForwardConflict2", config.COMMITTED)
@@ -1193,7 +1193,7 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 	redisItem2.MTxnState = config.COMMITTED
 	redisItem2.MPrev = ""
 	redisItem2.MLinkedLen = 1
-	redisItem2.MVersion = 3
+	redisItem2.MVersion = "3"
 	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 
 }
@@ -1503,7 +1503,7 @@ func TestMongo_DeleteTimingProblems(t *testing.T) {
 			MTxnState: config.COMMITTED,
 			MTValid:   time.Now().Add(-5 * time.Second),
 			MTLease:   time.Now().Add(-4 * time.Second),
-			MVersion:  1,
+			MVersion:  "1",
 		}
 		testConn.PutItem("item1", dbItem)
 

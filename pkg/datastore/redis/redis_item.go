@@ -22,7 +22,7 @@ type RedisItem struct {
 	RPrev      string       `redis:"Prev" json:"Prev"`
 	RLinkedLen int          `redis:"LinkedLen" json:"LinkedLen"`
 	RIsDeleted bool         `redis:"IsDeleted" json:"IsDeleted"`
-	RVersion   int          `redis:"Version" json:"Version"`
+	RVersion   string       `redis:"Version" json:"Version"`
 }
 
 func NewRedisItem(options txn.ItemOptions) *RedisItem {
@@ -104,11 +104,11 @@ func (r *RedisItem) SetIsDeleted(d bool) {
 	r.RIsDeleted = d
 }
 
-func (r *RedisItem) Version() int {
+func (r *RedisItem) Version() string {
 	return r.RVersion
 }
 
-func (r *RedisItem) SetVersion(v int) {
+func (r *RedisItem) SetVersion(v string) {
 	r.RVersion = v
 }
 
@@ -123,7 +123,7 @@ func (r RedisItem) String() string {
     Prev:      %s,
 	LinkedLen: %d,
     IsDeleted: %v,
-    Version:   %d,
+    Version:   %s,
 }`, r.RKey, r.RValue, r.RTxnId, util.ToString(r.RTxnState),
 		r.RTValid.Format(time.RFC3339), r.RTLease.Format(time.RFC3339),
 		r.RPrev, r.RLinkedLen, r.RIsDeleted, r.RVersion)
@@ -134,7 +134,7 @@ func (r *RedisItem) Empty() bool {
 		r.RTxnId == "" && r.RTxnState == config.State(0) &&
 		r.RTValid.IsZero() && r.RTLease.IsZero() &&
 		r.RPrev == "" && r.RLinkedLen == 0 &&
-		!r.RIsDeleted && r.RVersion == 0
+		!r.RIsDeleted && r.RVersion == ""
 }
 
 func (r *RedisItem) Equal(other txn.DataItem) bool {
