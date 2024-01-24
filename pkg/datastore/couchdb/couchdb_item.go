@@ -21,8 +21,7 @@ type CouchDBItem struct {
 	CPrev      string       `json:"Prev"`
 	CLinkedLen int          `json:"LinkedLen"`
 	CIsDeleted bool         `json:"IsDeleted"`
-	CVersion   string       `json:"Version"`
-	Rev        string       `json:"_rev,omitempty"`
+	CVersion   string       `json:"_rev,omitempty"`
 }
 
 func NewCouchDBItem(options txn.ItemOptions) *CouchDBItem {
@@ -139,7 +138,7 @@ func (c *CouchDBItem) Empty() bool {
 }
 
 func (c *CouchDBItem) String() string {
-	return fmt.Sprintf(`MongoItem{
+	return fmt.Sprintf(`CouchDBItem{
     Key:       %s,
     Value:     %s,
     TxnId:     %s,
@@ -149,7 +148,7 @@ func (c *CouchDBItem) String() string {
     Prev:      %s,
 	LinkedLen: %d,
     IsDeleted: %v,
-    Version:   %d,
+    Version:   %s,
 }`, c.CKey, c.CValue, c.CTxnId, util.ToString(c.CTxnState),
 		c.CTValid.Format(time.RFC3339), c.CTLease.Format(time.RFC3339),
 		c.CPrev, c.CLinkedLen, c.CIsDeleted, c.CVersion)

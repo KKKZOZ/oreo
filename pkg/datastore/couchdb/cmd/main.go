@@ -17,7 +17,7 @@ func main() {
 		TxnId:   "txn1",
 		TValid:  time.Now(),
 		TLease:  time.Now(),
-		Version: 1,
+		Version: "1",
 	})
 
 	conn := couchdb.NewCouchDBConnection(nil)
@@ -26,7 +26,7 @@ func main() {
 		panic(err)
 	}
 
-	err = conn.PutItem(couchItem.CKey, couchItem)
+	_, err = conn.PutItem(couchItem.CKey, couchItem)
 	if err != nil {
 		panic(err)
 	}

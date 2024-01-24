@@ -787,7 +787,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 	}
 
 	key := "John"
-	err := conn.PutItem(key, expectedRedisItem)
+	_, err := conn.PutItem(key, expectedRedisItem)
 	if err != nil {
 		t.Errorf("Error putting item to redis datastore: %s", err)
 	}
@@ -1139,7 +1139,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	t.Run("read will fail due to MaxRecordLength=2", func(t *testing.T) {
 
 		conn := NewDefaultConnection()
-		err := conn.PutItem("item1", memItem1_3)
+		_, err := conn.PutItem("item1", memItem1_3)
 		assert.NoError(t, err)
 
 		config.Config.MaxRecordLength = 2
