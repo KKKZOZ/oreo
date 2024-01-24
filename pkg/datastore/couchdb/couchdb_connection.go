@@ -2,11 +2,12 @@ package couchdb
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-kivik/kivik/v4"
-	"github.com/kkkzoz/oreo/pkg/serializer"
+	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/txn"
 
 	_ "github.com/go-kivik/kivik/v4/couchdb"
@@ -15,18 +16,17 @@ import (
 var _ txn.Connector = (*CouchDBConnection)(nil)
 
 type CouchDBConnection struct {
-	client  *kivik.Client
-	db      *kivik.DB
-	Address string
-	config  ConnectionOptions
-	se      serializer.Serializer
+	client       *kivik.Client
+	db           *kivik.DB
+	Address      string
+	config       ConnectionOptions
+	hasConnected bool
 }
 
 type ConnectionOptions struct {
 	Address  string
 	Username string
 	Password string
-	se       serializer.Serializer
 	DBName   string
 }
 
@@ -40,11 +40,7 @@ func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 		}
 	}
 	if config.Address == "" {
-		config.Address = "http://localhost:5984"
-	}
-
-	if config.se == nil {
-		config.se = serializer.NewJSONSerializer()
+		config.Address = "http://admin:password@localhost:5984"
 	}
 
 	client, _ := kivik.New("couch", config.Address)
@@ -52,10 +48,10 @@ func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 	// Set the basic authorization header
 
 	return &CouchDBConnection{
-		client:  client,
-		Address: config.Address,
-		config:  *config,
-		se:      config.se,
+		client:       client,
+		Address:      config.Address,
+		config:       *config,
+		hasConnected: false,
 	}
 }
 
@@ -72,10 +68,15 @@ func (r *CouchDBConnection) Connect() error {
 		return dbErr
 	}
 	r.db = db
+	r.hasConnected = true
 	return nil
 }
 
 func (r *CouchDBConnection) GetItem(key string) (txn.DataItem, error) {
+	if !r.hasConnected {
+		return &CouchDBItem{}, fmt.Errorf("not connected to CouchDB")
+	}
+
 	row := r.db.Get(context.Background(), key)
 	var value CouchDBItem
 	err := row.ScanDoc(&value)
@@ -89,12 +90,16 @@ func (r *CouchDBConnection) GetItem(key string) (txn.DataItem, error) {
 	return &value, nil
 }
 
-func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) error {
-	_, err := r.db.Put(context.Background(), key, value)
-	if err != nil {
-		return err
+func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) (string, error) {
+	if !r.hasConnected {
+		return "", fmt.Errorf("not connected to CouchDB")
 	}
-	return nil
+
+	rev, err := r.db.Put(context.Background(), key, value, nil)
+	if err != nil {
+		return "", err
+	}
+	return rev, nil
 }
 
 /*
@@ -103,44 +108,76 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) error {
 Consider using CouchDB's conflict resolution system by checking for conflicts on Get(), or apply updates using previous _rev as a reference to ensure atomicity
 */
 func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+	if !r.hasConnected {
+		return "", fmt.Errorf("not connected to CouchDB")
+	}
+
+	var existing CouchDBItem
+	err := r.db.Get(context.Background(), key).ScanDoc(&existing)
 
 	if doCreate {
-
+		if err != nil {
+			if kivik.HTTPStatus(err) == http.StatusNotFound {
+				// If the document doesn't exist, create it
+				newVer, err := r.db.Put(context.Background(), key, value)
+				if err != nil {
+					return "", err
+				}
+				return newVer, nil
+			}
+			// For all other errors, return as is
+			return "", err
+		}
+		return "", txn.VersionMismatch
 	}
 
-	// Get the existing document
-	row := r.db.Get(context.Background(), key)
-	var existing Item
-	if err = row.ScanDoc(&existing); err != nil {
-		return err
+	if err != nil {
+		return "", txn.VersionMismatch
 	}
-
-	// Check if the version is the same
-	if existing.Version != item.Version {
-		return errors.New("version mismatch")
-	}
-
-	// Use the existing document revision
-	item.Rev = existing.Rev
 
 	// Update the document
-	_, err = r.db.Put(context.Background(), key, item)
+	newVer, err := r.db.Put(context.Background(), key, value)
+	if err != nil {
+		return "", txn.VersionMismatch
+	}
 
-	return err
+	return newVer, nil
 }
 
 // Retrieve the value associated with the given key
 func (r *CouchDBConnection) Get(name string) (string, error) {
+	if !r.hasConnected {
+		return "", fmt.Errorf("not connected to CouchDB")
+	}
+
 	row := r.db.Get(context.Background(), name)
-	var value string
+	var value map[string]string
 	if err := row.ScanDoc(&value); err != nil {
+		if kivik.HTTPStatus(err) == http.StatusNotFound {
+			return "", txn.KeyNotFound
+		}
 		return "", err
 	}
-	return value, nil
+	return value["value"], nil
 }
 
 // Store the given value with the specified name (key)
 func (r *CouchDBConnection) Put(name string, value interface{}) error {
+	if !r.hasConnected {
+		return fmt.Errorf("not connected to CouchDB")
+	}
+
+	if _, ok := value.(string); ok {
+		value = map[string]interface{}{
+			"value": value,
+		}
+	}
+	if _, ok := value.(config.State); ok {
+		value = map[string]interface{}{
+			"value": util.ToString(value),
+		}
+	}
+
 	_, err := r.db.Put(context.Background(), name, value)
 	if err != nil {
 		return err
@@ -150,13 +187,21 @@ func (r *CouchDBConnection) Put(name string, value interface{}) error {
 
 // Delete the specified key
 func (r *CouchDBConnection) Delete(name string) error {
+	if !r.hasConnected {
+		return fmt.Errorf("not connected to CouchDB")
+	}
+
+	type Item struct {
+		Rev string `json:"_rev,omitempty"`
+	}
+
 	row := r.db.Get(context.Background(), name)
-	var rev string
+	var rev Item
 
 	if err := row.ScanDoc(&rev); err != nil {
 		return err
 	}
-	_, err := r.db.Delete(context.Background(), name, rev)
+	_, err := r.db.Delete(context.Background(), name, rev.Rev)
 	if err != nil {
 		return err
 	}

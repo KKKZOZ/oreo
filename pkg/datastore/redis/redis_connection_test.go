@@ -133,7 +133,7 @@ func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
 		RVersion:   "2",
 	}
 
-	err := conn.PutItem(key, expectedItem)
+	_, err := conn.PutItem(key, expectedItem)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
@@ -161,7 +161,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 		RVersion:   "2",
 	}
 
-	err := conn.PutItem(key, olderItem)
+	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
 
 	newerPerson := testutil.NewDefaultPerson()
@@ -178,7 +178,7 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 		RVersion:   "3",
 	}
 
-	err = conn.PutItem(key, newerItem)
+	_, err = conn.PutItem(key, newerItem)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
@@ -204,7 +204,7 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 		RIsDeleted: false,
 		RVersion:   "2",
 	}
-	err := conn.PutItem(key, olderItem)
+	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
 
 	newerPerson := testutil.NewDefaultPerson()
@@ -250,7 +250,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 		RIsDeleted: false,
 		RVersion:   "2",
 	}
-	err := conn.PutItem(key, olderItem)
+	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
 
 	newerPerson := testutil.NewDefaultPerson()
@@ -326,7 +326,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 			RIsDeleted: false,
 			RVersion:   "2",
 		}
-		err := conn.PutItem(key, olderItem)
+		_, err := conn.PutItem(key, olderItem)
 		assert.NoError(t, err)
 
 		resChan := make(chan bool)

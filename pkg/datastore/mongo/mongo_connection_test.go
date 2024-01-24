@@ -92,7 +92,7 @@ func TestMongoConnectionPutItemAndGetItem(t *testing.T) {
 		MVersion:   "2",
 	}
 
-	err = conn.PutItem(key, expectedItem)
+	_, err = conn.PutItem(key, expectedItem)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
@@ -121,7 +121,7 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 		MVersion:   "2",
 	}
 
-	err := conn.PutItem(key, olderItem)
+	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
 
 	newerPerson := testutil.NewDefaultPerson()
@@ -138,7 +138,7 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 		MVersion:   "3",
 	}
 
-	err = conn.PutItem(key, newerItem)
+	_, err = conn.PutItem(key, newerItem)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
@@ -165,7 +165,7 @@ func TestMongoConnection_DeleteItem(t *testing.T) {
 		MIsDeleted: false,
 		MVersion:   "2",
 	}
-	err := conn.PutItem(key, item)
+	_, err := conn.PutItem(key, item)
 	assert.NoError(t, err)
 
 	err = conn.Delete(key)
@@ -215,7 +215,7 @@ func TestMongoConnection_ConditionalUpdateSuccess(t *testing.T) {
 		MIsDeleted: false,
 		MVersion:   "2",
 	}
-	err := conn.PutItem(key, olderItem)
+	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
 
 	newerPerson := testutil.NewDefaultPerson()
@@ -263,7 +263,7 @@ func TestMongoConnection_ConditionalUpdateFail(t *testing.T) {
 		MIsDeleted: false,
 		MVersion:   "2",
 	}
-	err := conn.PutItem(key, olderItem)
+	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
 
 	newerPerson := testutil.NewDefaultPerson()
@@ -340,7 +340,7 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 			MIsDeleted: false,
 			MVersion:   "2",
 		}
-		err := conn.PutItem(key, olderItem)
+		_, err := conn.PutItem(key, olderItem)
 		assert.NoError(t, err)
 
 		resChan := make(chan bool)

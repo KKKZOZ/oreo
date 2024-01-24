@@ -11,6 +11,9 @@ import (
 	"github.com/kkkzoz/oreo/pkg/serializer"
 )
 
+var _ Datastorer = (*Datastore)(nil)
+var _ TSRMaintainer = (*Datastore)(nil)
+
 const (
 	EMPTY string = ""
 )
@@ -479,7 +482,8 @@ func (r *Datastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
 	for _, item := range r.writeCache {
 		item.SetTxnState(config.COMMITTED)
-		err := r.conn.PutItem(item.Key(), item)
+		// _, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+		_, err := r.conn.PutItem(item.Key(), item)
 		if err != nil {
 			return err
 		}

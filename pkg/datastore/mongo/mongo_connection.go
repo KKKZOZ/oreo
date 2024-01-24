@@ -117,9 +117,9 @@ func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 
 // PutItem puts an item into the MongoDB database with the specified key and value.
 // The function returns an error if there was a problem executing the MongoDB commands.
-func (m *MongoConnection) PutItem(key string, value txn.DataItem) error {
+func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	if !m.hasConnected {
-		return fmt.Errorf("not connected to MongoDB")
+		return "", fmt.Errorf("not connected to MongoDB")
 	}
 
 	_, err := m.coll.UpdateOne(
@@ -131,9 +131,9 @@ func (m *MongoConnection) PutItem(key string, value txn.DataItem) error {
 		options.Update().SetUpsert(true),
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return "", nil
 }
 
 // ConditionalUpdate updates the value of a Mongo item if the version matches the provided value.
