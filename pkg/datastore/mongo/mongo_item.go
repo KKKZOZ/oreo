@@ -24,7 +24,7 @@ type MongoItem struct {
 	MPrev      string       `bson:"Prev" json:"Prev"`
 	MLinkedLen int          `bson:"LinkedLen" json:"LinkedLen"`
 	MIsDeleted bool         `bson:"IsDeleted" json:"IsDeleted"`
-	MVersion   int          `bson:"Version" json:"Version"`
+	MVersion   string       `bson:"Version" json:"Version"`
 }
 
 func NewMongoItem(options txn.ItemOptions) *MongoItem {
@@ -106,11 +106,11 @@ func (m *MongoItem) SetIsDeleted(isDeleted bool) {
 	m.MIsDeleted = isDeleted
 }
 
-func (m *MongoItem) Version() int {
+func (m *MongoItem) Version() string {
 	return m.MVersion
 }
 
-func (m *MongoItem) SetVersion(version int) {
+func (m *MongoItem) SetVersion(version string) {
 	m.MVersion = version
 }
 
@@ -125,7 +125,7 @@ func (r MongoItem) String() string {
     Prev:      %s,
 	LinkedLen: %d,
     IsDeleted: %v,
-    Version:   %d,
+    Version:   %s,
 }`, r.MKey, r.MValue, r.MTxnId, util.ToString(r.MTxnState),
 		r.MTValid.Format(time.RFC3339), r.MTLease.Format(time.RFC3339),
 		r.MPrev, r.MLinkedLen, r.MIsDeleted, r.MVersion)
@@ -136,7 +136,7 @@ func (r *MongoItem) Empty() bool {
 		r.MTxnId == "" && r.MTxnState == config.State(0) &&
 		r.MTValid.IsZero() && r.MTLease.IsZero() &&
 		r.MPrev == "" && r.MLinkedLen == 0 &&
-		!r.MIsDeleted && r.MVersion == 0
+		!r.MIsDeleted && r.MVersion == ""
 }
 
 func (r *MongoItem) Equal(other txn.DataItem) bool {
@@ -214,8 +214,7 @@ func (mi *MongoItem) UnmarshalBSONValue(t bsontype.Type, raw []byte) error {
 		mi.MIsDeleted = value.(bool)
 	}
 	if value, ok := m["Version"]; ok {
-		version := value.(int32)
-		mi.MVersion = int(version)
+		mi.MVersion = value.(string)
 	}
 
 	return nil

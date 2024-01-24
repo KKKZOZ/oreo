@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"sync"
@@ -11,19 +12,20 @@ import (
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/factory"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestKvrocks_TxnWrite(t *testing.T) {
+func TestCouchDB_TxnWrite(t *testing.T) {
 
-	txn1 := NewTransactionWithSetup(KVROCKS)
+	txn1 := NewTransactionWithSetup(COUCHDB)
 	expected := testutil.NewDefaultPerson()
 
 	// clear the data
-	conn := NewConnectionWithSetup(KVROCKS)
+	conn := NewConnectionWithSetup(COUCHDB)
 	conn.Delete("John")
 
 	// Txn1 writes the record
@@ -31,7 +33,7 @@ func TestKvrocks_TxnWrite(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
-	err = txn1.Write(KVROCKS, "John", expected)
+	err = txn1.Write(COUCHDB, "John", expected)
 	if err != nil {
 		t.Errorf("Error writing record: %s", err)
 	}
@@ -40,7 +42,7 @@ func TestKvrocks_TxnWrite(t *testing.T) {
 		t.Errorf("Error committing transaction: %s", err)
 	}
 
-	txn2 := NewTransactionWithSetup(KVROCKS)
+	txn2 := NewTransactionWithSetup(COUCHDB)
 
 	// Txn2 reads the record
 	err = txn2.Start()
@@ -48,7 +50,7 @@ func TestKvrocks_TxnWrite(t *testing.T) {
 		t.Errorf("Error starting transaction: %s", err)
 	}
 	var actual testutil.Person
-	err = txn2.Read(KVROCKS, "John", &actual)
+	err = txn2.Read(COUCHDB, "John", &actual)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
@@ -63,15 +65,15 @@ func TestKvrocks_TxnWrite(t *testing.T) {
 	}
 }
 
-func TestKvrocks_ReadOwnWrite(t *testing.T) {
+func TestCouchDB_ReadOwnWrite(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write(KVROCKS, "John", dataPerson)
+	preTxn.Write(COUCHDB, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
 
 	// Txn reads the record
 	err := txn.Start()
@@ -79,17 +81,17 @@ func TestKvrocks_ReadOwnWrite(t *testing.T) {
 		t.Errorf("Error starting transaction: %s", err)
 	}
 	var person testutil.Person
-	err = txn.Read(KVROCKS, "John", &person)
+	err = txn.Read(COUCHDB, "John", &person)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
 
 	expected := person
 	expected.Age = 31
-	txn.Write(KVROCKS, "John", expected)
+	txn.Write(COUCHDB, "John", expected)
 
 	var actual testutil.Person
-	err = txn.Read(KVROCKS, "John", &actual)
+	err = txn.Read(COUCHDB, "John", &actual)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
@@ -104,67 +106,67 @@ func TestKvrocks_ReadOwnWrite(t *testing.T) {
 
 }
 
-func TestKvrocks_SingleKeyWriteConflict(t *testing.T) {
+func TestCouchDB_SingleKeyWriteConflict(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write(KVROCKS, "John", dataPerson)
+	preTxn.Write(COUCHDB, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
 	txn.Start()
 	var person testutil.Person
-	txn.Read(KVROCKS, "John", &person)
+	txn.Read(COUCHDB, "John", &person)
 	person.Age = 31
-	txn.Write(KVROCKS, "John", person)
+	txn.Write(COUCHDB, "John", person)
 	var anotherPerson testutil.Person
-	txn.Read(KVROCKS, "John", &anotherPerson)
+	txn.Read(COUCHDB, "John", &anotherPerson)
 
 	if person != anotherPerson {
 		t.Errorf("Expected two read to be the same")
 	}
 	txn.Commit()
 
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 	var postPerson testutil.Person
-	postTxn.Read(KVROCKS, "John", &postPerson)
+	postTxn.Read(COUCHDB, "John", &postPerson)
 	if postPerson != person {
 		t.Errorf("got %v want %v", postPerson, person)
 	}
 
 }
 
-func TestKvrocks_MultileKeyWriteConflict(t *testing.T) {
+func TestCouchDB_MultileKeyWriteConflict(t *testing.T) {
 
 	// clear the data
-	conn := NewConnectionWithSetup(KVROCKS)
+	conn := NewConnectionWithSetup(COUCHDB)
 	conn.Delete("item1")
 	conn.Delete("item2")
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	item1 := testutil.NewTestItem("item1")
 	item2 := testutil.NewTestItem("item2")
 	preTxn.Start()
-	preTxn.Write(KVROCKS, "item1", item1)
-	preTxn.Write(KVROCKS, "item2", item2)
+	preTxn.Write(COUCHDB, "item1", item1)
+	preTxn.Write(COUCHDB, "item2", item2)
 	err := preTxn.Commit()
 	assert.Nil(t, err)
 
 	resChan := make(chan bool)
 
 	go func() {
-		txn1 := NewTransactionWithSetup(KVROCKS)
+		txn1 := NewTransactionWithSetup(COUCHDB)
 		txn1.Start()
 		var item testutil.TestItem
-		txn1.Read(KVROCKS, "item1", &item)
+		txn1.Read(COUCHDB, "item1", &item)
 		item.Value = "item1-updated-by-txn1"
-		txn1.Write(KVROCKS, "item1", item)
+		txn1.Write(COUCHDB, "item1", item)
 
-		txn1.Read(KVROCKS, "item2", &item)
+		txn1.Read(COUCHDB, "item2", &item)
 		item.Value = "item2-updated-by-txn1"
-		txn1.Write(KVROCKS, "item2", item)
+		txn1.Write(COUCHDB, "item2", item)
 
 		err := txn1.Commit()
 		if err != nil {
@@ -176,16 +178,16 @@ func TestKvrocks_MultileKeyWriteConflict(t *testing.T) {
 	}()
 
 	go func() {
-		txn2 := NewTransactionWithSetup(KVROCKS)
+		txn2 := NewTransactionWithSetup(COUCHDB)
 		txn2.Start()
 		var item testutil.TestItem
-		txn2.Read(KVROCKS, "item2", &item)
+		txn2.Read(COUCHDB, "item2", &item)
 		item.Value = "item2-updated-by-txn2"
-		txn2.Write(KVROCKS, "item2", item)
+		txn2.Write(COUCHDB, "item2", item)
 
-		txn2.Read(KVROCKS, "item1", &item)
+		txn2.Read(COUCHDB, "item1", &item)
 		item.Value = "item1-updated-by-txn2"
-		txn2.Write(KVROCKS, "item1", item)
+		txn2.Write(COUCHDB, "item1", item)
 
 		err := txn2.Commit()
 		if err != nil {
@@ -203,39 +205,39 @@ func TestKvrocks_MultileKeyWriteConflict(t *testing.T) {
 	if res1 == res2 {
 		t.Logf("res1: %v, res2: %v", res1, res2)
 		t.Errorf("Expected only one transaction to succeed")
-		postTxn := NewTransactionWithSetup(KVROCKS)
+		postTxn := NewTransactionWithSetup(COUCHDB)
 		postTxn.Start()
 		var item testutil.TestItem
-		postTxn.Read(KVROCKS, "item1", &item)
+		postTxn.Read(COUCHDB, "item1", &item)
 		t.Logf("item1: %v", item)
-		postTxn.Read(KVROCKS, "item2", &item)
+		postTxn.Read(COUCHDB, "item2", &item)
 		t.Logf("item2: %v", item)
 		postTxn.Commit()
 	}
 }
 
-func TestKvrocks_RepeatableReadWhenRecordDeleted(t *testing.T) {
+func TestCouchDB_RepeatableReadWhenRecordDeleted(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write(KVROCKS, "John", dataPerson)
+	preTxn.Write(COUCHDB, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(KVROCKS)
-	manualTxn := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
+	manualTxn := NewTransactionWithSetup(COUCHDB)
 	txn.Start()
 	manualTxn.Start()
 
 	var person1 testutil.Person
-	txn.Read(KVROCKS, "John", &person1)
+	txn.Read(COUCHDB, "John", &person1)
 
 	// manualTxn deletes John and commits
 	manualTxn.Delete("memory", "John")
 	manualTxn.Commit()
 
 	var person2 testutil.Person
-	txn.Read(KVROCKS, "John", &person2)
+	txn.Read(COUCHDB, "John", &person2)
 
 	// two read in txn should be the same
 	if person1 != person2 {
@@ -243,40 +245,40 @@ func TestKvrocks_RepeatableReadWhenRecordDeleted(t *testing.T) {
 	}
 }
 
-func TestKvrocks_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
+func TestCouchDB_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write(KVROCKS, "John", dataPerson)
+	preTxn.Write(COUCHDB, "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(KVROCKS)
-	manualTxn1 := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
+	manualTxn1 := NewTransactionWithSetup(COUCHDB)
 	txn.Start()
 	manualTxn1.Start()
 
 	var person1 testutil.Person
-	txn.Read(KVROCKS, "John", &person1)
+	txn.Read(COUCHDB, "John", &person1)
 
 	// manualTxn1 updates John and commits
 	var manualPerson1 testutil.Person
-	manualTxn1.Read(KVROCKS, "John", &manualPerson1)
+	manualTxn1.Read(COUCHDB, "John", &manualPerson1)
 	manualPerson1.Age = 31
-	manualTxn1.Write(KVROCKS, "John", manualPerson1)
+	manualTxn1.Write(COUCHDB, "John", manualPerson1)
 	manualTxn1.Commit()
 
-	manualTxn2 := NewTransactionWithSetup(KVROCKS)
+	manualTxn2 := NewTransactionWithSetup(COUCHDB)
 	manualTxn2.Start()
 	// manualTxn updates John again and commits
 	var manualPerson2 testutil.Person
-	manualTxn2.Read(KVROCKS, "John", &manualPerson2)
+	manualTxn2.Read(COUCHDB, "John", &manualPerson2)
 	manualPerson2.Age = 32
-	manualTxn2.Write(KVROCKS, "John", manualPerson2)
+	manualTxn2.Write(COUCHDB, "John", manualPerson2)
 	manualTxn2.Commit()
 
 	var person2 testutil.Person
-	err := txn.Read(KVROCKS, "John", &person2)
+	err := txn.Read(COUCHDB, "John", &person2)
 	if err != nil {
 		t.Errorf("Error reading record: %s", err)
 	}
@@ -294,26 +296,26 @@ func TestKvrocks_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 //   - txn2 read John again
 //
 // two read in txn2 should be the same
-func TestKvrocks_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
+func TestCouchDB_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write(KVROCKS, "John", dataPerson)
+	preTxn.Write(COUCHDB, "John", dataPerson)
 	preTxn.Commit()
 
 	resChan := make(chan bool)
 
 	go func() {
-		txn1 := NewTransactionWithSetup(KVROCKS)
+		txn1 := NewTransactionWithSetup(COUCHDB)
 		txn1.Start()
 		var person testutil.Person
-		txn1.Read(KVROCKS, "John", &person)
+		txn1.Read(COUCHDB, "John", &person)
 		time.Sleep(50 * time.Millisecond)
 
 		// txn1 writes John
 		person.Age = 31
-		txn1.Write(KVROCKS, "John", person)
+		txn1.Write(COUCHDB, "John", person)
 
 		// wait for txn2 to read John
 		time.Sleep(100 * time.Millisecond)
@@ -326,16 +328,16 @@ func TestKvrocks_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 	}()
 
 	go func() {
-		txn2 := NewTransactionWithSetup(KVROCKS)
+		txn2 := NewTransactionWithSetup(COUCHDB)
 		txn2.Start()
 		var person1 testutil.Person
 		// txn2 reads John
-		txn2.Read(KVROCKS, "John", &person1)
+		txn2.Read(COUCHDB, "John", &person1)
 		time.Sleep(100 * time.Millisecond)
 
 		var person2 testutil.Person
 		// txn2 reads John again
-		txn2.Read(KVROCKS, "John", &person2)
+		txn2.Read(COUCHDB, "John", &person2)
 
 		// two read in txn2 should be the same
 		if person1 != person2 {
@@ -367,26 +369,26 @@ func TestKvrocks_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 //   - txn2 read John again
 //
 // two read in txn2 should be the same
-func TestKvrocks_RepeatableReadWhenAnotherCommitted(t *testing.T) {
+func TestCouchDB_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
-	preTxn.Write(KVROCKS, "John", dataPerson)
+	preTxn.Write(COUCHDB, "John", dataPerson)
 	preTxn.Commit()
 
 	resChan := make(chan bool)
 
 	go func() {
-		txn1 := NewTransactionWithSetup(KVROCKS)
+		txn1 := NewTransactionWithSetup(COUCHDB)
 		txn1.Start()
 		var person testutil.Person
-		txn1.Read(KVROCKS, "John", &person)
+		txn1.Read(COUCHDB, "John", &person)
 		time.Sleep(50 * time.Millisecond)
 
 		// txn1 writes John
 		person.Age = 31
-		txn1.Write(KVROCKS, "John", person)
+		txn1.Write(COUCHDB, "John", person)
 
 		err := txn1.Commit()
 		if err != nil {
@@ -397,16 +399,16 @@ func TestKvrocks_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 	}()
 
 	go func() {
-		txn2 := NewTransactionWithSetup(KVROCKS)
+		txn2 := NewTransactionWithSetup(COUCHDB)
 		txn2.Start()
 		var person1 testutil.Person
 		// txn2 reads John
-		txn2.Read(KVROCKS, "John", &person1)
+		txn2.Read(COUCHDB, "John", &person1)
 		time.Sleep(100 * time.Millisecond)
 
 		var person2 testutil.Person
 		// txn2 reads John again
-		txn2.Read(KVROCKS, "John", &person2)
+		txn2.Read(COUCHDB, "John", &person2)
 
 		// two read in txn2 should be the same
 		if person1 != person2 {
@@ -430,26 +432,26 @@ func TestKvrocks_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 	}
 }
 
-func TestKvrocks_TxnAbort(t *testing.T) {
+func TestCouchDB_TxnAbort(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	expected := testutil.NewDefaultPerson()
-	preTxn.Write(KVROCKS, "John", expected)
+	preTxn.Write(COUCHDB, "John", expected)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
 	var person testutil.Person
 	txn.Start()
-	txn.Read(KVROCKS, "John", &person)
+	txn.Read(COUCHDB, "John", &person)
 	person.Age = 31
-	txn.Write(KVROCKS, "John", person)
+	txn.Write(COUCHDB, "John", person)
 	txn.Abort()
 
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 	var postPerson testutil.Person
-	postTxn.Read(KVROCKS, "John", &postPerson)
+	postTxn.Read(COUCHDB, "John", &postPerson)
 	postTxn.Commit()
 	if postPerson != expected {
 		t.Errorf("got %v want %v", postPerson, expected)
@@ -457,34 +459,34 @@ func TestKvrocks_TxnAbort(t *testing.T) {
 }
 
 // TODO: WTF why this test failed when using CLI
-func TestKvrocks_TxnAbortCausedByWriteConflict(t *testing.T) {
+func TestCouchDB_TxnAbortCausedByWriteConflict(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write(KVROCKS, item.Value, item)
+		preTxn.Write(COUCHDB, item.Value, item)
 	}
 	err := preTxn.Commit()
 	assert.Nil(t, err)
 
-	txn := NewTransactionWithSetup(KVROCKS)
-	manualTxn := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
+	manualTxn := NewTransactionWithSetup(COUCHDB)
 	txn.Start()
 	manualTxn.Start()
 
 	// txn reads all items and modify them
 	for _, item := range testutil.InputItemList {
 		var actual testutil.TestItem
-		txn.Read(KVROCKS, item.Value, &actual)
+		txn.Read(COUCHDB, item.Value, &actual)
 		actual.Value = item.Value + "updated"
-		txn.Write(KVROCKS, item.Value, actual)
+		txn.Write(COUCHDB, item.Value, actual)
 	}
 
 	// manualTxn reads one item and modify it
 	var manualItem testutil.TestItem
-	manualTxn.Read(KVROCKS, "item4", &manualItem)
+	manualTxn.Read(COUCHDB, "item4", &manualItem)
 	manualItem.Value = "item4updated"
-	manualTxn.Write(KVROCKS, "item4", manualItem)
+	manualTxn.Write(COUCHDB, "item4", manualItem)
 	err = manualTxn.Commit()
 	assert.Nil(t, err)
 
@@ -493,11 +495,11 @@ func TestKvrocks_TxnAbortCausedByWriteConflict(t *testing.T) {
 		t.Errorf("Expected error committing transaction")
 	}
 
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 	for _, item := range testutil.InputItemList {
 		var actual testutil.TestItem
-		postTxn.Read(KVROCKS, item.Value, &actual)
+		postTxn.Read(COUCHDB, item.Value, &actual)
 		if item.Value != "item4" {
 			assert.Equal(t, item, actual)
 		} else {
@@ -507,10 +509,10 @@ func TestKvrocks_TxnAbortCausedByWriteConflict(t *testing.T) {
 	postTxn.Commit()
 }
 
-func TestKvrocks_ConcurrentTransaction(t *testing.T) {
+func TestCouchDB_ConcurrentTransaction(t *testing.T) {
 
 	// Create a new redis datastore instance
-	redisDst1 := redis.NewRedisDatastore("redis1", NewConnectionWithSetup(KVROCKS))
+	redisDst1 := redis.NewRedisDatastore("redis1", NewConnectionWithSetup(COUCHDB))
 
 	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
 		DatastoreList:    []txn.Datastorer{redisDst1},
@@ -523,26 +525,26 @@ func TestKvrocks_ConcurrentTransaction(t *testing.T) {
 	preTxn := txnFactory.NewTransaction()
 	preTxn.Start()
 	person := testutil.NewDefaultPerson()
-	preTxn.Write(KVROCKS, "John", person)
+	preTxn.Write(COUCHDB, "John", person)
 	err = preTxn.Commit()
 	assert.NoError(t, err)
 
 	resChan := make(chan bool)
-	conNum := 100
+	conNum := 10
 
-	conn := NewConnectionWithSetup(KVROCKS)
+	conn := NewConnectionWithSetup(COUCHDB)
 
 	for i := 1; i <= conNum; i++ {
 		go func(id int) {
 			txn := txn.NewTransaction()
-			rds := redis.NewRedisDatastore(KVROCKS, conn)
+			rds := couchdb.NewCouchDBDatastore(COUCHDB, conn)
 			txn.AddDatastore(rds)
 			txn.SetGlobalDatastore(rds)
 			txn.Start()
 			var person testutil.Person
-			txn.Read(KVROCKS, "John", &person)
+			txn.Read(COUCHDB, "John", &person)
 			person.Age = person.Age + id
-			txn.Write(KVROCKS, "John", person)
+			txn.Write(COUCHDB, "John", person)
 			time.Sleep(1000 * time.Millisecond)
 			err = txn.Commit()
 			if err != nil {
@@ -569,42 +571,44 @@ func TestKvrocks_ConcurrentTransaction(t *testing.T) {
 // and verifies that the read item matches the expected value.
 // Finally, it commits the transaction and checks that
 // the redis item has been updated to the committed state.
-func TestKvrocks_SimpleExpiredRead(t *testing.T) {
-	tarMemItem := redis.NewRedisItem(txn.ItemOptions{
-		Key:      "item1",
-		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
-		TxnId:    "TestRedis_SimpleExpiredRead1",
-		TxnState: config.COMMITTED,
-		TValid:   time.Now().Add(-10 * time.Second),
-		TLease:   time.Now().Add(-9 * time.Second),
-		Version:  "1",
-	})
+func TestCouchDB_SimpleExpiredRead(t *testing.T) {
+	tarMemItem := &couchdb.CouchDBItem{
+		CKey:      "item1",
+		CValue:    util.ToJSONString(testutil.NewTestItem("item1")),
+		CTxnId:    "TestCouchDB_SimpleExpiredRead1",
+		CTxnState: config.COMMITTED,
+		CTValid:   time.Now().Add(-10 * time.Second),
+		CTLease:   time.Now().Add(-9 * time.Second),
+		CVersion:  "1",
+	}
 
-	curMemItem := redis.NewRedisItem(txn.ItemOptions{
-		Key:      "item1",
-		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		TxnId:    "TestRedis_SimpleExpiredRead2",
-		TxnState: config.PREPARED,
-		TValid:   time.Now().Add(-5 * time.Second),
-		TLease:   time.Now().Add(-4 * time.Second),
-		Prev:     util.ToJSONString(tarMemItem),
-		Version:  "2",
-	})
+	curMemItem := &couchdb.CouchDBItem{
+		CKey:      "item1",
+		CValue:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		CTxnId:    "TestCouchDB_SimpleExpiredRead2",
+		CTxnState: config.PREPARED,
+		CTValid:   time.Now().Add(-5 * time.Second),
+		CTLease:   time.Now().Add(-4 * time.Second),
+		CPrev:     util.ToJSONString(tarMemItem),
+		// CVersion:  "2",
+	}
 
-	conn := NewConnectionWithSetup(KVROCKS)
+	conn := NewConnectionWithSetup(COUCHDB)
+	conn.Delete("item1")
 	conn.PutItem("item1", curMemItem)
 
-	txn := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
 	txn.Start()
 
 	var item testutil.TestItem
-	txn.Read(KVROCKS, "item1", &item)
+	txn.Read(COUCHDB, "item1", &item)
 	assert.Equal(t, testutil.NewTestItem("item1"), item)
 	err := txn.Commit()
 	assert.NoError(t, err)
 	actual, err := conn.GetItem("item1")
 	assert.NoError(t, err)
-	tarMemItem.RVersion = "3"
+
+	tarMemItem.SetVersion(actual.Version())
 	if !tarMemItem.Equal(actual) {
 		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
 	}
@@ -640,25 +644,25 @@ func TestKvrocks_SimpleExpiredRead(t *testing.T) {
 //   - item3-fast COMMITTED
 //   - item4-fast COMMITTED
 //   - item5-fast COMMITTED
-func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
+func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write(KVROCKS, item.Value, item)
+		preTxn.Write(COUCHDB, item.Value, item)
 	}
 	preTxn.Commit()
 
 	go func() {
-		slowTxn := NewTransactionWithMockConn(KVROCKS, 2, false,
+		slowTxn := NewTransactionWithMockConn(COUCHDB, 2, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
-			slowTxn.Read(KVROCKS, item.Value, &result)
+			slowTxn.Read(COUCHDB, item.Value, &result)
 			result.Value = item.Value + "-slow"
-			slowTxn.Write(KVROCKS, item.Value, result)
+			slowTxn.Write(COUCHDB, item.Value, result)
 		}
 		err := slowTxn.Commit()
 		assert.EqualError(t, err, "prepare phase failed: version mismatch")
@@ -666,7 +670,7 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 	time.Sleep(1 * time.Second)
 
 	// ensure the internal state of redis database
-	testConn := NewConnectionWithSetup(KVROCKS)
+	testConn := NewConnectionWithSetup(COUCHDB)
 	testConn.Connect()
 	memItem1, _ := testConn.GetItem("item1")
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-slow")), memItem1.Value())
@@ -680,33 +684,33 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item3")), memItem3.Value())
 	assert.Equal(t, memItem3.TxnState(), config.COMMITTED)
 
-	fastTxn := NewTransactionWithSetup(KVROCKS)
+	fastTxn := NewTransactionWithSetup(COUCHDB)
 	fastTxn.Start()
 	for i := 2; i <= 4; i++ {
 		var result testutil.TestItem
-		fastTxn.Read(KVROCKS, testutil.InputItemList[i].Value, &result)
+		fastTxn.Read(COUCHDB, testutil.InputItemList[i].Value, &result)
 		result.Value = testutil.InputItemList[i].Value + "-fast"
-		fastTxn.Write(KVROCKS, testutil.InputItemList[i].Value, result)
+		fastTxn.Write(COUCHDB, testutil.InputItemList[i].Value, result)
 	}
 	err := fastTxn.Commit()
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
 	time.Sleep(1 * time.Second)
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 
 	var res1 testutil.TestItem
-	postTxn.Read(KVROCKS, testutil.InputItemList[0].Value, &res1)
+	postTxn.Read(COUCHDB, testutil.InputItemList[0].Value, &res1)
 	assert.Equal(t, testutil.InputItemList[0], res1)
 
 	var res2 testutil.TestItem
-	postTxn.Read(KVROCKS, testutil.InputItemList[1].Value, &res2)
+	postTxn.Read(COUCHDB, testutil.InputItemList[1].Value, &res2)
 	assert.Equal(t, testutil.InputItemList[1], res2)
 
 	for i := 2; i <= 4; i++ {
 		var res testutil.TestItem
-		postTxn.Read(KVROCKS, testutil.InputItemList[i].Value, &res)
+		postTxn.Read(COUCHDB, testutil.InputItemList[i].Value, &res)
 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
 	}
 
@@ -744,32 +748,32 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 //   - item3-fast COMMITTED
 //   - item4-fast COMMITTED
 //   - item5 COMMITTED
-func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
+func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write(KVROCKS, item.Value, item)
+		preTxn.Write(COUCHDB, item.Value, item)
 	}
 	err := preTxn.Commit()
 	assert.NoError(t, err)
 
 	go func() {
-		slowTxn := NewTransactionWithMockConn(KVROCKS, 4, false,
+		slowTxn := NewTransactionWithMockConn(COUCHDB, 4, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
-			slowTxn.Read(KVROCKS, item.Value, &result)
+			slowTxn.Read(COUCHDB, item.Value, &result)
 			result.Value = item.Value + "-slow"
-			slowTxn.Write(KVROCKS, item.Value, result)
+			slowTxn.Write(COUCHDB, item.Value, result)
 		}
 		err := slowTxn.Commit()
 		assert.EqualError(t, err, "transaction is aborted by other transaction")
 	}()
 
 	time.Sleep(1 * time.Second)
-	testConn := NewConnectionWithSetup(KVROCKS)
+	testConn := NewConnectionWithSetup(COUCHDB)
 	testConn.Connect()
 
 	// all records should be PREPARED state except item5
@@ -786,39 +790,39 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T
 		assert.Equal(t, memItem.TxnState(), config.PREPARED)
 	}
 
-	fastTxn := NewTransactionWithSetup(KVROCKS)
+	fastTxn := NewTransactionWithSetup(COUCHDB)
 	err = fastTxn.Start()
 	assert.NoError(t, err)
 	for i := 2; i <= 3; i++ {
 		var result testutil.TestItem
-		fastTxn.Read(KVROCKS, testutil.InputItemList[i].Value, &result)
+		fastTxn.Read(COUCHDB, testutil.InputItemList[i].Value, &result)
 		result.Value = testutil.InputItemList[i].Value + "-fast"
-		fastTxn.Write(KVROCKS, testutil.InputItemList[i].Value, result)
+		fastTxn.Write(COUCHDB, testutil.InputItemList[i].Value, result)
 	}
 	err = fastTxn.Commit()
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
 	time.Sleep(1 * time.Second)
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 
 	var res1 testutil.TestItem
-	postTxn.Read(KVROCKS, testutil.InputItemList[0].Value, &res1)
+	postTxn.Read(COUCHDB, testutil.InputItemList[0].Value, &res1)
 	assert.Equal(t, testutil.InputItemList[0], res1)
 
 	var res2 testutil.TestItem
-	postTxn.Read(KVROCKS, testutil.InputItemList[1].Value, &res2)
+	postTxn.Read(COUCHDB, testutil.InputItemList[1].Value, &res2)
 	assert.Equal(t, testutil.InputItemList[1], res2)
 
 	for i := 2; i <= 3; i++ {
 		var res testutil.TestItem
-		postTxn.Read(KVROCKS, testutil.InputItemList[i].Value, &res)
+		postTxn.Read(COUCHDB, testutil.InputItemList[i].Value, &res)
 		assert.Equal(t, testutil.InputItemList[i].Value+"-fast", res.Value)
 	}
 
 	var res5 testutil.TestItem
-	postTxn.Read(KVROCKS, testutil.InputItemList[4].Value, &res5)
+	postTxn.Read(COUCHDB, testutil.InputItemList[4].Value, &res5)
 	assert.Equal(t, testutil.InputItemList[4].Value, res5.Value)
 
 	err = postTxn.Commit()
@@ -857,57 +861,57 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T
 //   - item3 rollback to COMMITTED
 //   - item4 rollback to COMMITTED
 //   - item5 rollback to COMMITTED
-func TestKvrocks_TransactionAbortWhenWritingTSR(t *testing.T) {
+func TestCouchDB_TransactionAbortWhenWritingTSR(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup(KVROCKS)
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
-		preTxn.Write(KVROCKS, item.Value, item)
+		preTxn.Write(COUCHDB, item.Value, item)
 	}
 	err := preTxn.Commit()
 	if err != nil {
 		t.Errorf("preTxn commit err: %s", err)
 	}
 
-	txn := NewTransactionWithMockConn(KVROCKS, 5, true,
+	txn := NewTransactionWithMockConn(COUCHDB, 5, true,
 		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
-		txn.Read(KVROCKS, item.Value, &result)
+		txn.Read(COUCHDB, item.Value, &result)
 		result.Value = item.Value + "-slow"
-		txn.Write(KVROCKS, item.Value, result)
+		txn.Write(COUCHDB, item.Value, result)
 	}
 	err = txn.Commit()
 	assert.EqualError(t, err, "fail to write TSR")
 
-	testTxn := NewTransactionWithSetup(KVROCKS)
+	testTxn := NewTransactionWithSetup(COUCHDB)
 	testTxn.Start()
 
 	for i := 0; i <= 3; i++ {
 		item := testutil.InputItemList[i]
 		var memItem testutil.TestItem
-		testTxn.Read(KVROCKS, item.Value, &memItem)
+		testTxn.Read(COUCHDB, item.Value, &memItem)
 	}
 	err = testTxn.Commit()
 	assert.NoError(t, err)
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 	for i := 0; i <= 3; i++ {
 		item := testutil.InputItemList[i]
 		var memItem testutil.TestItem
-		postTxn.Read(KVROCKS, item.Value, &memItem)
+		postTxn.Read(COUCHDB, item.Value, &memItem)
 		assert.Equal(t, item.Value, memItem.Value)
 	}
 
-	conn := NewConnectionWithSetup(KVROCKS)
+	conn := NewConnectionWithSetup(COUCHDB)
 	memItem, err := conn.GetItem("item5")
 	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item5")), memItem.Value())
 	assert.Equal(t, config.COMMITTED, memItem.TxnState())
 }
 
-func TestKvrocks_LinkedRecord(t *testing.T) {
+func TestCouchDB_LinkedRecord(t *testing.T) {
 
 	t.Cleanup(func() {
 		config.Config.MaxRecordLength = 2
@@ -915,101 +919,101 @@ func TestKvrocks_LinkedRecord(t *testing.T) {
 
 	t.Run("commit time less than MaxLen", func(t *testing.T) {
 
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
-		preTxn.Write(KVROCKS, "John", person)
+		preTxn.Write(COUCHDB, "John", person)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
-		slowTxn := NewTransactionWithSetup(KVROCKS)
+		slowTxn := NewTransactionWithSetup(COUCHDB)
 		slowTxn.Start()
 
 		config.Config.MaxRecordLength = 4
 		// 1+2=3 < 4, including origin
 		commitTime := 2
 		for i := 1; i <= commitTime; i++ {
-			txn := NewTransactionWithSetup(KVROCKS)
+			txn := NewTransactionWithSetup(COUCHDB)
 			txn.Start()
 			var p testutil.Person
-			txn.Read(KVROCKS, "John", &p)
+			txn.Read(COUCHDB, "John", &p)
 			p.Age = p.Age + 1
-			txn.Write(KVROCKS, "John", p)
+			txn.Write(COUCHDB, "John", p)
 			err = txn.Commit()
 			assert.NoError(t, err)
 		}
 
 		var p testutil.Person
-		err = slowTxn.Read(KVROCKS, "John", &p)
+		err = slowTxn.Read(COUCHDB, "John", &p)
 		assert.NoError(t, err)
 		assert.Equal(t, 30, p.Age)
 	})
 
 	t.Run("commit time equals MaxLen", func(t *testing.T) {
 
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
-		preTxn.Write(KVROCKS, "John", person)
+		preTxn.Write(COUCHDB, "John", person)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
-		slowTxn := NewTransactionWithSetup(KVROCKS)
+		slowTxn := NewTransactionWithSetup(COUCHDB)
 		slowTxn.Start()
 
 		config.Config.MaxRecordLength = 4
 		// 1+3=4 == 4, including origin
 		commitTime := 3
 		for i := 1; i <= commitTime; i++ {
-			txn := NewTransactionWithSetup(KVROCKS)
+			txn := NewTransactionWithSetup(COUCHDB)
 			txn.Start()
 			var p testutil.Person
-			txn.Read(KVROCKS, "John", &p)
+			txn.Read(COUCHDB, "John", &p)
 			p.Age = p.Age + 1
-			txn.Write(KVROCKS, "John", p)
+			txn.Write(COUCHDB, "John", p)
 			err = txn.Commit()
 			assert.NoError(t, err)
 		}
 
 		var p testutil.Person
-		err = slowTxn.Read(KVROCKS, "John", &p)
+		err = slowTxn.Read(COUCHDB, "John", &p)
 		assert.NoError(t, err)
 		assert.Equal(t, 30, p.Age)
 	})
 
 	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
 
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
-		preTxn.Write(KVROCKS, "John", person)
+		preTxn.Write(COUCHDB, "John", person)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
-		slowTxn := NewTransactionWithSetup(KVROCKS)
+		slowTxn := NewTransactionWithSetup(COUCHDB)
 		slowTxn.Start()
 
 		config.Config.MaxRecordLength = 4
 		// 1+4=5 > 4, including origin
 		commitTime := 4
 		for i := 1; i <= commitTime; i++ {
-			txn := NewTransactionWithSetup(KVROCKS)
+			txn := NewTransactionWithSetup(COUCHDB)
 			txn.Start()
 			var p testutil.Person
-			txn.Read(KVROCKS, "John", &p)
+			txn.Read(COUCHDB, "John", &p)
 			p.Age = p.Age + 1
-			txn.Write(KVROCKS, "John", p)
+			txn.Write(COUCHDB, "John", p)
 			err = txn.Commit()
 			assert.NoError(t, err)
 		}
 
 		var p testutil.Person
-		err = slowTxn.Read(KVROCKS, "John", &p)
+		err = slowTxn.Read(COUCHDB, "John", &p)
 		assert.EqualError(t, err, "key not found")
 	})
 }
 
-func TestKvrocks_RollbackConflict(t *testing.T) {
+func TestCouchDB_RollbackConflict(t *testing.T) {
 
 	// there is a broken item
 	//   - txnA reads the item, decides to roll back
@@ -1018,51 +1022,53 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 	//   - txnB update the item and commit
 	//   - txnA rollbacks the item -> should fail
 	t.Run("the broken item has a valid Prev field", func(t *testing.T) {
-		conn := NewConnectionWithSetup(KVROCKS)
+		conn := NewConnectionWithSetup(COUCHDB)
 
-		redisItem1 := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:     "TestRedis_RollbackConflict1",
-			RTxnState:  config.COMMITTED,
-			RTValid:    time.Now().Add(-5 * time.Second),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RLinkedLen: 1,
-			RVersion:   "1",
+		redisItem1 := &couchdb.CouchDBItem{
+			CKey:       "item1",
+			CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			CTxnId:     "TestCouchDB_RollbackConflict1",
+			CTxnState:  config.COMMITTED,
+			CTValid:    time.Now().Add(-5 * time.Second),
+			CTLease:    time.Now().Add(-4 * time.Second),
+			CLinkedLen: 1,
+			CVersion:   "1",
 		}
-		redisItem2 := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			RTxnId:     "TestRedis_RollbackConflict2",
-			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RPrev:      util.ToJSONString(redisItem1),
-			RLinkedLen: 2,
-			RVersion:   "2",
+		redisItem2 := &couchdb.CouchDBItem{
+			CKey:       "item1",
+			CValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			CTxnId:     "TestCouchDB_RollbackConflict2",
+			CTxnState:  config.PREPARED,
+			CTValid:    time.Now().Add(-5 * time.Second),
+			CTLease:    time.Now().Add(-4 * time.Second),
+			CPrev:      util.ToJSONString(redisItem1),
+			CLinkedLen: 2,
+			// CVersion:   "2",
 		}
+		conn.Delete("item1")
 		conn.PutItem("item1", redisItem2)
 
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
+			txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
 				func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
-			err := txnA.Read(KVROCKS, "item1", &item)
+			err := txnA.Read(COUCHDB, "item1", &item)
 			assert.NotNil(t, err)
 		}()
 
 		time.Sleep(100 * time.Millisecond)
-		txnB := NewTransactionWithSetup(KVROCKS)
+		txnB := NewTransactionWithSetup(COUCHDB)
 		txnB.Start()
+
 		var item testutil.TestItem
-		err := txnB.Read(KVROCKS, "item1", &item)
+		err := txnB.Read(COUCHDB, "item1", &item)
 		assert.NoError(t, err)
 		assert.Equal(t, testutil.NewTestItem("item1-pre"), item)
 		item.Value = "item1-B"
-		txnB.Write(KVROCKS, "item1", item)
+		txnB.Write(COUCHDB, "item1", item)
 		err = txnB.Commit()
 		assert.NoError(t, err)
 
@@ -1070,7 +1076,12 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 		resItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-		redisItem1.RVersion = "3"
+
+		var previousItem couchdb.CouchDBItem
+		err = json.Unmarshal([]byte(resItem.Prev()), &previousItem)
+		assert.NoError(t, err)
+
+		redisItem1.SetVersion(previousItem.Version())
 		assert.Equal(t, util.ToJSONString(redisItem1), resItem.Prev())
 	})
 
@@ -1081,41 +1092,42 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 	//   - txnB update the item and commit
 	//   - txnA rollbacks the item -> should fail
 	t.Run("the broken item has an empty Prev field", func(t *testing.T) {
-		conn := NewConnectionWithSetup(KVROCKS)
+		conn := NewConnectionWithSetup(COUCHDB)
 
-		redisItem2 := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			RTxnId:     "TestRedis_RollbackConflict2-emptyField",
-			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RPrev:      "",
-			RLinkedLen: 1,
-			RVersion:   "1",
+		redisItem2 := &couchdb.CouchDBItem{
+			CKey:       "item1",
+			CValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			CTxnId:     "TestCouchDB_RollbackConflict2-emptyField",
+			CTxnState:  config.PREPARED,
+			CTValid:    time.Now().Add(-5 * time.Second),
+			CTLease:    time.Now().Add(-4 * time.Second),
+			CPrev:      "",
+			CLinkedLen: 1,
+			// CVersion:   "1",
 		}
+		conn.Delete("item1")
 		conn.PutItem("item1", redisItem2)
 
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
+			txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
 				func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
-			err := txnA.Read(KVROCKS, "item1", &item)
+			err := txnA.Read(COUCHDB, "item1", &item)
 			assert.NotNil(t, err)
 		}()
 
 		time.Sleep(100 * time.Millisecond)
-		txnB := NewTransactionWithSetup(KVROCKS)
+		txnB := NewTransactionWithSetup(COUCHDB)
 		txnB.Start()
 		var item testutil.TestItem
-		err := txnB.Read(KVROCKS, "item1", &item)
+		err := txnB.Read(COUCHDB, "item1", &item)
 		assert.EqualError(t, err, txn.KeyNotFound.Error())
 
 		item.Value = "item1-B"
-		txnB.Write(KVROCKS, "item1", item)
+		txnB.Write(COUCHDB, "item1", item)
 		err = txnB.Commit()
 		assert.NoError(t, err)
 
@@ -1123,9 +1135,14 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 		resItem, err := conn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-		redisItem2.RIsDeleted = true
-		redisItem2.RTxnState = config.COMMITTED
-		redisItem2.RVersion = util.AddToString(redisItem2.RVersion, 1)
+
+		var previousItem couchdb.CouchDBItem
+		err = json.Unmarshal([]byte(resItem.Prev()), &previousItem)
+		assert.NoError(t, err)
+
+		redisItem2.CIsDeleted = true
+		redisItem2.CTxnState = config.COMMITTED
+		redisItem2.SetVersion(previousItem.Version())
 		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 	})
 
@@ -1137,51 +1154,53 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 //   - txnB rolls forward the item
 //   - txnB update the item and commit
 //   - txnA rolls forward the item -> should fail
-func TestKvrocks_RollForwardConflict(t *testing.T) {
-	conn := NewConnectionWithSetup(KVROCKS)
+func TestCouchDB_RollForwardConflict(t *testing.T) {
+	conn := NewConnectionWithSetup(COUCHDB)
 
-	redisItem1 := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		RTxnId:    "TestKvrocks_RollForwardConflict2",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-5 * time.Second),
-		RTLease:   time.Now().Add(-4 * time.Second),
-		RVersion:  "1",
+	redisItem1 := &couchdb.CouchDBItem{
+		CKey:      "item1",
+		CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		CTxnId:    "TestCouchDB_RollForwardConflict1",
+		CTxnState: config.COMMITTED,
+		CTValid:   time.Now().Add(-5 * time.Second),
+		CTLease:   time.Now().Add(-4 * time.Second),
+		CVersion:  "1",
 	}
-	redisItem2 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-		RTxnId:     "TestKvrocks_RollForwardConflict2",
-		RTxnState:  config.PREPARED,
-		RTValid:    time.Now().Add(-5 * time.Second),
-		RTLease:    time.Now().Add(-4 * time.Second),
-		RPrev:      util.ToJSONString(redisItem1),
-		RLinkedLen: 2,
-		RVersion:   "2",
+	redisItem2 := &couchdb.CouchDBItem{
+		CKey:       "item1",
+		CValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
+		CTxnId:     "TestCouchDB_RollForwardConflict2",
+		CTxnState:  config.PREPARED,
+		CTValid:    time.Now().Add(-5 * time.Second),
+		CTLease:    time.Now().Add(-4 * time.Second),
+		CPrev:      util.ToJSONString(redisItem1),
+		CLinkedLen: 2,
+		// CVersion:   "2",
 	}
+	conn.Delete("item1")
+	conn.Delete("TestCouchDB_RollForwardConflict2")
 	conn.PutItem("item1", redisItem2)
-	conn.Put("TestKvrocks_RollForwardConflict2", config.COMMITTED)
+	conn.Put("TestCouchDB_RollForwardConflict2", config.COMMITTED)
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
+		txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
 			func() error { time.Sleep(2 * time.Second); return nil })
 		txnA.Start()
 		var item testutil.TestItem
-		err := txnA.Read(KVROCKS, "item1", &item)
+		err := txnA.Read(COUCHDB, "item1", &item)
 		assert.NotNil(t, err)
 
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-	txnB := NewTransactionWithSetup(KVROCKS)
+	txnB := NewTransactionWithSetup(COUCHDB)
 	txnB.Start()
 	var item testutil.TestItem
-	txnB.Read(KVROCKS, "item1", &item)
+	txnB.Read(COUCHDB, "item1", &item)
 	assert.Equal(t, testutil.NewTestItem("item1-broken"), item)
 	item.Value = "item1-B"
-	txnB.Write(KVROCKS, "item1", item)
+	txnB.Write(COUCHDB, "item1", item)
 	err := txnB.Commit()
 	assert.NoError(t, err)
 
@@ -1189,17 +1208,22 @@ func TestKvrocks_RollForwardConflict(t *testing.T) {
 	resItem, err := conn.GetItem("item1")
 	assert.NoError(t, err)
 	assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-	redisItem2.RTxnState = config.COMMITTED
-	redisItem2.RPrev = ""
-	redisItem2.RLinkedLen = 1
-	redisItem2.RVersion = "3"
+
+	var previousItem couchdb.CouchDBItem
+	err = json.Unmarshal([]byte(resItem.Prev()), &previousItem)
+	assert.NoError(t, err)
+
+	redisItem2.CTxnState = config.COMMITTED
+	redisItem2.CPrev = ""
+	redisItem2.CLinkedLen = 1
+	redisItem2.SetVersion(previousItem.Version())
 	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 
 }
 
-func TestKvrocks_ConcurrentDirectWrite(t *testing.T) {
+func TestCouchDB_ConcurrentDirectWrite(t *testing.T) {
 
-	conn := NewConnectionWithSetup(KVROCKS)
+	conn := NewConnectionWithSetup(COUCHDB)
 	conn.Delete("item1")
 
 	conNumber := 5
@@ -1208,10 +1232,10 @@ func TestKvrocks_ConcurrentDirectWrite(t *testing.T) {
 	resChan := make(chan bool)
 	for i := 1; i <= conNumber; i++ {
 		go func(id int) {
-			txn := NewTransactionWithSetup(KVROCKS)
+			txn := NewTransactionWithSetup(COUCHDB)
 			item := testutil.NewTestItem("item1-" + strconv.Itoa(id))
 			txn.Start()
-			txn.Write(KVROCKS, "item1", item)
+			txn.Write(COUCHDB, "item1", item)
 			err := txn.Commit()
 			if err != nil {
 				resChan <- false
@@ -1234,195 +1258,195 @@ func TestKvrocks_ConcurrentDirectWrite(t *testing.T) {
 
 	assert.Equal(t, 1, successNum)
 
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 	var item testutil.TestItem
-	postTxn.Read(KVROCKS, "item1", &item)
+	postTxn.Read(COUCHDB, "item1", &item)
 	assert.Equal(t, testutil.NewTestItem("item1-"+strconv.Itoa(globalId)), item)
 	// assert.Equal(t, 0, globalId)
 	t.Logf("item: %v", item)
 }
 
-func TestKvrocks_TxnDelete(t *testing.T) {
-	preTxn := NewTransactionWithSetup(KVROCKS)
+func TestCouchDB_TxnDelete(t *testing.T) {
+	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	item := testutil.NewTestItem("item1-pre")
-	preTxn.Write(KVROCKS, "item1", item)
+	preTxn.Write(COUCHDB, "item1", item)
 	err := preTxn.Commit()
 	assert.NoError(t, err)
 
-	txn := NewTransactionWithSetup(KVROCKS)
+	txn := NewTransactionWithSetup(COUCHDB)
 	txn.Start()
 	var item1 testutil.TestItem
-	txn.Read(KVROCKS, "item1", &item1)
-	txn.Delete(KVROCKS, "item1")
+	txn.Read(COUCHDB, "item1", &item1)
+	txn.Delete(COUCHDB, "item1")
 	err = txn.Commit()
 	assert.NoError(t, err)
 
-	postTxn := NewTransactionWithSetup(KVROCKS)
+	postTxn := NewTransactionWithSetup(COUCHDB)
 	postTxn.Start()
 	var item2 testutil.TestItem
-	err = postTxn.Read(KVROCKS, "item1", &item2)
+	err = postTxn.Read(COUCHDB, "item1", &item2)
 	assert.EqualError(t, err, "key not found")
 }
 
-func TestKvrocks_PreventLostUpdatesValidation(t *testing.T) {
+func TestCouchDB_PreventLostUpdatesValidation(t *testing.T) {
 
 	t.Run("Case 1-1(with read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
 
-			preTxn := NewTransactionWithSetup(KVROCKS)
+			preTxn := NewTransactionWithSetup(COUCHDB)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
-			preTxn.Write(KVROCKS, "item1", item)
+			preTxn.Write(COUCHDB, "item1", item)
 			err := preTxn.Commit()
 			assert.NoError(t, err)
 
-			txnA := NewTransactionWithSetup(KVROCKS)
+			txnA := NewTransactionWithSetup(COUCHDB)
 			txnA.Start()
-			txnB := NewTransactionWithSetup(KVROCKS)
+			txnB := NewTransactionWithSetup(COUCHDB)
 			txnB.Start()
 
 			var itemA testutil.TestItem
-			txnA.Read(KVROCKS, "item1", &itemA)
+			txnA.Read(COUCHDB, "item1", &itemA)
 			itemA.Value = "item1-A"
-			txnA.Write(KVROCKS, "item1", itemA)
+			txnA.Write(COUCHDB, "item1", itemA)
 			err = txnA.Commit()
 			assert.NoError(t, err)
 
 			var itemB testutil.TestItem
-			txnB.Read(KVROCKS, "item1", &itemB)
+			txnB.Read(COUCHDB, "item1", &itemB)
 			itemB.Value = "item1-B"
-			txnB.Write(KVROCKS, "item1", itemB)
+			txnB.Write(COUCHDB, "item1", itemB)
 			err = txnB.Commit()
 			assert.EqualError(t, err,
 				"prepare phase failed: version mismatch")
 
-			postTxn := NewTransactionWithSetup(KVROCKS)
+			postTxn := NewTransactionWithSetup(COUCHDB)
 			postTxn.Start()
 			var item1 testutil.TestItem
-			postTxn.Read(KVROCKS, "item1", &item1)
+			postTxn.Read(COUCHDB, "item1", &item1)
 			assert.Equal(t, itemA, item1)
 		})
 
 	t.Run("Case 1-2(without read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
 
-			preTxn := NewTransactionWithSetup(KVROCKS)
+			preTxn := NewTransactionWithSetup(COUCHDB)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
-			preTxn.Write(KVROCKS, "item1", item)
+			preTxn.Write(COUCHDB, "item1", item)
 			err := preTxn.Commit()
 			assert.NoError(t, err)
 
-			txnA := NewTransactionWithSetup(KVROCKS)
+			txnA := NewTransactionWithSetup(COUCHDB)
 			txnA.Start()
-			txnB := NewTransactionWithSetup(KVROCKS)
+			txnB := NewTransactionWithSetup(COUCHDB)
 			txnB.Start()
 
 			itemA := testutil.NewTestItem("item1-A")
-			txnA.Write(KVROCKS, "item1", itemA)
+			txnA.Write(COUCHDB, "item1", itemA)
 			err = txnA.Commit()
 			assert.NoError(t, err)
 
 			itemB := testutil.NewTestItem("item1-B")
-			txnB.Write(KVROCKS, "item1", itemB)
+			txnB.Write(COUCHDB, "item1", itemB)
 			err = txnB.Commit()
 			assert.EqualError(t, err,
 				"prepare phase failed: version mismatch")
 
-			postTxn := NewTransactionWithSetup(KVROCKS)
+			postTxn := NewTransactionWithSetup(COUCHDB)
 			postTxn.Start()
 			var item1 testutil.TestItem
-			postTxn.Read(KVROCKS, "item1", &item1)
+			postTxn.Read(COUCHDB, "item1", &item1)
 			assert.Equal(t, itemA, item1)
 		})
 
 	t.Run("Case 2-1(with read): There is no conflict", func(t *testing.T) {
 
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
-		preTxn.Write(KVROCKS, "item1", item)
+		preTxn.Write(COUCHDB, "item1", item)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
-		txnA := NewTransactionWithSetup(KVROCKS)
+		txnA := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		var itemA testutil.TestItem
-		txnA.Read(KVROCKS, "item1", &itemA)
+		txnA.Read(COUCHDB, "item1", &itemA)
 		itemA.Value = "item1-A"
-		txnA.Write(KVROCKS, "item1", itemA)
+		txnA.Write(COUCHDB, "item1", itemA)
 		err = txnA.Commit()
 		assert.NoError(t, err)
 
-		txnB := NewTransactionWithSetup(KVROCKS)
+		txnB := NewTransactionWithSetup(COUCHDB)
 		txnB.Start()
 		var itemB testutil.TestItem
-		txnB.Read(KVROCKS, "item1", &itemB)
+		txnB.Read(COUCHDB, "item1", &itemB)
 		itemB.Value = "item1-B"
-		txnB.Write(KVROCKS, "item1", itemB)
+		txnB.Write(COUCHDB, "item1", itemB)
 		err = txnB.Commit()
 		assert.NoError(t, err)
 
-		postTxn := NewTransactionWithSetup(KVROCKS)
+		postTxn := NewTransactionWithSetup(COUCHDB)
 		postTxn.Start()
 		var item1 testutil.TestItem
-		postTxn.Read(KVROCKS, "item1", &item1)
+		postTxn.Read(COUCHDB, "item1", &item1)
 		assert.Equal(t, itemB, item1)
 	})
 
 	t.Run("Case 2-2(without read): There is no conflict", func(t *testing.T) {
 
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
-		preTxn.Write(KVROCKS, "item1", item)
+		preTxn.Write(COUCHDB, "item1", item)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
-		txnA := NewTransactionWithSetup(KVROCKS)
+		txnA := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		itemA := testutil.NewTestItem("item1-A")
-		txnA.Write(KVROCKS, "item1", itemA)
+		txnA.Write(COUCHDB, "item1", itemA)
 		err = txnA.Commit()
 		assert.NoError(t, err)
 
-		txnB := NewTransactionWithSetup(KVROCKS)
+		txnB := NewTransactionWithSetup(COUCHDB)
 		txnB.Start()
 		itemB := testutil.NewTestItem("item1-B")
-		txnB.Write(KVROCKS, "item1", itemB)
+		txnB.Write(COUCHDB, "item1", itemB)
 		err = txnB.Commit()
 		assert.NoError(t, err)
 
-		postTxn := NewTransactionWithSetup(KVROCKS)
+		postTxn := NewTransactionWithSetup(COUCHDB)
 		postTxn.Start()
 		var item1 testutil.TestItem
-		postTxn.Read(KVROCKS, "item1", &item1)
+		postTxn.Read(COUCHDB, "item1", &item1)
 		assert.Equal(t, itemB, item1)
 	})
 }
 
-func TestKvrocks_RepeatableReadWhenDirtyRead(t *testing.T) {
+func TestCouchDB_RepeatableReadWhenDirtyRead(t *testing.T) {
 	t.Run("the prepared item has a valid Prev", func(t *testing.T) {
 		config.Config.LeaseTime = 3000 * time.Millisecond
 
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
-		preTxn.Write(KVROCKS, "item1", item)
+		preTxn.Write(COUCHDB, "item1", item)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
-		txnA := NewTransactionWithMockConn(KVROCKS, 1, false,
+		txnA := NewTransactionWithMockConn(COUCHDB, 1, false,
 			func() error { time.Sleep(1 * time.Second); return nil })
-		txnB := NewTransactionWithSetup(KVROCKS)
+		txnB := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		txnB.Start()
 
 		go func() {
 			itemA := testutil.NewTestItem("item1-A")
-			txnA.Write(KVROCKS, "item1", itemA)
+			txnA.Write(COUCHDB, "item1", itemA)
 			err = txnA.Commit()
 			assert.NoError(t, err)
 		}()
@@ -1430,12 +1454,12 @@ func TestKvrocks_RepeatableReadWhenDirtyRead(t *testing.T) {
 		// wait for txnA to write item into database
 		time.Sleep(500 * time.Millisecond)
 		var itemB testutil.TestItem
-		err = txnB.Read(KVROCKS, "item1", &itemB)
+		err = txnB.Read(COUCHDB, "item1", &itemB)
 		assert.NoError(t, err)
 		assert.Equal(t, "item1-pre", itemB.Value)
 
 		time.Sleep(2 * time.Second)
-		err = txnB.Read(KVROCKS, "item1", &itemB)
+		err = txnB.Read(COUCHDB, "item1", &itemB)
 		assert.NoError(t, err)
 		assert.Equal(t, "item1-pre", itemB.Value)
 	})
@@ -1443,18 +1467,18 @@ func TestKvrocks_RepeatableReadWhenDirtyRead(t *testing.T) {
 	t.Run("the prepared item has an empty Prev", func(t *testing.T) {
 		config.Config.LeaseTime = 3000 * time.Millisecond
 
-		testConn := NewConnectionWithSetup(KVROCKS)
+		testConn := NewConnectionWithSetup(COUCHDB)
 		testConn.Delete("item1")
 
-		txnA := NewTransactionWithMockConn(KVROCKS, 1, false,
+		txnA := NewTransactionWithMockConn(COUCHDB, 1, false,
 			func() error { time.Sleep(1 * time.Second); return nil })
-		txnB := NewTransactionWithSetup(KVROCKS)
+		txnB := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		txnB.Start()
 
 		go func() {
 			itemA := testutil.NewTestItem("item1-A")
-			txnA.Write(KVROCKS, "item1", itemA)
+			txnA.Write(COUCHDB, "item1", itemA)
 			err := txnA.Commit()
 			assert.NoError(t, err)
 		}()
@@ -1462,7 +1486,7 @@ func TestKvrocks_RepeatableReadWhenDirtyRead(t *testing.T) {
 		// wait for txnA to write item into database
 		time.Sleep(500 * time.Millisecond)
 		var itemB testutil.TestItem
-		err := txnB.Read(KVROCKS, "item1", &itemB)
+		err := txnB.Read(COUCHDB, "item1", &itemB)
 		assert.EqualError(t, err, txn.KeyNotFound.Error())
 
 		time.Sleep(2 * time.Second)
@@ -1472,50 +1496,50 @@ func TestKvrocks_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-A")), resItem.Value())
 
-		err = txnB.Read(KVROCKS, "item1", &itemB)
+		err = txnB.Read(COUCHDB, "item1", &itemB)
 		assert.EqualError(t, err, txn.KeyNotFound.Error())
 
 		// post check
-		postTxn := NewTransactionWithSetup(KVROCKS)
+		postTxn := NewTransactionWithSetup(COUCHDB)
 		postTxn.Start()
 
 		var itemPost testutil.TestItem
-		err = postTxn.Read(KVROCKS, "item1", &itemPost)
+		err = postTxn.Read(COUCHDB, "item1", &itemPost)
 		assert.NoError(t, err)
 		assert.Equal(t, "item1-A", itemPost.Value)
 	})
 
 }
 
-func TestKvrocks_DeleteTimingProblems(t *testing.T) {
+func TestCouchDB_DeleteTimingProblems(t *testing.T) {
 
 	// conn Puts an item with an empty Prev field
 	//  - txnA reads the item, decides to delete
 	//  - txnB reads the item, updates and commmits
 	//  - txnA tries to delete the item -> should fail
 	t.Run("the item has an empty Prev field", func(t *testing.T) {
-		testConn := NewConnectionWithSetup(KVROCKS)
-		dbItem := &redis.RedisItem{
-			RKey:      "item1",
-			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:    "TestRedis_DeleteTimingProblems",
-			RTxnState: config.COMMITTED,
-			RTValid:   time.Now().Add(-5 * time.Second),
-			RTLease:   time.Now().Add(-4 * time.Second),
-			RVersion:  "1",
+		testConn := NewConnectionWithSetup(COUCHDB)
+		dbItem := &couchdb.CouchDBItem{
+			CKey:      "item1",
+			CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			CTxnId:    "TestCouchDB_DeleteTimingProblems",
+			CTxnState: config.COMMITTED,
+			CTValid:   time.Now().Add(-5 * time.Second),
+			CTLease:   time.Now().Add(-4 * time.Second),
+			CVersion:  "1",
 		}
 		testConn.PutItem("item1", dbItem)
 
-		txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
+		txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
 			func() error { time.Sleep(1 * time.Second); return nil })
-		txnB := NewTransactionWithSetup(KVROCKS)
+		txnB := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		txnB.Start()
 
 		go func() {
 			var item testutil.TestItem
-			txnA.Read(KVROCKS, "item1", &item)
-			txnA.Delete(KVROCKS, "item1")
+			txnA.Read(COUCHDB, "item1", &item)
+			txnA.Delete(COUCHDB, "item1")
 			err := txnA.Commit()
 			assert.NotNil(t, err)
 			// assert.NoError(t, err)
@@ -1523,10 +1547,10 @@ func TestKvrocks_DeleteTimingProblems(t *testing.T) {
 
 		time.Sleep(200 * time.Millisecond)
 		var itemB testutil.TestItem
-		txnB.Read(KVROCKS, "item1", &itemB)
-		txnB.Delete(KVROCKS, "item1")
+		txnB.Read(COUCHDB, "item1", &itemB)
+		txnB.Delete(COUCHDB, "item1")
 		itemB.Value = "item1-B"
-		txnB.Write(KVROCKS, "item1", itemB)
+		txnB.Write(COUCHDB, "item1", itemB)
 		err := txnB.Commit()
 		assert.NoError(t, err)
 
@@ -1540,13 +1564,13 @@ func TestKvrocks_DeleteTimingProblems(t *testing.T) {
 	})
 }
 
-func TestKvrocks_VisibilityResults(t *testing.T) {
+func TestCouchDB_VisibilityResults(t *testing.T) {
 
 	t.Run("a normal chain", func(t *testing.T) {
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-V0")
-		preTxn.Write(KVROCKS, "item1", item)
+		preTxn.Write(COUCHDB, "item1", item)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
@@ -1554,13 +1578,13 @@ func TestKvrocks_VisibilityResults(t *testing.T) {
 
 		for i := 1; i <= chainNum; i++ {
 			time.Sleep(10 * time.Millisecond)
-			txn := NewTransactionWithSetup(KVROCKS)
+			txn := NewTransactionWithSetup(COUCHDB)
 			txn.Start()
 			var item testutil.TestItem
-			txn.Read(KVROCKS, "item1", &item)
+			txn.Read(COUCHDB, "item1", &item)
 			assert.Equal(t, "item1-V"+strconv.Itoa(i-1), item.Value)
 			item.Value = "item1-V" + strconv.Itoa(i)
-			txn.Write(KVROCKS, "item1", item)
+			txn.Write(COUCHDB, "item1", item)
 			err = txn.Commit()
 			assert.NoError(t, err)
 		}
@@ -1574,31 +1598,31 @@ func TestKvrocks_VisibilityResults(t *testing.T) {
 //  - call `Get` X+1 times
 //  - call `Put` 2X+2 times
 
-func TestKvrocks_ReadModifyWritePattern(t *testing.T) {
+func TestCouchDB_ReadModifyWritePattern(t *testing.T) {
 
 	t.Run("when X = 1", func(t *testing.T) {
 
 		X := 1
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		dbItem := testutil.NewTestItem("item1-pre")
-		preTxn.Write(KVROCKS, "item1", dbItem)
+		preTxn.Write(COUCHDB, "item1", dbItem)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
 		txn := txn.NewTransaction()
-		mockConn := mock.NewMockRedisConnection("localhost", 6666, -1, false,
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
 			func() error { time.Sleep(1 * time.Second); return nil })
-		rds := redis.NewRedisDatastore(KVROCKS, mockConn)
+		rds := redis.NewRedisDatastore(COUCHDB, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
 		txn.Start()
 
 		var item1 testutil.TestItem
-		err = txn.Read(KVROCKS, "item1", &item1)
+		err = txn.Read(COUCHDB, "item1", &item1)
 		assert.NoError(t, err)
 		item1.Value = "item1-modified"
-		txn.Write(KVROCKS, "item1", item1)
+		txn.Write(COUCHDB, "item1", item1)
 		err = txn.Commit()
 		assert.NoError(t, err)
 
@@ -1612,29 +1636,29 @@ func TestKvrocks_ReadModifyWritePattern(t *testing.T) {
 	t.Run("when X = 5", func(t *testing.T) {
 
 		X := 5
-		preTxn := NewTransactionWithSetup(KVROCKS)
+		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		for i := 1; i <= X; i++ {
 			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
-			preTxn.Write(KVROCKS, "item"+strconv.Itoa(i), dbItem)
+			preTxn.Write(COUCHDB, "item"+strconv.Itoa(i), dbItem)
 		}
 		err := preTxn.Commit()
 		assert.NoError(t, err)
 
 		txn := txn.NewTransaction()
-		mockConn := mock.NewMockRedisConnection("localhost", 6666, -1, false,
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
 			func() error { time.Sleep(1 * time.Second); return nil })
-		rds := redis.NewRedisDatastore(KVROCKS, mockConn)
+		rds := redis.NewRedisDatastore(COUCHDB, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
 		txn.Start()
 
 		for i := 1; i <= X; i++ {
 			var item testutil.TestItem
-			err = txn.Read(KVROCKS, "item"+strconv.Itoa(i), &item)
+			err = txn.Read(COUCHDB, "item"+strconv.Itoa(i), &item)
 			assert.NoError(t, err)
 			item.Value = "item" + strconv.Itoa(i) + "-modified"
-			txn.Write(KVROCKS, "item"+strconv.Itoa(i), item)
+			txn.Write(COUCHDB, "item"+strconv.Itoa(i), item)
 		}
 		err = txn.Commit()
 		assert.NoError(t, err)

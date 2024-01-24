@@ -41,7 +41,7 @@ func main() {
 		MTLease:    now.Add(-2 * time.Second),
 		MPrev:      "",
 		MIsDeleted: false,
-		MVersion:   2,
+		MVersion:   "2",
 	}
 
 	keyFilter := bson.D{{Key: "TxnId", Value: "1"}}

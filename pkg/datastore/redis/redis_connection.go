@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/redis/go-redis/v9"
@@ -80,7 +81,7 @@ func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 // PutItem puts an item into the Redis database with the specified key and value.
 // It sets various fields of the txn.DataItem struct as hash fields in the Redis hash.
 // The function returns an error if there was a problem executing the Redis commands.
-func (r *RedisConnection) PutItem(key string, value txn.DataItem) error {
+func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	ctx := context.Background()
 	_, err := r.rdb.Pipelined(ctx, func(rdb redis.Pipeliner) error {
 		rdb.HSet(ctx, key, "Key", value.Key())
@@ -97,16 +98,16 @@ func (r *RedisConnection) PutItem(key string, value txn.DataItem) error {
 	})
 
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return "", nil
 }
 
 // ConditionalUpdate updates the value of a Redis item if the version matches the provided value.
 // It takes a key string and a txn.DataItem value as parameters.
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
+func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
 
 	if doCreate {
 		ctx := context.Background()
@@ -128,16 +129,17 @@ else
 end
     `).Result()
 		if err != nil {
-			return err
+			return "", err
 		}
+		newVer := util.AddToString(value.Version(), 1)
 
 		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key()}, value.Version(), value.Key(),
 			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
-			value.Version()+1, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
+			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
-			return err
+			return "", err
 		}
-		return nil
+		return newVer, nil
 	} else {
 		ctx := context.Background()
 		sha, err := r.rdb.ScriptLoad(ctx, `
@@ -158,16 +160,17 @@ end
 	end
 		`).Result()
 		if err != nil {
-			return err
+			return "", err
 		}
+		newVer := util.AddToString(value.Version(), 1)
 
 		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key()}, value.Version(), value.Key(),
 			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
-			value.Version()+1, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
+			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
-			return err
+			return "", err
 		}
-		return nil
+		return newVer, nil
 	}
 
 }

@@ -43,6 +43,9 @@ func ToJSONString(value any) string {
 func ToInt(value any) int64 {
 	switch v := value.(type) {
 	case string:
+		if v == "" {
+			return 0
+		}
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			log.Fatal(err)
@@ -121,4 +124,9 @@ func RetryHelper(maxRetryTimes int, retryInterval time.Duration, fn func() error
 		time.Sleep(retryInterval)
 	}
 	return errors.New("reached maximum retry limit, last error: " + err.Error())
+}
+
+func AddToString(s string, i int) string {
+	num := ToInt(s) + ToInt(i)
+	return ToString(num)
 }
