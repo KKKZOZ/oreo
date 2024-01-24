@@ -48,11 +48,11 @@ func (m *MockRedisConnection) Get(name string) (string, error) {
 	return m.RedisConnection.Get(name)
 }
 
-func (m *MockRedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) error {
+func (m *MockRedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
-			return m.debugFunc()
+			return "", m.debugFunc()
 		} else {
 			m.debugFunc()
 		}
@@ -60,11 +60,11 @@ func (m *MockRedisConnection) ConditionalUpdate(key string, value txn.DataItem, 
 	return m.RedisConnection.ConditionalUpdate(key, value, doCreate)
 }
 
-func (m *MockRedisConnection) PutItem(key string, value txn.DataItem) error {
+func (m *MockRedisConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
-			return m.debugFunc()
+			return "", m.debugFunc()
 		} else {
 			m.debugFunc()
 		}

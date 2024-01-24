@@ -16,7 +16,7 @@ type ItemOptions struct {
 	Prev      string
 	LinkedLen int
 	IsDeleted bool
-	Version   int
+	Version   string
 }
 
 type DataItemFactory interface {

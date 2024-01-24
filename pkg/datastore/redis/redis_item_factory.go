@@ -2,6 +2,8 @@ package redis
 
 import "github.com/kkkzoz/oreo/pkg/txn"
 
+var _ txn.DataItemFactory = (*RedisItemFactory)(nil)
+
 type RedisItemFactory struct{}
 
 func (r *RedisItemFactory) NewDataItem(options txn.ItemOptions) txn.DataItem {
