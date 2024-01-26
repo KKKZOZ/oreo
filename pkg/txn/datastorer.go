@@ -1,6 +1,6 @@
 package txn
 
-// Datastore is an interface that defines the operations for interacting with a data store.
+// Datastorer is an interface that defines the operations for interacting with a data store.
 //
 //go:generate mockery --name Datastore
 type Datastorer interface {
