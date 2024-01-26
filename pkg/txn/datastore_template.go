@@ -481,19 +481,25 @@ func (r *Datastore) Prepare() error {
 // Returns an error if there is any issue updating the records.
 func (r *Datastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
-	for _, item := range r.writeCache {
 
+	copiedMap := make(map[string]DataItem)
+	for k, v := range r.writeCache {
+		copiedMap[k] = v
+	}
+
+	for _, item := range copiedMap {
 		go func(item DataItem) {
 			item.SetTxnState(config.COMMITTED)
-			// _, err := r.conn.ConditionalUpdate(item.Key(), item, false)
 			util.RetryHelper(3, 100*time.Millisecond, func() error {
-				_, err := r.conn.PutItem(item.Key(), item)
+				_, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+				// _, err := r.conn.PutItem(item.Key(), item)
+				if err == VersionMismatch {
+					// this indicates that the record has been rolled forward
+					// by another transaction.
+					return nil
+				}
 				return err
 			})
-			// _, err := r.conn.PutItem(item.Key(), item)
-			// if err != nil {
-			// 	return err
-			// }
 		}(item)
 	}
 
