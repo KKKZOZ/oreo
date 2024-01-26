@@ -1,11 +1,11 @@
 package txn
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/testutil"
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/locker"
@@ -20,11 +20,11 @@ func (e TxnError) Error() string {
 	return string(e)
 }
 
-const (
-	KeyNotFound      TxnError = "key not found"
-	DirtyRead        TxnError = "dirty read"
-	DeserializeError TxnError = "deserialize error"
-	VersionMismatch  TxnError = "version mismatch"
+var (
+	KeyNotFound      = errors.Errorf("key not found")
+	DirtyRead        = errors.Errorf("dirty read")
+	DeserializeError = errors.Errorf("deserialize error")
+	VersionMismatch  = errors.Errorf("version mismatch")
 )
 
 const (
@@ -195,14 +195,20 @@ func (t *Transaction) Commit() error {
 		err := ds.Prepare()
 		if err != nil {
 			success, cause = false, err
+			if stackError, ok := err.(*errors.Error); ok {
+				Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", stackError.ErrorStack(), "ds", ds.GetName())
+			}
 			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
 			t.debug(testutil.DPrepare, "prepare phase failed(ds:%v): %v", ds.GetName(), err)
 			break
 		}
 	}
 	if !success {
-		Log.Errorw("prepare phase failed, aborting transaction", "txnId", t.TxnId, "cause", cause)
+		// Log.Errorw("prepare phase failed, aborting transaction", "txnId", t.TxnId, "cause", cause.(*errors.Error).ErrorStack())
 		t.Abort()
+		if stackError, ok := cause.(*errors.Error); ok {
+			return errors.New("prepare phase failed: " + stackError.ErrorStack())
+		}
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
