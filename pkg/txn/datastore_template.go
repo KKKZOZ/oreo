@@ -212,7 +212,7 @@ func (r *Datastore) treatAsCommitted(item DataItem, logicFunc func(DataItem, boo
 
 		if curItem.TValid().Before(r.Txn.TxnStartTime) {
 			// find the corresponding version,
-			// do some bussiness logic.
+			// do some business logic.
 			return logicFunc(curItem, true)
 		}
 		if i == config.Config.MaxRecordLength {
