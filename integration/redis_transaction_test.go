@@ -651,7 +651,7 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(REDIS, 2, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -756,7 +756,7 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(REDIS, 4, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
@@ -870,7 +870,7 @@ func TestRedis_TransactionAbortWhenWritingTSR(t *testing.T) {
 	}
 
 	txn := NewTransactionWithMockConn(REDIS, 5, true,
-		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
+		0, func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
@@ -1046,7 +1046,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(REDIS, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1099,7 +1099,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(REDIS, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1166,7 +1166,7 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		txnA := NewTransactionWithMockConn(REDIS, 0, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		txnA.Start()
 		var item testutil.TestItem
 		err := txnA.Read(REDIS, "item1", &item)
@@ -1415,7 +1415,7 @@ func TestRedis_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 
 		txnA := NewTransactionWithMockConn(REDIS, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(REDIS)
 		txnA.Start()
 		txnB.Start()
@@ -1447,7 +1447,7 @@ func TestRedis_RepeatableReadWhenDirtyRead(t *testing.T) {
 		testConn.Delete("item1")
 
 		txnA := NewTransactionWithMockConn(REDIS, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(REDIS)
 		txnA.Start()
 		txnB.Start()
@@ -1507,7 +1507,7 @@ func TestRedis_DeleteTimingProblems(t *testing.T) {
 		testConn.PutItem("item1", dbItem)
 
 		txnA := NewTransactionWithMockConn(REDIS, 0, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(REDIS)
 		txnA.Start()
 		txnB.Start()
@@ -1588,7 +1588,7 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(REDIS, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -1623,7 +1623,7 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(REDIS, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)

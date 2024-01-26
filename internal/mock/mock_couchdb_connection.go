@@ -2,6 +2,7 @@ package mock
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -17,12 +18,13 @@ type MockCouchDBConnection struct {
 	debugCounter int
 	debugFunc    func() error
 	isReturned   bool
+	networkDelay time.Duration
 	PutTimes     int
 	GetTimes     int
 }
 
 func NewMockCouchDBConnection(address string, port int, limit int,
-	isReturned bool, debugFunc func() error) *MockCouchDBConnection {
+	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockCouchDBConnection {
 	conn := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
 		Address: fmt.Sprintf("http://admin:password@%s:%d", address, port),
 		DBName:  "oreo",
@@ -32,22 +34,26 @@ func NewMockCouchDBConnection(address string, port int, limit int,
 		debugCounter:      limit,
 		debugFunc:         debugFunc,
 		isReturned:        isReturned,
+		networkDelay:      networkDelay,
 		PutTimes:          0,
 		GetTimes:          0,
 	}
 }
 
 func (m *MockCouchDBConnection) GetItem(key string) (txn.DataItem, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.GetTimes++ }()
 	return m.CouchDBConnection.GetItem(key)
 }
 
 func (m *MockCouchDBConnection) Get(name string) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.GetTimes++ }()
 	return m.CouchDBConnection.Get(name)
 }
 
 func (m *MockCouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -60,6 +66,7 @@ func (m *MockCouchDBConnection) ConditionalUpdate(key string, value txn.DataItem
 }
 
 func (m *MockCouchDBConnection) PutItem(key string, value txn.DataItem) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -72,6 +79,7 @@ func (m *MockCouchDBConnection) PutItem(key string, value txn.DataItem) (string,
 }
 
 func (m *MockCouchDBConnection) Put(name string, value any) error {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -84,6 +92,7 @@ func (m *MockCouchDBConnection) Put(name string, value any) error {
 }
 
 func (m *MockCouchDBConnection) Delete(name string) error {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {

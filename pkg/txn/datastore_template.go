@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
@@ -481,13 +482,21 @@ func (r *Datastore) Prepare() error {
 func (r *Datastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
 	for _, item := range r.writeCache {
-		item.SetTxnState(config.COMMITTED)
-		// _, err := r.conn.ConditionalUpdate(item.Key(), item, false)
-		_, err := r.conn.PutItem(item.Key(), item)
-		if err != nil {
-			return err
-		}
+
+		go func(item DataItem) {
+			item.SetTxnState(config.COMMITTED)
+			// _, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+			util.RetryHelper(3, 100*time.Millisecond, func() error {
+				_, err := r.conn.PutItem(item.Key(), item)
+				return err
+			})
+			// _, err := r.conn.PutItem(item.Key(), item)
+			// if err != nil {
+			// 	return err
+			// }
+		}(item)
 	}
+
 	// clear the cache
 	r.writeCache = make(map[string]DataItem)
 	r.readCache = make(map[string]DataItem)
