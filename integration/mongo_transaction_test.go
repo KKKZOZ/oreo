@@ -652,7 +652,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(MONGO, 2, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -757,7 +757,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(MONGO, 4, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
@@ -871,7 +871,7 @@ func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 	}
 
 	txn := NewTransactionWithMockConn(MONGO, 5, true,
-		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
+		0, func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
@@ -1047,7 +1047,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(MONGO, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1100,7 +1100,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(MONGO, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1167,7 +1167,7 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		txnA := NewTransactionWithMockConn(MONGO, 0, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		txnA.Start()
 		var item testutil.TestItem
 		err := txnA.Read(MONGO, "item1", &item)
@@ -1416,7 +1416,7 @@ func TestMongo_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 
 		txnA := NewTransactionWithMockConn(MONGO, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(MONGO)
 		txnA.Start()
 		txnB.Start()
@@ -1448,7 +1448,7 @@ func TestMongo_RepeatableReadWhenDirtyRead(t *testing.T) {
 		testConn.Delete("item1")
 
 		txnA := NewTransactionWithMockConn(MONGO, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(MONGO)
 		txnA.Start()
 		txnB.Start()
@@ -1508,7 +1508,7 @@ func TestMongo_DeleteTimingProblems(t *testing.T) {
 		testConn.PutItem("item1", dbItem)
 
 		txnA := NewTransactionWithMockConn(MONGO, 0, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(MONGO)
 		txnA.Start()
 		txnB.Start()
@@ -1589,7 +1589,7 @@ func TestMongo_ReadModifyWritePattern(t *testing.T) {
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(MONGO, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -1624,7 +1624,7 @@ func TestMongo_ReadModifyWritePattern(t *testing.T) {
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(MONGO, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
