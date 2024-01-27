@@ -2,6 +2,7 @@ package mock
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -19,12 +20,13 @@ type MockRedisConnection struct {
 	debugCounter int
 	debugFunc    func() error
 	isReturned   bool
+	networkDelay time.Duration
 	PutTimes     int
 	GetTimes     int
 }
 
 func NewMockRedisConnection(address string, port int, limit int,
-	isReturned bool, debugFunc func() error) *MockRedisConnection {
+	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockRedisConnection {
 	conn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address: fmt.Sprintf("%s:%d", address, port),
 	})
@@ -33,22 +35,26 @@ func NewMockRedisConnection(address string, port int, limit int,
 		debugCounter:    limit,
 		debugFunc:       debugFunc,
 		isReturned:      isReturned,
+		networkDelay:    networkDelay,
 		PutTimes:        0,
 		GetTimes:        0,
 	}
 }
 
 func (m *MockRedisConnection) GetItem(key string) (txn.DataItem, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.GetTimes++ }()
 	return m.RedisConnection.GetItem(key)
 }
 
 func (m *MockRedisConnection) Get(name string) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.GetTimes++ }()
 	return m.RedisConnection.Get(name)
 }
 
 func (m *MockRedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -61,6 +67,7 @@ func (m *MockRedisConnection) ConditionalUpdate(key string, value txn.DataItem, 
 }
 
 func (m *MockRedisConnection) PutItem(key string, value txn.DataItem) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -73,6 +80,7 @@ func (m *MockRedisConnection) PutItem(key string, value txn.DataItem) (string, e
 }
 
 func (m *MockRedisConnection) Put(name string, value any) error {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -85,6 +93,7 @@ func (m *MockRedisConnection) Put(name string, value any) error {
 }
 
 func (m *MockRedisConnection) Delete(name string) error {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {

@@ -39,6 +39,7 @@ func TestKvrocks_TxnWrite(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error committing transaction: %s", err)
 	}
+	time.Sleep(100 * time.Millisecond)
 
 	txn2 := NewTransactionWithSetup(KVROCKS)
 
@@ -647,11 +648,13 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 	for _, item := range testutil.InputItemList {
 		preTxn.Write(KVROCKS, item.Value, item)
 	}
-	preTxn.Commit()
+	err := preTxn.Commit()
+	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(KVROCKS, 2, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -688,7 +691,7 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 		result.Value = testutil.InputItemList[i].Value + "-fast"
 		fastTxn.Write(KVROCKS, testutil.InputItemList[i].Value, result)
 	}
-	err := fastTxn.Commit()
+	err = fastTxn.Commit()
 	assert.NoError(t, err)
 
 	// wait for slowTxn to complete
@@ -753,10 +756,11 @@ func TestKvrocks_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T
 	}
 	err := preTxn.Commit()
 	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(KVROCKS, 4, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
@@ -868,9 +872,10 @@ func TestKvrocks_TransactionAbortWhenWritingTSR(t *testing.T) {
 	if err != nil {
 		t.Errorf("preTxn commit err: %s", err)
 	}
+	time.Sleep(1 * time.Second)
 
 	txn := NewTransactionWithMockConn(KVROCKS, 5, true,
-		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
+		0, func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
@@ -1046,7 +1051,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1099,7 +1104,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1166,7 +1171,7 @@ func TestKvrocks_RollForwardConflict(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		txnA.Start()
 		var item testutil.TestItem
 		err := txnA.Read(KVROCKS, "item1", &item)
@@ -1250,6 +1255,7 @@ func TestKvrocks_TxnDelete(t *testing.T) {
 	preTxn.Write(KVROCKS, "item1", item)
 	err := preTxn.Commit()
 	assert.NoError(t, err)
+	// time.Sleep(100 * time.Millisecond)
 
 	txn := NewTransactionWithSetup(KVROCKS)
 	txn.Start()
@@ -1277,6 +1283,7 @@ func TestKvrocks_PreventLostUpdatesValidation(t *testing.T) {
 			preTxn.Write(KVROCKS, "item1", item)
 			err := preTxn.Commit()
 			assert.NoError(t, err)
+			time.Sleep(500 * time.Millisecond)
 
 			txnA := NewTransactionWithSetup(KVROCKS)
 			txnA.Start()
@@ -1314,6 +1321,7 @@ func TestKvrocks_PreventLostUpdatesValidation(t *testing.T) {
 			preTxn.Write(KVROCKS, "item1", item)
 			err := preTxn.Commit()
 			assert.NoError(t, err)
+			time.Sleep(500 * time.Millisecond)
 
 			txnA := NewTransactionWithSetup(KVROCKS)
 			txnA.Start()
@@ -1346,6 +1354,7 @@ func TestKvrocks_PreventLostUpdatesValidation(t *testing.T) {
 		preTxn.Write(KVROCKS, "item1", item)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
+		time.Sleep(500 * time.Millisecond)
 
 		txnA := NewTransactionWithSetup(KVROCKS)
 		txnA.Start()
@@ -1380,6 +1389,7 @@ func TestKvrocks_PreventLostUpdatesValidation(t *testing.T) {
 		preTxn.Write(KVROCKS, "item1", item)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
+		time.Sleep(500 * time.Millisecond)
 
 		txnA := NewTransactionWithSetup(KVROCKS)
 		txnA.Start()
@@ -1415,7 +1425,7 @@ func TestKvrocks_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 
 		txnA := NewTransactionWithMockConn(KVROCKS, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(KVROCKS)
 		txnA.Start()
 		txnB.Start()
@@ -1447,7 +1457,7 @@ func TestKvrocks_RepeatableReadWhenDirtyRead(t *testing.T) {
 		testConn.Delete("item1")
 
 		txnA := NewTransactionWithMockConn(KVROCKS, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(KVROCKS)
 		txnA.Start()
 		txnB.Start()
@@ -1507,7 +1517,7 @@ func TestKvrocks_DeleteTimingProblems(t *testing.T) {
 		testConn.PutItem("item1", dbItem)
 
 		txnA := NewTransactionWithMockConn(KVROCKS, 0, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(KVROCKS)
 		txnA.Start()
 		txnB.Start()
@@ -1585,10 +1595,11 @@ func TestKvrocks_ReadModifyWritePattern(t *testing.T) {
 		preTxn.Write(KVROCKS, "item1", dbItem)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
+		time.Sleep(1 * time.Second)
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6666, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(KVROCKS, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -1605,6 +1616,7 @@ func TestKvrocks_ReadModifyWritePattern(t *testing.T) {
 		// t.Logf("Connection status:\nGetTimes: %d\nPutTimes: %d\n",
 		// 	mockConn.GetTimes, mockConn.PutTimes)
 
+		time.Sleep(1 * time.Second)
 		assert.Equal(t, X+1, mockConn.GetTimes)
 		assert.Equal(t, 2*X+2, mockConn.PutTimes)
 	})
@@ -1620,10 +1632,11 @@ func TestKvrocks_ReadModifyWritePattern(t *testing.T) {
 		}
 		err := preTxn.Commit()
 		assert.NoError(t, err)
+		time.Sleep(1 * time.Second)
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6666, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(KVROCKS, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -1642,6 +1655,7 @@ func TestKvrocks_ReadModifyWritePattern(t *testing.T) {
 		// t.Logf("Connection status:\nGetTimes: %d\nPutTimes: %d\n",
 		// 	mockConn.GetTimes, mockConn.PutTimes)
 
+		time.Sleep(1 * time.Second)
 		assert.Equal(t, X+1, mockConn.GetTimes)
 		assert.Equal(t, 2*X+2, mockConn.PutTimes)
 	})

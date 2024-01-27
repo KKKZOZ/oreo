@@ -2,6 +2,7 @@ package mock
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -17,12 +18,13 @@ type MockMongoConnection struct {
 	debugCounter int
 	debugFunc    func() error
 	isReturned   bool
+	networkDelay time.Duration
 	PutTimes     int
 	GetTimes     int
 }
 
 func NewMockMongoConnection(address string, port int, limit int,
-	isReturned bool, debugFunc func() error) *MockMongoConnection {
+	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockMongoConnection {
 	conn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 		Address:        fmt.Sprintf("mongodb://%s:%d", address, port),
 		DBName:         "oreo",
@@ -33,22 +35,26 @@ func NewMockMongoConnection(address string, port int, limit int,
 		debugCounter:    limit,
 		debugFunc:       debugFunc,
 		isReturned:      isReturned,
+		networkDelay:    networkDelay,
 		PutTimes:        0,
 		GetTimes:        0,
 	}
 }
 
 func (m *MockMongoConnection) GetItem(key string) (txn.DataItem, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.GetTimes++ }()
 	return m.MongoConnection.GetItem(key)
 }
 
 func (m *MockMongoConnection) Get(name string) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.GetTimes++ }()
 	return m.MongoConnection.Get(name)
 }
 
 func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -61,6 +67,7 @@ func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem, 
 }
 
 func (m *MockMongoConnection) PutItem(key string, value txn.DataItem) (string, error) {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -73,6 +80,7 @@ func (m *MockMongoConnection) PutItem(key string, value txn.DataItem) (string, e
 }
 
 func (m *MockMongoConnection) Put(name string, value any) error {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {
@@ -85,6 +93,7 @@ func (m *MockMongoConnection) Put(name string, value any) error {
 }
 
 func (m *MockMongoConnection) Delete(name string) error {
+	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {
 		if m.isReturned {

@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"time"
+
 	"github.com/kkkzoz/oreo/internal/mock"
 	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
 	"github.com/kkkzoz/oreo/pkg/datastore/memory"
@@ -101,13 +103,13 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 }
 
 func NewTransactionWithMockConn(dsType string, limit int,
-	isReturned bool, debugFunc func() error) *txn.Transaction {
+	isReturned bool, networkDelay time.Duration, debugFunc func() error) *txn.Transaction {
 
 	txn := txn.NewTransaction()
 	if dsType == "redis" {
 
 		mockConn := mock.NewMockRedisConnection(
-			"localhost", 6379, limit, isReturned, debugFunc)
+			"localhost", 6379, limit, isReturned, networkDelay, debugFunc)
 		rds := redis.NewRedisDatastore("redis", mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -115,7 +117,7 @@ func NewTransactionWithMockConn(dsType string, limit int,
 
 	if dsType == "mongo" {
 		mockConn := mock.NewMockMongoConnection(
-			"localhost", 27017, limit, isReturned, debugFunc)
+			"localhost", 27017, limit, isReturned, networkDelay, debugFunc)
 		mds := mongo.NewMongoDatastore("mongo", mockConn)
 		txn.AddDatastore(mds)
 		txn.SetGlobalDatastore(mds)
@@ -123,7 +125,7 @@ func NewTransactionWithMockConn(dsType string, limit int,
 
 	if dsType == "couchdb" {
 		mockConn := mock.NewMockCouchDBConnection(
-			"localhost", 5984, limit, isReturned, debugFunc)
+			"localhost", 5984, limit, isReturned, networkDelay, debugFunc)
 		cds := couchdb.NewCouchDBDatastore("couchdb", mockConn)
 		txn.AddDatastore(cds)
 		txn.SetGlobalDatastore(cds)
@@ -131,7 +133,7 @@ func NewTransactionWithMockConn(dsType string, limit int,
 
 	if dsType == "kvrocks" {
 		mockConn := mock.NewMockRedisConnection(
-			"localhost", 6666, limit, isReturned, debugFunc)
+			"localhost", 6666, limit, isReturned, networkDelay, debugFunc)
 		rds := redis.NewRedisDatastore("kvrocks", mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)

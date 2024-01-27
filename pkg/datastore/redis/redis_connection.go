@@ -2,9 +2,9 @@ package redis
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -73,7 +73,7 @@ func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 	}
 	// Check if returned value is an empty struct
 	if value.Empty() {
-		return &RedisItem{}, txn.KeyNotFound
+		return &RedisItem{}, errors.New(txn.KeyNotFound)
 	}
 	return &value, nil
 }
@@ -137,6 +137,9 @@ end
 			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
 			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
+			if err.Error() == "version mismatch" {
+				return "", errors.New(txn.VersionMismatch)
+			}
 			return "", err
 		}
 		return newVer, nil
@@ -168,6 +171,9 @@ end
 			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
 			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
+			if err.Error() == "version mismatch" {
+				return "", errors.New(txn.VersionMismatch)
+			}
 			return "", err
 		}
 		return newVer, nil
@@ -183,7 +189,7 @@ func (r *RedisConnection) Get(name string) (string, error) {
 	str, err := r.rdb.Get(context.Background(), name).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return "", fmt.Errorf("key not found: %s", name)
+			return "", errors.New(txn.KeyNotFound)
 		}
 		return "", err
 	}

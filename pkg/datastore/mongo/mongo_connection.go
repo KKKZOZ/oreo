@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"go.mongodb.org/mongo-driver/bson"
@@ -102,13 +103,13 @@ func (m *MongoConnection) Close() error {
 // If the key is not found, it returns an empty txn.DataItem and an error.
 func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 	if !m.hasConnected {
-		return &MongoItem{}, fmt.Errorf("not connected to MongoDB")
+		return &MongoItem{}, errors.Errorf("not connected to MongoDB")
 	}
 	var item MongoItem
 	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return &MongoItem{}, txn.KeyNotFound
+			return &MongoItem{}, errors.New(txn.KeyNotFound)
 		}
 		return &MongoItem{}, err
 	}
@@ -119,7 +120,7 @@ func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 // The function returns an error if there was a problem executing the MongoDB commands.
 func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	if !m.hasConnected {
-		return "", fmt.Errorf("not connected to MongoDB")
+		return "", errors.Errorf("not connected to MongoDB")
 	}
 
 	_, err := m.coll.UpdateOne(
@@ -143,7 +144,7 @@ func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error
 // Otherwise, it updates the item with the provided values and returns the updated item.
 func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreat bool) (string, error) {
 	if !m.hasConnected {
-		return "", fmt.Errorf("not connected to MongoDB")
+		return "", errors.Errorf("not connected to MongoDB")
 	}
 
 	if doCreat {
@@ -174,13 +175,13 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return "", txn.VersionMismatch
+			return "", errors.New(txn.VersionMismatch)
 		}
 		return "", err
 	}
 
 	if updatedItem.Version() != newVer {
-		return "", txn.VersionMismatch
+		return "", errors.New(txn.VersionMismatch)
 	}
 
 	return newVer, nil
@@ -216,7 +217,7 @@ func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) (string, 
 		return "", err
 	}
 
-	return "", txn.VersionMismatch
+	return "", errors.New(txn.VersionMismatch)
 }
 
 // Get retrieves the value associated with the given key from the MongoDB database.
@@ -234,7 +235,7 @@ func (m *MongoConnection) Get(key string) (string, error) {
 	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return "", txn.KeyNotFound
+			return "", errors.New(txn.KeyNotFound)
 		}
 		return "", err
 	}

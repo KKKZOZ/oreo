@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-errors/errors"
 	"github.com/go-kivik/kivik/v4"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
@@ -82,7 +83,7 @@ func (r *CouchDBConnection) GetItem(key string) (txn.DataItem, error) {
 	err := row.ScanDoc(&value)
 	if err != nil {
 		if kivik.HTTPStatus(err) == http.StatusNotFound {
-			return &CouchDBItem{}, txn.KeyNotFound
+			return &CouchDBItem{}, errors.New(txn.KeyNotFound)
 		}
 		// For all other errors, return as is
 		return &CouchDBItem{}, err
@@ -128,11 +129,11 @@ func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, do
 			// For all other errors, return as is
 			return "", err
 		}
-		return "", txn.VersionMismatch
+		return "", errors.New(txn.VersionMismatch)
 	}
 
 	if err != nil {
-		return "", txn.VersionMismatch
+		return "", errors.New(txn.VersionMismatch)
 	}
 
 	// Update the document
@@ -154,7 +155,7 @@ func (r *CouchDBConnection) Get(name string) (string, error) {
 	var value map[string]string
 	if err := row.ScanDoc(&value); err != nil {
 		if kivik.HTTPStatus(err) == http.StatusNotFound {
-			return "", txn.KeyNotFound
+			return "", errors.New(txn.KeyNotFound)
 		}
 		return "", err
 	}

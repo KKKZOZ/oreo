@@ -655,7 +655,7 @@ func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(COUCHDB, 2, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -760,7 +760,7 @@ func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(COUCHDB, 4, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
@@ -874,7 +874,7 @@ func TestCouchDB_TransactionAbortWhenWritingTSR(t *testing.T) {
 	}
 
 	txn := NewTransactionWithMockConn(COUCHDB, 5, true,
-		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
+		0, func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
@@ -1051,7 +1051,7 @@ func TestCouchDB_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1111,7 +1111,7 @@ func TestCouchDB_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1185,7 +1185,7 @@ func TestCouchDB_RollForwardConflict(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		txnA.Start()
 		var item testutil.TestItem
 		err := txnA.Read(COUCHDB, "item1", &item)
@@ -1439,7 +1439,7 @@ func TestCouchDB_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 
 		txnA := NewTransactionWithMockConn(COUCHDB, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		txnB.Start()
@@ -1471,7 +1471,7 @@ func TestCouchDB_RepeatableReadWhenDirtyRead(t *testing.T) {
 		testConn.Delete("item1")
 
 		txnA := NewTransactionWithMockConn(COUCHDB, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		txnB.Start()
@@ -1531,7 +1531,7 @@ func TestCouchDB_DeleteTimingProblems(t *testing.T) {
 		testConn.PutItem("item1", dbItem)
 
 		txnA := NewTransactionWithMockConn(COUCHDB, 0, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(COUCHDB)
 		txnA.Start()
 		txnB.Start()
@@ -1612,7 +1612,7 @@ func TestCouchDB_ReadModifyWritePattern(t *testing.T) {
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(COUCHDB, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -1647,7 +1647,7 @@ func TestCouchDB_ReadModifyWritePattern(t *testing.T) {
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(COUCHDB, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
