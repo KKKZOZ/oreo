@@ -2,13 +2,14 @@ package util
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/pkg/config"
 )
 
@@ -129,4 +130,7 @@ func RetryHelper(maxRetryTimes int, retryInterval time.Duration, fn func() error
 func AddToString(s string, i int) string {
 	num := ToInt(s) + ToInt(i)
 	return ToString(num)
+}
+func FormatErrorStack(stackError *errors.Error) string {
+	return strings.Replace(stackError.ErrorStack(), "\\n", "\n", -1)
 }
