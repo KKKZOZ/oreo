@@ -1709,12 +1709,13 @@ func TestRedis_CommitTimingCase(t *testing.T) {
 func TestRedis_ConcurrentOptimization(t *testing.T) {
 
 	t.Run("test datastore.Commit() should be concurrent", func(t *testing.T) {
-		preTxn := NewTransactionWithSetup(REDIS)
-		preTxn.Start()
 
 		// Params
 		X := 5
 		delay := 50 * time.Millisecond
+
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
 
 		for i := 1; i <= X; i++ {
 			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
@@ -1752,5 +1753,69 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 		assert.True(t, ok)
 		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
 			executionTime, time.Duration(2*X+4)*delay, threshold)
+	})
+
+	t.Run("test transaction.Commit() should be concurrent", func(t *testing.T) {
+
+		// Params
+		X := 5
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		preTxn2 := NewTransactionWithSetup(REDIS)
+		preTxn2.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn2.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err = preTxn2.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockRedisConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockRedisConn)
+		mockKvConn := mock.NewMockRedisConnection("localhost", 6666, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		kds := redis.NewRedisDatastore(KVROCKS, mockKvConn)
+		txn.AddDatastore(rds)
+		txn.AddDatastore(kds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= 5; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+
+			txn.Read(KVROCKS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(KVROCKS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+
+		executionTime := endTime.Sub(startTime)
+
+		threshold := 80 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(4*X+4)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(4*X+4)*delay, threshold)
+
 	})
 }

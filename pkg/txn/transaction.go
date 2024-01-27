@@ -3,6 +3,7 @@ package txn
 import (
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -63,7 +64,6 @@ type Transaction struct {
 // It initializes the Transaction with default values and returns a pointer to the newly created object.
 func NewTransaction() *Transaction {
 	return &Transaction{
-		TxnId:        "",
 		dataStoreMap: make(map[string]Datastorer),
 		timeSource:   LOCAL,
 		locker:       locker.AMemoryLocker,
@@ -175,7 +175,7 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Finally, it deletes the transaction state record.
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
-	Log.Infow("starts to Commit()", "txnId", t.TxnId)
+	Log.Infow("Starts to Commit()", "txnId", t.TxnId)
 	err := t.SetState(config.COMMITTED)
 	if err != nil {
 		return err
@@ -196,7 +196,8 @@ func (t *Transaction) Commit() error {
 		if err != nil {
 			success, cause = false, err
 			if stackError, ok := err.(*errors.Error); ok {
-				Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", stackError.ErrorStack(), "ds", ds.GetName())
+				errMsg := fmt.Sprintf("prepare phase failed: %v", stackError.ErrorStack())
+				Log.Errorw(errMsg, "txnId", t.TxnId, "ds", ds.GetName())
 			}
 			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
 			t.debug(testutil.DPrepare, "prepare phase failed(ds:%v): %v", ds.GetName(), err)
@@ -205,12 +206,14 @@ func (t *Transaction) Commit() error {
 	}
 	if !success {
 		// Log.Errorw("prepare phase failed, aborting transaction", "txnId", t.TxnId, "cause", cause.(*errors.Error).ErrorStack())
-		t.Abort()
-		if stackError, ok := cause.(*errors.Error); ok {
-			return errors.New("prepare phase failed: " + stackError.ErrorStack())
+		if stackError, ok := err.(*errors.Error); ok {
+			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", stackError.ErrorStack())
 		}
+		t.Abort()
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
+
+	Log.Infow("finishes prepare phase", "txnId", t.TxnId)
 
 	// Commit phase
 	// The sync point
@@ -222,22 +225,28 @@ func (t *Transaction) Commit() error {
 	}
 
 	t.debug(testutil.DTSR, "writing TSR")
-	Log.Infow("writing TSR", "txnId", t.TxnId)
+	Log.Infow("Writing TSR", "txnId", t.TxnId)
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
 		t.Abort()
 		return err
 	}
 
-	t.debug(testutil.DCommit, "starts commit phase")
+	var wg = sync.WaitGroup{}
+
 	for _, ds := range t.dataStoreMap {
-		// TODO: do not allow abort after Commit
-		// try indefinitely until success
-		ds.Commit()
+		// TODO: Retry helper
+		wg.Add(1)
+		go func(ds Datastorer) {
+			defer wg.Done()
+			ds.Commit()
+		}(ds)
 	}
 
+	wg.Wait()
+
 	t.DeleteTSR()
-	Log.Infow("Commit() finished", "txnId", t.TxnId)
+	Log.Infow("Successfully Commit()", "txnId", t.TxnId)
 	return nil
 }
 
@@ -276,7 +285,7 @@ func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
 }
 
 // DeleteTSR deletes the Transaction Status Record (TSR) associated with the Transaction.
-// It calls the DeleteTSR method of the globalDataStore to perform the deletion.
+// It calls the DeleteTSR method of the tsrMaintainer to perform the deletion.
 // It returns an error if the deletion operation fails.
 func (t *Transaction) DeleteTSR() error {
 	return t.tsrMaintainer.DeleteTSR(t.TxnId)
