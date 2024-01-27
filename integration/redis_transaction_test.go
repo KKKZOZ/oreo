@@ -648,10 +648,11 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 		preTxn.Write(REDIS, item.Value, item)
 	}
 	preTxn.Commit()
+	time.Sleep(500 * time.Millisecond)
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(REDIS, 2, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
@@ -718,7 +719,7 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 // A complex test
 // preTxn writes data to the redis database
 // slowTxn read all data and write all data,
-// but it will block when conditionalUpdate item5 (sleep 5s)
+// but it will block when conditionalUpdate item5 (sleep 2s)
 // so when slowTxn blocks, the internal state of redis database:
 //   - item1-slow PREPARED
 //   - item2-slow PREPARED
@@ -753,10 +754,11 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 	}
 	err := preTxn.Commit()
 	assert.NoError(t, err)
+	time.Sleep(1 * time.Second)
 
 	go func() {
 		slowTxn := NewTransactionWithMockConn(REDIS, 4, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		slowTxn.Start()
 		for _, item := range testutil.InputItemList {
 			var result testutil.TestItem
@@ -868,9 +870,10 @@ func TestRedis_TransactionAbortWhenWritingTSR(t *testing.T) {
 	if err != nil {
 		t.Errorf("preTxn commit err: %s", err)
 	}
+	time.Sleep(1 * time.Second)
 
 	txn := NewTransactionWithMockConn(REDIS, 5, true,
-		func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
+		0, func() error { time.Sleep(3 * time.Second); return errors.New("fail to write TSR") })
 	txn.Start()
 	for _, item := range testutil.InputItemList {
 		var result testutil.TestItem
@@ -1046,7 +1049,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(REDIS, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1099,7 +1102,7 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			txnA := NewTransactionWithMockConn(REDIS, 0, false,
-				func() error { time.Sleep(2 * time.Second); return nil })
+				0, func() error { time.Sleep(2 * time.Second); return nil })
 			txnA.Start()
 
 			var item testutil.TestItem
@@ -1166,7 +1169,7 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		txnA := NewTransactionWithMockConn(REDIS, 0, false,
-			func() error { time.Sleep(2 * time.Second); return nil })
+			0, func() error { time.Sleep(2 * time.Second); return nil })
 		txnA.Start()
 		var item testutil.TestItem
 		err := txnA.Read(REDIS, "item1", &item)
@@ -1380,6 +1383,7 @@ func TestRedis_PreventLostUpdatesValidation(t *testing.T) {
 		preTxn.Write(REDIS, "item1", item)
 		err := preTxn.Commit()
 		assert.NoError(t, err)
+		time.Sleep(1 * time.Second)
 
 		txnA := NewTransactionWithSetup(REDIS)
 		txnA.Start()
@@ -1415,7 +1419,7 @@ func TestRedis_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 
 		txnA := NewTransactionWithMockConn(REDIS, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(REDIS)
 		txnA.Start()
 		txnB.Start()
@@ -1447,7 +1451,7 @@ func TestRedis_RepeatableReadWhenDirtyRead(t *testing.T) {
 		testConn.Delete("item1")
 
 		txnA := NewTransactionWithMockConn(REDIS, 1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(REDIS)
 		txnA.Start()
 		txnB.Start()
@@ -1507,7 +1511,7 @@ func TestRedis_DeleteTimingProblems(t *testing.T) {
 		testConn.PutItem("item1", dbItem)
 
 		txnA := NewTransactionWithMockConn(REDIS, 0, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnB := NewTransactionWithSetup(REDIS)
 		txnA.Start()
 		txnB.Start()
@@ -1588,7 +1592,7 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(REDIS, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -1605,6 +1609,7 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 		// t.Logf("Connection status:\nGetTimes: %d\nPutTimes: %d\n",
 		// 	mockConn.GetTimes, mockConn.PutTimes)
 
+		time.Sleep(100 * time.Millisecond)
 		assert.Equal(t, X+1, mockConn.GetTimes)
 		assert.Equal(t, 2*X+2, mockConn.PutTimes)
 	})
@@ -1620,10 +1625,11 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 		}
 		err := preTxn.Commit()
 		assert.NoError(t, err)
+		time.Sleep(1 * time.Second)
 
 		txn := txn.NewTransaction()
 		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
-			func() error { time.Sleep(1 * time.Second); return nil })
+			0, func() error { time.Sleep(1 * time.Second); return nil })
 		rds := redis.NewRedisDatastore(REDIS, mockConn)
 		txn.AddDatastore(rds)
 		txn.SetGlobalDatastore(rds)
@@ -1642,8 +1648,174 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 		// t.Logf("Connection status:\nGetTimes: %d\nPutTimes: %d\n",
 		// 	mockConn.GetTimes, mockConn.PutTimes)
 
+		time.Sleep(1000 * time.Millisecond)
 		assert.Equal(t, X+1, mockConn.GetTimes)
 		assert.Equal(t, 2*X+2, mockConn.PutTimes)
 	})
 
+}
+
+// A timing case.
+//   - txnA reads,modifies,writes item1
+//   - txnA returns before datastore.Commit() finishes
+//   - txnB reads item1, and brings item1 to COMMITTED
+//   - txnB modifies item1 and commit
+//   - txnA tries to bring item1 to COMMITTED state, it should fail
+func TestRedis_CommitTimingCase(t *testing.T) {
+
+	preTxn := NewTransactionWithSetup(REDIS)
+	preTxn.Start()
+	item := testutil.NewTestItem("item1-pre")
+	preTxn.Write(REDIS, "item1", item)
+	err := preTxn.Commit()
+	assert.NoError(t, err)
+
+	go func() {
+
+		txnA := NewTransactionWithMockConn(REDIS, 2, false,
+			0, func() error { time.Sleep(1 * time.Second); return nil })
+		txnA.Start()
+		var item1 testutil.TestItem
+		err = txnA.Read(REDIS, "item1", &item1)
+		assert.NoError(t, err)
+		item1.Value = "item1-A"
+		txnA.Write(REDIS, "item1", item1)
+		err = txnA.Commit()
+		assert.NoError(t, err)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	txnB := NewTransactionWithSetup(REDIS)
+	txnB.Start()
+	var item1 testutil.TestItem
+	err = txnB.Read(REDIS, "item1", &item1)
+	assert.NoError(t, err)
+	item1.Value = "item1-B"
+	txnB.Write(REDIS, "item1", item1)
+	err = txnB.Commit()
+	assert.NoError(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	postTxn := NewTransactionWithSetup(REDIS)
+	postTxn.Start()
+	var resItem testutil.TestItem
+	err = postTxn.Read(REDIS, "item1", &resItem)
+	assert.NoError(t, err)
+	assert.Equal(t, "item1-B", resItem.Value)
+
+}
+
+func TestRedis_ConcurrentOptimization(t *testing.T) {
+
+	t.Run("test datastore.Commit() should be concurrent", func(t *testing.T) {
+
+		// Params
+		X := 5
+		delay := 50 * time.Millisecond
+
+		preTxn := NewTransactionWithSetup(REDIS)
+		preTxn.Start()
+
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= 5; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+
+		executionTime := endTime.Sub(startTime)
+
+		threshold := 50 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(2*X+4)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(2*X+4)*delay, threshold)
+	})
+
+	t.Run("test transaction.Commit() should be concurrent", func(t *testing.T) {
+
+		// Params
+		X := 5
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		preTxn2 := NewTransactionWithSetup(REDIS)
+		preTxn2.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn2.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err = preTxn2.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockRedisConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockRedisConn)
+		mockKvConn := mock.NewMockRedisConnection("localhost", 6666, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		kds := redis.NewRedisDatastore(KVROCKS, mockKvConn)
+		txn.AddDatastore(rds)
+		txn.AddDatastore(kds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= 5; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+
+			txn.Read(KVROCKS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(KVROCKS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+
+		executionTime := endTime.Sub(startTime)
+
+		threshold := 80 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(4*X+4)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(4*X+4)*delay, threshold)
+
+	})
 }

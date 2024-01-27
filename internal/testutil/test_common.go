@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 )
@@ -71,4 +72,12 @@ func WaitForServer(address string, port int, timeout time.Duration) error {
 	case <-time.After(timeout):
 		return fmt.Errorf("server did not reply after %v", timeout)
 	}
+}
+
+func RoughlyEqual(a, b time.Duration, threshold time.Duration) bool {
+	return math.Abs(float64(a-b)) <= float64(threshold)
+}
+
+func RoughlyLessThan(result, expected time.Duration, threshold time.Duration) bool {
+	return result <= expected+threshold
 }

@@ -3,9 +3,11 @@ package txn
 
 import (
 	"cmp"
-	"errors"
 	"slices"
+	"sync"
+	"time"
 
+	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/serializer"
@@ -15,7 +17,8 @@ var _ Datastorer = (*Datastore)(nil)
 var _ TSRMaintainer = (*Datastore)(nil)
 
 const (
-	EMPTY string = ""
+	EMPTY         string = ""
+	RETRYINTERVAL        = 50 * time.Millisecond
 )
 
 // Datastore represents a datastorer implementation using the underlying connector.
@@ -72,7 +75,7 @@ func (r *Datastore) Read(key string, value any) error {
 	if item, ok := r.writeCache[key]; ok {
 		// if the record is marked as deleted
 		if item.IsDeleted() {
-			return KeyNotFound
+			return errors.New(KeyNotFound)
 		}
 		return r.getValue(item, value)
 	}
@@ -100,13 +103,12 @@ func (r *Datastore) Read(key string, value any) error {
 	logicFunc := func(curItem DataItem, isFound bool) error {
 		// if the record has been deleted
 		if !isFound || curItem.IsDeleted() {
-			return KeyNotFound
+			return errors.New(KeyNotFound)
 		}
 
 		err := r.getValue(curItem, value)
 		if err != nil {
 			return err
-			// return DeserializeError.Join(err)
 		}
 		r.readCache[curItem.Key()] = curItem
 		return nil
@@ -118,7 +120,7 @@ func (r *Datastore) Read(key string, value any) error {
 // dirtyReadChecker will drop an item if it violates repeatable read rules.
 func (r *Datastore) dirtyReadChecker(item DataItem) (DataItem, error) {
 	if _, ok := r.invisibleSet[item.Key()]; ok {
-		return nil, KeyNotFound
+		return nil, errors.New(KeyNotFound)
 	} else {
 		return item, nil
 	}
@@ -135,12 +137,8 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		}
 
 		if item.Empty() {
-			return nil, KeyNotFound
+			return nil, errors.New(KeyNotFound)
 		}
-
-		// if item.Equal(DataItem{}) {
-		// 	return DataItem{}, KeyNotFound
-		// }
 		return item, err
 	}
 
@@ -195,13 +193,13 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		r.invisibleSet[item.Key()] = true
 		// if prev is empty
 		if item.Prev() == "" {
-			return nil, KeyNotFound
+			return nil, errors.New(KeyNotFound)
 		}
 
 		return r.getPrevItem(item)
 		// return DataItem{}, DirtyRead
 	}
-	return nil, KeyNotFound
+	return nil, errors.New(KeyNotFound)
 }
 
 // treatAsCommitted treats a DataItem as committed, finds a corresponding version
@@ -230,7 +228,7 @@ func (r *Datastore) treatAsCommitted(item DataItem, logicFunc func(DataItem, boo
 		}
 		curItem = preItem
 	}
-	return KeyNotFound
+	return errors.New(KeyNotFound)
 }
 
 // Write writes a record to the cache.
@@ -284,7 +282,7 @@ func (r *Datastore) Delete(key string) error {
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
 		if item.IsDeleted() {
-			return KeyNotFound
+			return errors.New(KeyNotFound)
 		}
 		item.SetIsDeleted(true)
 		r.writeCache[key] = item
@@ -324,7 +322,7 @@ func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) err
 		if !isFound {
 			// if the corresponding version can not be found in treatAsCommitted,
 			// it indicates that there are too many successful commits in the linked list
-			return VersionMismatch
+			return errors.New(VersionMismatch)
 		}
 		newItem, err := r.updateMetadata(cacheItem, curItem)
 		if err != nil {
@@ -358,7 +356,7 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 
 	dbItem, err := r.conn.GetItem(cacheItem.Key())
 	if err != nil {
-		if err == KeyNotFound {
+		if errors.Is(err, KeyNotFound) {
 			return r.doConditionalUpdate(cacheItem, nil)
 		}
 		return err
@@ -366,8 +364,8 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 
 	dbItem, err = r.basicVisibilityProcessor(dbItem)
 	if err != nil && err != KeyNotFound {
-		if err == DirtyRead {
-			return VersionMismatch
+		if errors.Is(err, DirtyRead) {
+			return errors.New(VersionMismatch)
 		}
 		return err
 	}
@@ -480,14 +478,26 @@ func (r *Datastore) Prepare() error {
 // Returns an error if there is any issue updating the records.
 func (r *Datastore) Commit() error {
 	// update record's state to the COMMITTED state in the data store
+	var wg sync.WaitGroup
+
 	for _, item := range r.writeCache {
-		item.SetTxnState(config.COMMITTED)
-		// _, err := r.conn.ConditionalUpdate(item.Key(), item, false)
-		_, err := r.conn.PutItem(item.Key(), item)
-		if err != nil {
-			return err
-		}
+		wg.Add(1)
+		go func(item DataItem) {
+			defer wg.Done()
+			item.SetTxnState(config.COMMITTED)
+			util.RetryHelper(3, RETRYINTERVAL, func() error {
+				_, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+				if errors.Is(err, VersionMismatch) {
+					// this indicates that the record has been rolled forward
+					// by another transaction.
+					return nil
+				}
+				return err
+			})
+		}(item)
 	}
+	wg.Wait()
+
 	// clear the cache
 	r.writeCache = make(map[string]DataItem)
 	r.readCache = make(map[string]DataItem)
@@ -559,16 +569,13 @@ func (r *Datastore) rollback(item DataItem) (DataItem, error) {
 
 // rollForward makes the record metadata with COMMITTED state
 func (r *Datastore) rollForward(item DataItem) (DataItem, error) {
-	// var oldItem DataItem
-	// r.conn.Get(item.Key, &oldItem)
+
 	item.SetTxnState(config.COMMITTED)
 	newVer, err := r.conn.ConditionalUpdate(item.Key(), item, false)
 	if err != nil {
 		return nil, errors.Join(errors.New("rollForward failed"), err)
 	}
 	item.SetVersion(newVer)
-
-	// err := r.conn.PutItem(item.Key, item)
 	return item, err
 }
 
@@ -591,7 +598,7 @@ func (r *Datastore) getValue(item DataItem, value any) error {
 	return r.se.Deserialize([]byte(item.Value()), value)
 }
 
-// GetName returns the name of the MemoryDatastore.
+// GetName returns the name of the Datastore.
 func (r *Datastore) GetName() string {
 	return r.Name
 }
