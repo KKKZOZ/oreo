@@ -85,6 +85,10 @@ func (r *Datastore) Read(key string, value any) error {
 	}
 
 	// else get if from connection
+	return r.readFromConn(key, value)
+}
+
+func (r *Datastore) readFromConn(key string, value any) error {
 	item, err := r.conn.GetItem(key)
 	if err != nil {
 		return err
@@ -103,12 +107,16 @@ func (r *Datastore) Read(key string, value any) error {
 	logicFunc := func(curItem DataItem, isFound bool) error {
 		// if the record has been deleted
 		if !isFound || curItem.IsDeleted() {
+			if curItem.IsDeleted() {
+				r.readCache[curItem.Key()] = curItem
+			}
 			return errors.New(KeyNotFound)
 		}
-
-		err := r.getValue(curItem, value)
-		if err != nil {
-			return err
+		if value != nil {
+			err := r.getValue(curItem, value)
+			if err != nil {
+				return err
+			}
 		}
 		r.readCache[curItem.Key()] = curItem
 		return nil
@@ -301,43 +309,21 @@ func (r *Datastore) Delete(key string) error {
 // doConditionalUpdate performs the real conditonal update according to item's state
 func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) error {
 
-	// if this item will be created
-	if dbItem == nil {
-		newItem, err := r.updateMetadata(cacheItem, dbItem)
-		if err != nil {
-			return err
-		}
-		newVer, err := r.conn.ConditionalUpdate(newItem.Key(), newItem, true)
-		if err != nil {
-			return err
-		}
-		newItem.SetVersion(newVer)
-		r.writeCache[newItem.Key()] = newItem
-		return nil
+	newItem, err := r.updateMetadata(cacheItem, dbItem)
+	if err != nil {
+		return err
 	}
-
-	// else this item will be updated
-	// we should find the corresponding version
-	logicFunc := func(curItem DataItem, isFound bool) error {
-		if !isFound {
-			// if the corresponding version can not be found in treatAsCommitted,
-			// it indicates that there are too many successful commits in the linked list
-			return errors.New(VersionMismatch)
-		}
-		newItem, err := r.updateMetadata(cacheItem, curItem)
-		if err != nil {
-			return err
-		}
-		newVer, err := r.conn.ConditionalUpdate(newItem.Key(), newItem, false)
-		if err != nil {
-			return err
-		}
-		newItem.SetVersion(newVer)
-		r.writeCache[newItem.Key()] = newItem
-		return nil
+	doCreate := false
+	if dbItem == nil || dbItem.Empty() {
+		doCreate = true
 	}
-
-	return r.treatAsCommitted(dbItem, logicFunc)
+	newVer, err := r.conn.ConditionalUpdate(newItem.Key(), newItem, doCreate)
+	if err != nil {
+		return err
+	}
+	newItem.SetVersion(newVer)
+	r.writeCache[newItem.Key()] = newItem
+	return nil
 }
 
 // conditionalUpdate performs a conditional update operation on the Datastore.
@@ -354,22 +340,16 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 		return r.doConditionalUpdate(cacheItem, dbItem)
 	}
 
-	dbItem, err := r.conn.GetItem(cacheItem.Key())
-	if err != nil {
-		if errors.Is(err, KeyNotFound) {
-			return r.doConditionalUpdate(cacheItem, nil)
-		}
+	// else we read from connection
+	err := r.readFromConn(cacheItem.Key(), nil)
+	if err != nil && !errors.Is(err, KeyNotFound) {
 		return err
 	}
-
-	dbItem, err = r.basicVisibilityProcessor(dbItem)
-	if err != nil && err != KeyNotFound {
-		if errors.Is(err, DirtyRead) {
-			return errors.New(VersionMismatch)
-		}
-		return err
+	dbItem := r.readCache[cacheItem.Key()]
+	// if the record is dropped by the repeatable read rule
+	if res, ok := r.invisibleSet[cacheItem.Key()]; ok && res {
+		dbItem = nil
 	}
-
 	return r.doConditionalUpdate(cacheItem, dbItem)
 }
 

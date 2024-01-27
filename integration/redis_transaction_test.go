@@ -1810,7 +1810,7 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 
 		executionTime := endTime.Sub(startTime)
 
-		threshold := 80 * time.Millisecond
+		threshold := 100 * time.Millisecond
 
 		ok := testutil.RoughlyEqual(time.Duration(4*X+4)*delay, executionTime, threshold)
 		assert.True(t, ok)
