@@ -47,6 +47,9 @@ type Datastore struct {
 
 	// itemFactory is the factory used for creating DataItems.
 	itemFactory DataItemFactory
+
+	// mu is the mutex used for locking the Datastore.
+	mu sync.Mutex
 }
 
 // NewDatastore creates a new instance of Datastore with the given name and connection.
@@ -105,9 +108,12 @@ func (r *Datastore) readFromConn(key string, value any) error {
 	}
 
 	logicFunc := func(curItem DataItem, isFound bool) error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
 		// if the record has been deleted
 		if !isFound || curItem.IsDeleted() {
 			if curItem.IsDeleted() {
+				// put into cache anyway
 				r.readCache[curItem.Key()] = curItem
 			}
 			return errors.New(KeyNotFound)
@@ -322,7 +328,10 @@ func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) err
 		return err
 	}
 	newItem.SetVersion(newVer)
+
+	r.mu.Lock()
 	r.writeCache[newItem.Key()] = newItem
+	r.mu.Unlock()
 	return nil
 }
 
@@ -443,11 +452,31 @@ func (r *Datastore) Prepare() error {
 			return cmp.Compare(i.Key(), j.Key())
 		},
 	)
-	for _, item := range items {
-		err := r.conditionalUpdate(item)
-		if err != nil {
-			return err
+	if config.Config.ConcurrentOptimizationLevel < config.PARALLELIZE_ON_UPDATE {
+		for _, item := range items {
+			if err := r.conditionalUpdate(item); err != nil {
+				return err
+			}
 		}
+		return nil
+	}
+
+	resChan := make(chan error, len(items))
+	for _, item := range items {
+		go func(it DataItem) { resChan <- r.conditionalUpdate(it) }(item)
+	}
+
+	//TODO: replace it with errgroup
+	success := true
+	var cause error
+	for i := 0; i < len(items); i++ {
+		err := <-resChan
+		if err != nil {
+			success, cause = false, err
+		}
+	}
+	if !success {
+		return cause
 	}
 	return nil
 }

@@ -1770,11 +1770,11 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 		err := preTxn1.Commit()
 		assert.NoError(t, err)
 
-		preTxn2 := NewTransactionWithSetup(REDIS)
+		preTxn2 := NewTransactionWithSetup(KVROCKS)
 		preTxn2.Start()
 		for i := 1; i <= X; i++ {
 			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
-			preTxn2.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+			preTxn2.Write(KVROCKS, "item"+strconv.Itoa(i), dbItem)
 		}
 		err = preTxn2.Commit()
 		assert.NoError(t, err)
@@ -1817,5 +1817,161 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
 			executionTime, time.Duration(4*X+4)*delay, threshold)
 
+	})
+
+	t.Run("test PARALLELIZE_ON_UPDATE", func(t *testing.T) {
+
+		// Params
+		config.Config.ConcurrentOptimizationLevel = config.PARALLELIZE_ON_UPDATE
+		X := 10
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= X; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+		executionTime := endTime.Sub(startTime)
+		threshold := 75 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(X+5)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(X+5)*delay, threshold)
+		t.Logf("GetTimes: %d\nPutTimes: %d\n", mockConn.GetTimes, mockConn.PutTimes)
+		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
+	})
+
+	t.Run("test PARALLELIZE_ON_PREPARE", func(t *testing.T) {
+
+		// Params
+		config.Config.ConcurrentOptimizationLevel = config.PARALLELIZE_ON_PREPARE
+		X := 5
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		preTxn2 := NewTransactionWithSetup(KVROCKS)
+		preTxn2.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn2.Write(KVROCKS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err = preTxn2.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockRedisConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockRedisConn)
+		mockKvConn := mock.NewMockRedisConnection("localhost", 6666, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		kds := redis.NewRedisDatastore(KVROCKS, mockKvConn)
+		txn.AddDatastore(rds)
+		txn.AddDatastore(kds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= 5; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+
+			txn.Read(KVROCKS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(KVROCKS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+
+		executionTime := endTime.Sub(startTime)
+
+		threshold := 100 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(2*X+5)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(2*X+5)*delay, threshold)
+		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
+
+	})
+
+	t.Run("test read-only transaction", func(t *testing.T) {
+		// Params
+		X := 10
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= X; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+		executionTime := endTime.Sub(startTime)
+		threshold := 75 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(X)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(X)*delay, threshold)
+		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
 	})
 }
