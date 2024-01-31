@@ -26,6 +26,15 @@ const (
 	// means there is NO guarantee that one transaction will success when a write
 	// conflict happens in different datastores
 	PARALLELIZE_ON_PREPARE int = 2
+
+	// AsyncLevelZero means no async commit
+	AsyncLevelZero int = 0
+
+	// AsyncLevelOne means async delete the TSR after return
+	AsyncLevelOne int = 1
+
+	// AsyncLevelTwo means async ds.Commit() and delete the TSR after return
+	AsyncLevelTwo int = 2
 )
 
 type config struct {
@@ -47,6 +56,9 @@ type config struct {
 	// ConcurrentUpdate specifies whether to allow concurrent conditional updates
 	// in the datastore.Prepare() phase
 	ConcurrentOptimizationLevel int
+
+	// AsyncLevel specifies the level of asynchronous commit in the transaction
+	AsyncLevel int
 }
 
 var Config = config{
@@ -56,6 +68,7 @@ var Config = config{
 	Serializer:                  serializer.NewJSONSerializer(),
 	LogLevel:                    zapcore.InfoLevel,
 	ConcurrentOptimizationLevel: DEFAULT,
+	AsyncLevel:                  AsyncLevelZero,
 }
 
 type State int

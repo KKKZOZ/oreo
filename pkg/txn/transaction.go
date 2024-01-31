@@ -263,6 +263,26 @@ func (t *Transaction) Commit() error {
 		return err
 	}
 
+	if config.Config.AsyncLevel == config.AsyncLevelTwo {
+		go func() {
+			Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
+			var wg = sync.WaitGroup{}
+			for _, ds := range t.dataStoreMap {
+				// TODO: Retry helper
+				wg.Add(1)
+				go func(ds Datastorer) {
+					defer wg.Done()
+					ds.Commit()
+				}(ds)
+			}
+			wg.Wait()
+
+			Log.Infow("Deleting TSR", "txnId", t.TxnId)
+			t.DeleteTSR()
+		}()
+		return nil
+	}
+
 	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
@@ -274,6 +294,14 @@ func (t *Transaction) Commit() error {
 		}(ds)
 	}
 	wg.Wait()
+
+	if config.Config.AsyncLevel == config.AsyncLevelOne {
+		go func() {
+			Log.Infow("Deleting TSR", "txnId", t.TxnId)
+			t.DeleteTSR()
+		}()
+		return nil
+	}
 
 	Log.Infow("Deleting TSR", "txnId", t.TxnId)
 	t.DeleteTSR()
