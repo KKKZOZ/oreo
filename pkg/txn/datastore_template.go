@@ -10,6 +10,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/logger"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 )
 
@@ -18,7 +19,7 @@ var _ TSRMaintainer = (*Datastore)(nil)
 
 const (
 	EMPTY         string = ""
-	RETRYINTERVAL        = 50 * time.Millisecond
+	RETRYINTERVAL        = 10 * time.Millisecond
 )
 
 // Datastore represents a datastorer implementation using the underlying connector.
@@ -486,9 +487,10 @@ func (r *Datastore) Prepare() error {
 // After updating the records, it clears the write cache.
 // Returns an error if there is any issue updating the records.
 func (r *Datastore) Commit() error {
+
+	logger.Log.Debugw("Datastore.Commit() starts", "TxnId", r.Txn.TxnId)
 	// update record's state to the COMMITTED state in the data store
 	var wg sync.WaitGroup
-
 	for _, item := range r.writeCache {
 		wg.Add(1)
 		go func(item DataItem) {
@@ -506,7 +508,7 @@ func (r *Datastore) Commit() error {
 		}(item)
 	}
 	wg.Wait()
-
+	logger.Log.Debugw("Datastore.Commit() finishes", "TxnId", r.Txn.TxnId)
 	// clear the cache
 	r.writeCache = make(map[string]DataItem)
 	r.readCache = make(map[string]DataItem)

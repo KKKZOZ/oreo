@@ -151,8 +151,8 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 		return err
 	}
 	t.isReadOnly = false
-	msgStr := fmt.Sprintf("write in %v: [Key: %v]", dsName, key)
-	Log.Debugw(msgStr, "txnId", t.TxnId, "topic", testutil.DWrite)
+	// msgStr := fmt.Sprintf("write in %v: [Key: %v]", dsName, key)
+	// Log.Debugw(msgStr, "txnId", t.TxnId, "topic", testutil.DWrite)
 	// t.debug(testutil.DWrite, "write in %v: [Key: %v]", dsName, key)
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Write(key, value)
@@ -184,7 +184,7 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Finally, it deletes the transaction state record.
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
-	Log.Infow("Starts to Commit()", "txnId", t.TxnId)
+	Log.Infow("Starts to txn.Commit()", "txnId", t.TxnId)
 	err := t.SetState(config.COMMITTED)
 	if err != nil {
 		return err
@@ -219,6 +219,7 @@ func (t *Transaction) Commit() error {
 		}
 	}
 
+	Log.Infow("Starting to make ds.Prepare()", "txnId", t.TxnId)
 	if config.Config.ConcurrentOptimizationLevel == config.PARALLELIZE_ON_PREPARE {
 		var wg = sync.WaitGroup{}
 		for _, ds := range t.dataStoreMap {
@@ -255,7 +256,6 @@ func (t *Transaction) Commit() error {
 		return errors.New("transaction is aborted by other transaction")
 	}
 
-	t.debug(testutil.DTSR, "writing TSR")
 	Log.Infow("Writing TSR", "txnId", t.TxnId)
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
@@ -263,6 +263,7 @@ func (t *Transaction) Commit() error {
 		return err
 	}
 
+	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
 		// TODO: Retry helper
@@ -274,6 +275,7 @@ func (t *Transaction) Commit() error {
 	}
 	wg.Wait()
 
+	Log.Infow("Deleting TSR", "txnId", t.TxnId)
 	t.DeleteTSR()
 	Log.Infow("Successfully Commit()", "txnId", t.TxnId)
 	return nil
