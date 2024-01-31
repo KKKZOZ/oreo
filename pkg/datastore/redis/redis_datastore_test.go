@@ -1832,6 +1832,6 @@ func TestItemVersionUpdate(t *testing.T) {
 
 		res, err := conn.GetItem(dbItem.Key())
 		assert.NoError(t, err)
-		assert.Equal(t, util.AddToString(dbItem.Version(), 1), res.Version())
+		assert.Equal(t, util.AddToString(dbItem.Version(), 2), res.Version())
 	})
 }

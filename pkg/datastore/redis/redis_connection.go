@@ -6,18 +6,22 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/logger"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/errgroup"
 )
 
 // RedisConnection implements the txn.Connector interface.
 var _ txn.Connector = (*RedisConnection)(nil)
 
 type RedisConnection struct {
-	rdb     *redis.Client
-	Address string
-	se      serializer.Serializer
+	rdb                  *redis.Client
+	Address              string
+	se                   serializer.Serializer
+	atomicCreateSHA      string
+	conditionalUpdateSHA string
 }
 
 type ConnectionOptions struct {
@@ -25,6 +29,42 @@ type ConnectionOptions struct {
 	Password string
 	se       serializer.Serializer
 }
+
+const AtomicCreateScript = `
+if redis.call('EXISTS', KEYS[1]) == 0 then
+	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
+	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
+	redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
+	redis.call('HSET', KEYS[1], 'TxnState', ARGV[5])
+	redis.call('HSET', KEYS[1], 'TValid', ARGV[6])
+	redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
+	redis.call('HSET', KEYS[1], 'Version', ARGV[8])
+	redis.call('HSET', KEYS[1], 'Prev', ARGV[9])
+	redis.call('HSET', KEYS[1], 'LinkedLen', ARGV[10])
+	redis.call('HSET', KEYS[1], 'IsDeleted', ARGV[11])
+	return redis.call('HGETALL', KEYS[1])
+else
+	return redis.error_reply('version mismatch')
+end
+`
+
+const ConditionalUpdateScript = `
+if redis.call('HGET', KEYS[1], 'Version') == ARGV[1] then
+	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
+	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
+	redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
+	redis.call('HSET', KEYS[1], 'TxnState', ARGV[5])
+	redis.call('HSET', KEYS[1], 'TValid', ARGV[6])
+	redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
+	redis.call('HSET', KEYS[1], 'Version', ARGV[8])
+	redis.call('HSET', KEYS[1], 'Prev', ARGV[9])
+	redis.call('HSET', KEYS[1], 'LinkedLen', ARGV[10])
+	redis.call('HSET', KEYS[1], 'IsDeleted', ARGV[11])
+	return redis.call('HGETALL', KEYS[1])
+else
+	return redis.error_reply('version mismatch')
+end
+`
 
 // NewRedisConnection creates a new Redis connection using the provided configuration options.
 // If the config parameter is nil, default values will be used.
@@ -60,7 +100,32 @@ func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
 // Connect establishes a connection to the Redis server.
 // It returns an error if the connection cannot be established.
 func (r *RedisConnection) Connect() error {
-	return nil
+
+	logger.Log.Debugw("Start Connect", "address", r.Address)
+	defer logger.Log.Debugw("End   Connect", "address", r.Address)
+
+	var eg errgroup.Group
+	ctx := context.Background()
+
+	eg.Go(func() error {
+		sha, err := r.rdb.ScriptLoad(ctx, AtomicCreateScript).Result()
+		if err != nil {
+			return err
+		}
+		r.atomicCreateSHA = sha
+		return nil
+	})
+
+	eg.Go(func() error {
+		sha, err := r.rdb.ScriptLoad(ctx, ConditionalUpdateScript).Result()
+		if err != nil {
+			return err
+		}
+		r.conditionalUpdateSHA = sha
+		return nil
+	})
+
+	return eg.Wait()
 }
 
 // GetItem retrieves a txn.DataItem from the Redis database based on the specified key.
@@ -108,66 +173,14 @@ func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
 func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+	logger.Log.Debugw("Start  ConditionalUpdate", "key", key)
+	defer logger.Log.Debugw("End    ConditionalUpdate", "key", key)
 
 	if doCreate {
 		ctx := context.Background()
-		sha, err := r.rdb.ScriptLoad(ctx, `
-	if redis.call('EXISTS', KEYS[1]) == 0 then
-	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
-	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
-	redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
-	redis.call('HSET', KEYS[1], 'TxnState', ARGV[5])
-	redis.call('HSET', KEYS[1], 'TValid', ARGV[6])
-	redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
-	redis.call('HSET', KEYS[1], 'Version', ARGV[8])
-	redis.call('HSET', KEYS[1], 'Prev', ARGV[9])
-	redis.call('HSET', KEYS[1], 'LinkedLen', ARGV[10])
-	redis.call('HSET', KEYS[1], 'IsDeleted', ARGV[11])
-	return redis.call('HGETALL', KEYS[1])
-else
-	return redis.error_reply('version mismatch')
-end
-    `).Result()
-		if err != nil {
-			return "", err
-		}
 		newVer := util.AddToString(value.Version(), 1)
 
-		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key()}, value.Version(), value.Key(),
-			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
-			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
-		if err != nil {
-			if err.Error() == "version mismatch" {
-				return "", errors.New(txn.VersionMismatch)
-			}
-			return "", err
-		}
-		return newVer, nil
-	} else {
-		ctx := context.Background()
-		sha, err := r.rdb.ScriptLoad(ctx, `
-		if redis.call('HGET', KEYS[1], 'Version') == ARGV[1] then
-		redis.call('HSET', KEYS[1], 'Key', ARGV[2])
-		redis.call('HSET', KEYS[1], 'Value', ARGV[3])
-		redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
-		redis.call('HSET', KEYS[1], 'TxnState', ARGV[5])
-		redis.call('HSET', KEYS[1], 'TValid', ARGV[6])
-		redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
-		redis.call('HSET', KEYS[1], 'Version', ARGV[8])
-		redis.call('HSET', KEYS[1], 'Prev', ARGV[9])
-		redis.call('HSET', KEYS[1], 'LinkedLen', ARGV[10])
-		redis.call('HSET', KEYS[1], 'IsDeleted', ARGV[11])
-		return redis.call('HGETALL', KEYS[1])
-	else
-		return redis.error_reply('version mismatch')
-	end
-		`).Result()
-		if err != nil {
-			return "", err
-		}
-		newVer := util.AddToString(value.Version(), 1)
-
-		_, err = r.rdb.EvalSha(ctx, sha, []string{value.Key()}, value.Version(), value.Key(),
+		_, err := r.rdb.EvalSha(ctx, r.atomicCreateSHA, []string{value.Key()}, value.Version(), value.Key(),
 			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
 			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
@@ -179,6 +192,19 @@ end
 		return newVer, nil
 	}
 
+	ctx := context.Background()
+	newVer := util.AddToString(value.Version(), 1)
+
+	_, err := r.rdb.EvalSha(ctx, r.conditionalUpdateSHA, []string{value.Key()}, value.Version(), value.Key(),
+		value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
+		newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
+	if err != nil {
+		if err.Error() == "version mismatch" {
+			return "", errors.New(txn.VersionMismatch)
+		}
+		return "", err
+	}
+	return newVer, nil
 }
 
 // Get retrieves the value associated with the given key from the Redis database.
