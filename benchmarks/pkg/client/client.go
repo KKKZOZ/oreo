@@ -66,7 +66,22 @@ func NewClient(db ycsb.DB, wp *ycsb.WorkloadParameter) *Client {
 
 func (c *Client) RunLoad() {
 
-	for i := 1; i <= c.wp.RecordCount; i++ {
+	for i := 0; i <= c.wp.RecordCount; i++ {
+
+		if txnDB, ok := c.db.(ycsb.TransactionDB); ok {
+			if i%c.wp.TxnOperationGroup == 0 {
+				if i != 0 {
+					txnDB.Commit()
+				}
+				if i != c.wp.OperationCount {
+					txnDB.Start()
+				}
+			}
+		}
+
+		if i == c.wp.RecordCount {
+			break
+		}
 		keyNum := c.keySequence.Next(c.r)
 		dbKey := c.buildKeyName(keyNum)
 		value := c.buildRandomValue()
@@ -78,12 +93,21 @@ func (c *Client) RunLoad() {
 func (c *Client) RunBenchmark() {
 
 	ctx := context.Background()
+	for i := 0; i <= c.wp.OperationCount; i++ {
 
-	// startTime := time.Now()
-
-	for i := 1; i <= c.wp.OperationCount; i++ {
-
-		// var err error
+		if txnDB, ok := c.db.(ycsb.TransactionDB); ok {
+			if i%c.wp.TxnOperationGroup == 0 {
+				if i != 0 {
+					txnDB.Commit()
+				}
+				if i != c.wp.OperationCount {
+					txnDB.Start()
+				}
+			}
+		}
+		if i == c.wp.OperationCount {
+			break
+		}
 
 		operation := operationType(c.operationChooser.Next(c.r))
 		switch operation {
@@ -99,10 +123,6 @@ func (c *Client) RunBenchmark() {
 			_ = c.doReadModifyWrite(ctx, c.db)
 		}
 	}
-
-	// endTime := time.Now()
-
-	// elapsedTime := endTime.Sub(startTime)
 
 	// fmt.Printf(" elapsed time: %dμs\n OPS: %f\n",
 	// 	elapsedTime.Microseconds(), float64(c.wp.OperationCount)/elapsedTime.Seconds())
@@ -150,12 +170,12 @@ func (c *Client) doReadModifyWrite(ctx context.Context, db ycsb.DB) error {
 	keyNum := c.keyChooser.Next(c.r)
 	keyName := c.buildKeyName(keyNum)
 
-	value, err := db.Read(ctx, c.table, keyName)
+	_, err := db.Read(ctx, c.table, keyName)
 	if err != nil {
 		return err
 	}
 
-	value = c.buildRandomValue()
+	value := c.buildRandomValue()
 
 	err = db.Update(ctx, c.table, keyName, value)
 	if err != nil {

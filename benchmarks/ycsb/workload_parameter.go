@@ -3,9 +3,9 @@ package ycsb
 type WorkloadParameter struct {
 	TableName string
 
-	RecordCount int
-
-	OperationCount int
+	RecordCount       int
+	OperationCount    int
+	TxnOperationGroup int
 
 	ReadProportion   float64
 	UpdateProportion float64

@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"github.com/kkkzoz/oreo/pkg/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -10,7 +9,7 @@ var Log *zap.SugaredLogger
 
 func init() {
 	conf := zap.NewDevelopmentConfig()
-	conf.Level = zap.NewAtomicLevelAt(config.Config.LogLevel)
+	conf.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	conf.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
 	conf.EncoderConfig.MessageKey = "msg"

@@ -1,10 +1,13 @@
 package redis
 
 import (
+	"benchmark/ycsb"
 	"context"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 )
+
+var _ ycsb.DB = (*Redis)(nil)
 
 type Redis struct {
 	conn *redis.RedisConnection

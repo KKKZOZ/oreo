@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var _ ycsb.DB = (*DbWrapper)(nil)
+
 // DbWrapper stores the pointer to a implementation of ycsb.DB.
 type DbWrapper struct {
 	DB ycsb.DB

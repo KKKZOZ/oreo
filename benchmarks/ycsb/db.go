@@ -51,6 +51,18 @@ type DB interface {
 	// key: The record key of the record to delete.
 	Delete(ctx context.Context, table string, key string) error
 }
+type TransactionDB interface {
+	DB
+
+	// Start starts a new transaction.
+	Start() error
+
+	// Commit commits the current transaction.
+	Commit() error
+
+	// Abort aborts the current transaction.
+	Abort() error
+}
 
 type BatchDB interface {
 	// BatchInsert inserts batch records in the database.
