@@ -499,7 +499,7 @@ func TestRedisConnectionGetNoExist(t *testing.T) {
 	conn.Delete(key)
 
 	_, err := conn.Get(key)
-	assert.EqualError(t, err, fmt.Sprintf("key not found: %s", key))
+	assert.EqualError(t, err, fmt.Sprintf("key not found"))
 }
 
 func TestRedisConnectionPutDirectItem(t *testing.T) {

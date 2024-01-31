@@ -12,6 +12,20 @@ type DataStoreType string
 
 const (
 	MEMORY DataStoreType = "memory"
+
+	// DEFAULT sets the concurrent optimization level to 0, which means that
+	// when a write conflict occurs, one transaction will success
+	DEFAULT int = 0
+
+	// PARALLELIZE_ON_UPDATE sets the concurrent optimization level to 1, which
+	// means there is NO guarantee that one transaction will success when a write
+	// conflict happens in a single datastore
+	PARALLELIZE_ON_UPDATE int = 1
+
+	// PARALLELIZE_ON_PREPARE sets the concurrent optimization level to 2, which
+	// means there is NO guarantee that one transaction will success when a write
+	// conflict happens in different datastores
+	PARALLELIZE_ON_PREPARE int = 2
 )
 
 type config struct {
@@ -29,14 +43,19 @@ type config struct {
 
 	// LogLevel specifies the logging level for the application.
 	LogLevel zapcore.Level
+
+	// ConcurrentUpdate specifies whether to allow concurrent conditional updates
+	// in the datastore.Prepare() phase
+	ConcurrentOptimizationLevel int
 }
 
 var Config = config{
-	LeaseTime:       1000 * time.Millisecond,
-	MaxRecordLength: 2,
-	IdGenerator:     NewUUIDGenerator(),
-	Serializer:      serializer.NewJSONSerializer(),
-	LogLevel:        zapcore.InfoLevel,
+	LeaseTime:                   1000 * time.Millisecond,
+	MaxRecordLength:             2,
+	IdGenerator:                 NewUUIDGenerator(),
+	Serializer:                  serializer.NewJSONSerializer(),
+	LogLevel:                    zapcore.InfoLevel,
+	ConcurrentOptimizationLevel: DEFAULT,
 }
 
 type State int

@@ -57,6 +57,9 @@ type Transaction struct {
 	// locker is used for transaction-level locking.
 	locker locker.Locker
 
+	// isReadOnly indicates whether the transaction is read-only.
+	isReadOnly bool
+
 	*StateMachine
 }
 
@@ -67,6 +70,7 @@ func NewTransaction() *Transaction {
 		dataStoreMap: make(map[string]Datastorer),
 		timeSource:   LOCAL,
 		locker:       locker.AMemoryLocker,
+		isReadOnly:   true,
 		StateMachine: NewStateMachine(),
 	}
 }
@@ -146,7 +150,10 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 	if err != nil {
 		return err
 	}
-	t.debug(testutil.DWrite, "write in %v: [Key: %v]", dsName, key)
+	t.isReadOnly = false
+	// msgStr := fmt.Sprintf("write in %v: [Key: %v]", dsName, key)
+	// Log.Debugw(msgStr, "txnId", t.TxnId, "topic", testutil.DWrite)
+	// t.debug(testutil.DWrite, "write in %v: [Key: %v]", dsName, key)
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Write(key, value)
 	}
@@ -160,8 +167,10 @@ func (t *Transaction) Delete(dsName string, key string) error {
 	if err != nil {
 		return err
 	}
-
-	t.debug(testutil.DDelete, "delete in %v: [Key: %v]", dsName, key)
+	t.isReadOnly = false
+	msgStr := fmt.Sprintf("delete in %v: [Key: %v]", dsName, key)
+	Log.Debugw(msgStr, "txnId", t.TxnId, "topic", testutil.DDelete)
+	// t.debug(testutil.DDelete, "delete in %v: [Key: %v]", dsName, key)
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Delete(key)
 	}
@@ -175,10 +184,15 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Finally, it deletes the transaction state record.
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
-	Log.Infow("Starts to Commit()", "txnId", t.TxnId)
+	Log.Infow("Starts to txn.Commit()", "txnId", t.TxnId)
 	err := t.SetState(config.COMMITTED)
 	if err != nil {
 		return err
+	}
+
+	if t.isReadOnly {
+		Log.Infow("transaction is read-only, Commit() complete", "txnId", t.TxnId)
+		return nil
 	}
 
 	// Prepare phase
@@ -187,23 +201,41 @@ func (t *Transaction) Commit() error {
 		return err
 	}
 
-	t.debug(testutil.DPrepare, "starts prepare phase")
 	success := true
 	var cause error
-	for _, ds := range t.dataStoreMap {
+	mu := sync.Mutex{}
 
+	prepareDatastore := func(ds Datastorer) {
 		err := ds.Prepare()
 		if err != nil {
+			mu.Lock()
 			success, cause = false, err
+			mu.Unlock()
 			if stackError, ok := err.(*errors.Error); ok {
 				errMsg := fmt.Sprintf("prepare phase failed: %v", stackError.ErrorStack())
 				Log.Errorw(errMsg, "txnId", t.TxnId, "ds", ds.GetName())
 			}
 			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
-			t.debug(testutil.DPrepare, "prepare phase failed(ds:%v): %v", ds.GetName(), err)
-			break
 		}
 	}
+
+	Log.Infow("Starting to make ds.Prepare()", "txnId", t.TxnId)
+	if config.Config.ConcurrentOptimizationLevel == config.PARALLELIZE_ON_PREPARE {
+		var wg = sync.WaitGroup{}
+		for _, ds := range t.dataStoreMap {
+			wg.Add(1)
+			go func(ds Datastorer) {
+				defer wg.Done()
+				prepareDatastore(ds)
+			}(ds)
+		}
+		wg.Wait()
+	} else {
+		for _, ds := range t.dataStoreMap {
+			prepareDatastore(ds)
+		}
+	}
+
 	if !success {
 		// Log.Errorw("prepare phase failed, aborting transaction", "txnId", t.TxnId, "cause", cause.(*errors.Error).ErrorStack())
 		if stackError, ok := err.(*errors.Error); ok {
@@ -224,7 +256,6 @@ func (t *Transaction) Commit() error {
 		return errors.New("transaction is aborted by other transaction")
 	}
 
-	t.debug(testutil.DTSR, "writing TSR")
 	Log.Infow("Writing TSR", "txnId", t.TxnId)
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
@@ -232,8 +263,8 @@ func (t *Transaction) Commit() error {
 		return err
 	}
 
+	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
-
 	for _, ds := range t.dataStoreMap {
 		// TODO: Retry helper
 		wg.Add(1)
@@ -242,9 +273,9 @@ func (t *Transaction) Commit() error {
 			ds.Commit()
 		}(ds)
 	}
-
 	wg.Wait()
 
+	Log.Infow("Deleting TSR", "txnId", t.TxnId)
 	t.DeleteTSR()
 	Log.Infow("Successfully Commit()", "txnId", t.TxnId)
 	return nil
