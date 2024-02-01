@@ -35,7 +35,7 @@ type Datastore struct {
 	conn Connector
 
 	// readCache is the cache for read operations in Datastore.
-	readCache map[string]DataItem
+	readCache util.ConcurrentMap[string, DataItem]
 
 	// writeCache is the cache for write operations in Datastore.
 	writeCache map[string]DataItem
@@ -59,7 +59,7 @@ func NewDatastore(name string, conn Connector, factory DataItemFactory) *Datasto
 	return &Datastore{
 		Name:         name,
 		conn:         conn,
-		readCache:    make(map[string]DataItem),
+		readCache:    util.NewConcurrentMap[DataItem](),
 		writeCache:   make(map[string]DataItem),
 		invisibleSet: make(map[string]bool),
 		se:           config.Config.Serializer,
@@ -84,7 +84,7 @@ func (r *Datastore) Read(key string, value any) error {
 		return r.getValue(item, value)
 	}
 	// if the record is in the readCache
-	if item, ok := r.readCache[key]; ok {
+	if item, ok := r.readCache.Get(key); ok {
 		return r.getValue(item, value)
 	}
 
@@ -115,7 +115,7 @@ func (r *Datastore) readFromConn(key string, value any) error {
 		if !isFound || curItem.IsDeleted() {
 			if curItem.IsDeleted() {
 				// put into cache anyway
-				r.readCache[curItem.Key()] = curItem
+				r.readCache.Set(curItem.Key(), curItem)
 			}
 			return errors.New(KeyNotFound)
 		}
@@ -125,7 +125,7 @@ func (r *Datastore) readFromConn(key string, value any) error {
 				return err
 			}
 		}
-		r.readCache[curItem.Key()] = curItem
+		r.readCache.Set(curItem.Key(), curItem)
 		return nil
 	}
 
@@ -280,7 +280,7 @@ func (r *Datastore) Write(key string, value any) error {
 func (r *Datastore) writeToCache(cacheItem DataItem) error {
 
 	// check if it follows read-modified-commit pattern
-	if oldItem, ok := r.readCache[cacheItem.Key()]; ok {
+	if oldItem, ok := r.readCache.Get(cacheItem.Key()); ok {
 		cacheItem.SetVersion(oldItem.Version())
 	} else {
 		// else we set it to empty, indicating this is a direct write
@@ -346,7 +346,7 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 	// if the cacheItem follows read-modified-write pattern,
 	// it already has a valid version, we can skip the read step.
 	if cacheItem.Version() != "" {
-		dbItem := r.readCache[cacheItem.Key()]
+		dbItem, _ := r.readCache.Get(cacheItem.Key())
 		return r.doConditionalUpdate(cacheItem, dbItem)
 	}
 
@@ -355,7 +355,7 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 	if err != nil && !errors.Is(err, KeyNotFound) {
 		return err
 	}
-	dbItem := r.readCache[cacheItem.Key()]
+	dbItem, _ := r.readCache.Get(cacheItem.Key())
 	// if the record is dropped by the repeatable read rule
 	if res, ok := r.invisibleSet[cacheItem.Key()]; ok && res {
 		dbItem = nil
@@ -510,8 +510,8 @@ func (r *Datastore) Commit() error {
 	wg.Wait()
 	logger.Log.Debugw("Datastore.Commit() finishes", "TxnId", r.Txn.TxnId)
 	// clear the cache
+	r.readCache = util.NewConcurrentMap[DataItem]()
 	r.writeCache = make(map[string]DataItem)
-	r.readCache = make(map[string]DataItem)
 	r.invisibleSet = make(map[string]bool)
 	return nil
 }
@@ -539,7 +539,7 @@ func (r *Datastore) Abort(hasCommitted bool) error {
 			r.rollback(item)
 		}
 	}
-	r.readCache = make(map[string]DataItem)
+	r.readCache = util.NewConcurrentMap[DataItem]()
 	r.writeCache = make(map[string]DataItem)
 	r.invisibleSet = make(map[string]bool)
 	return nil
