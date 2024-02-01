@@ -20,6 +20,7 @@ type RedisConnection struct {
 	rdb                  *redis.Client
 	Address              string
 	se                   serializer.Serializer
+	connected            bool
 	atomicCreateSHA      string
 	conditionalUpdateSHA string
 }
@@ -100,6 +101,12 @@ func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
 // Connect establishes a connection to the Redis server.
 // It returns an error if the connection cannot be established.
 func (r *RedisConnection) Connect() error {
+
+	if r.connected {
+		return nil
+	}
+
+	r.connected = true
 
 	logger.Log.Debugw("Start Connect", "address", r.Address)
 	defer logger.Log.Debugw("End   Connect", "address", r.Address)
