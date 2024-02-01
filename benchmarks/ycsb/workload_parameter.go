@@ -3,6 +3,9 @@ package ycsb
 type WorkloadParameter struct {
 	TableName string
 
+	ThreadCount int
+	DoBenchmark bool
+
 	RecordCount       int
 	OperationCount    int
 	TxnOperationGroup int

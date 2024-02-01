@@ -8,7 +8,7 @@ import (
 	"benchmark/ycsb"
 	"fmt"
 	"os"
-	"runtime/trace"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,7 +18,7 @@ import (
 
 // 43.139.62.221
 
-func PureRedisDB() client.DbWrapper {
+func RedisCreator() ycsb.DBCreator {
 	redisConn := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
 		Address: "43.139.62.221:6379",
 	})
@@ -33,10 +33,10 @@ func PureRedisDB() client.DbWrapper {
 		}()
 	}
 	wg.Wait()
-	return client.DbWrapper{DB: redis.NewRedis(redisConn)}
+	return &redis.RedisCreator{Conn: redisConn}
 }
 
-func OreoDB() *client.TxnDbWrapper {
+func OreoDBCreator() ycsb.DBCreator {
 	redisConn := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
 		Address: "43.139.62.221:6380",
 	})
@@ -51,15 +51,22 @@ func OreoDB() *client.TxnDbWrapper {
 		}()
 	}
 	wg.Wait()
-	return &client.TxnDbWrapper{DB: oreo.NewRedisDatastore(redisConn)}
+	return &oreo.OreoRedisCreator{Conn: redisConn}
 }
 
 func main() {
 
 	args := os.Args
 
+	argsLen := len(args)
+	if argsLen < 4 {
+
+		fmt.Println("Usage: main [redis|oreo] [load|run] [ThreadNum]")
+		return
+	}
+
 	wp := &ycsb.WorkloadParameter{
-		RecordCount:               2000,
+		RecordCount:               1000,
 		OperationCount:            100,
 		TxnOperationGroup:         10,
 		ReadProportion:            0.5,
@@ -71,7 +78,7 @@ func main() {
 
 	// ignore INFO level messages
 	config.Config.ConcurrentOptimizationLevel = config.PARALLELIZE_ON_UPDATE
-	config.Config.AsyncLevel = config.AsyncLevelTwo
+	config.Config.AsyncLevel = config.AsyncLevelZero
 
 	// f, err := os.Create("trace.out")
 	// if err != nil {
@@ -81,27 +88,38 @@ func main() {
 	// if err != nil {
 	// 	panic(err)
 	// }
-	defer trace.Stop()
+	// defer trace.Stop()
 
 	var c *client.Client
 
 	if args[1] == "redis" {
 		fmt.Println("Pure redis test")
-		c = client.NewClient(PureRedisDB(), wp)
+		c = client.NewClient(wp, RedisCreator())
 	} else {
 		fmt.Println("Oreo test")
-		c = client.NewClient(OreoDB(), wp)
+		c = client.NewClient(wp, OreoDBCreator())
 	}
 
 	measurement.InitMeasure()
 	measurement.EnableWarmUp(true)
 
-	if args[2] == "load" {
+	mode := args[2]
+	threadNum, err := strconv.Atoi(args[3])
+	if err != nil {
+		fmt.Println("ThreadNum should be an integer")
+		return
+	}
+
+	wp.ThreadCount = threadNum
+
+	if mode == "load" {
+		wp.DoBenchmark = false
 		fmt.Println("Start to load data")
 		c.RunLoad()
 		fmt.Println("Load finished")
 		return
 	} else {
+		wp.DoBenchmark = true
 		fmt.Println("Start to run benchmark")
 
 		measurement.EnableWarmUp(false)

@@ -8,6 +8,16 @@ import (
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
+var _ ycsb.DBCreator = (*OreoRedisCreator)(nil)
+
+type OreoRedisCreator struct {
+	Conn *redis.RedisConnection
+}
+
+func (rc *OreoRedisCreator) Create() (ycsb.DB, error) {
+	return NewRedisDatastore(rc.Conn), nil
+}
+
 var _ ycsb.DB = (*RedisDatastore)(nil)
 
 var _ ycsb.TransactionDB = (*RedisDatastore)(nil)

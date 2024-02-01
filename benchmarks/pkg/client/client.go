@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -25,10 +26,12 @@ const (
 )
 
 type Client struct {
-	db ycsb.DB
-	wp *ycsb.WorkloadParameter
+	dbCreator ycsb.DBCreator
+	wp        *ycsb.WorkloadParameter
 
 	table string
+
+	mu sync.Mutex
 
 	r                *rand.Rand
 	operationChooser *generator.Discrete
@@ -38,12 +41,12 @@ type Client struct {
 	zeroPadding int64
 }
 
-func NewClient(db ycsb.DB, wp *ycsb.WorkloadParameter) *Client {
+func NewClient(wp *ycsb.WorkloadParameter, dbCreator ycsb.DBCreator) *Client {
 	c := &Client{
-		db:    db,
-		wp:    wp,
-		table: wp.TableName,
-		r:     rand.New(rand.NewSource(time.Now().UnixNano())),
+		dbCreator: dbCreator,
+		wp:        wp,
+		table:     wp.TableName,
+		r:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	c.operationChooser = createOperationGenerator(wp)
 
@@ -64,127 +67,69 @@ func NewClient(db ycsb.DB, wp *ycsb.WorkloadParameter) *Client {
 	return c
 }
 
+func (c *Client) NextOperation() operationType {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return operationType(c.operationChooser.Next(c.r))
+}
+
+func (c *Client) NextKeyName() string {
+	c.mu.Lock()
+	keyNum := c.keyChooser.Next(c.r)
+	c.mu.Unlock()
+	return c.buildKeyName(keyNum)
+}
+
+func (c *Client) NextKeyNameFromSequence() string {
+	c.mu.Lock()
+	keyNum := c.keySequence.Next(c.r)
+	c.mu.Unlock()
+	return c.buildKeyName(keyNum)
+}
+
 func (c *Client) RunLoad() {
 
-	for i := 0; i <= c.wp.RecordCount; i++ {
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	wg.Add(c.wp.ThreadCount)
 
-		if txnDB, ok := c.db.(ycsb.TransactionDB); ok {
-			if i%c.wp.TxnOperationGroup == 0 {
-				if i != 0 {
-					txnDB.Commit()
-				}
-				if i != c.wp.OperationCount {
-					txnDB.Start()
-				}
-			}
-		}
+	for i := 0; i < c.wp.ThreadCount; i++ {
 
-		if i == c.wp.RecordCount {
-			break
-		}
-		keyNum := c.keySequence.Next(c.r)
-		dbKey := c.buildKeyName(keyNum)
-		value := c.buildRandomValue()
-		_ = c.db.Insert(context.Background(), c.table, dbKey, value)
+		go func(threadID int) {
+			defer wg.Done()
+			db, _ := c.dbCreator.Create()
+			w := newWorker(c, c.wp, threadID, c.wp.ThreadCount, db)
+			w.RunLoad(ctx)
+		}(i)
 	}
+
+	wg.Wait()
 
 }
 
 func (c *Client) RunBenchmark() {
 
 	ctx := context.Background()
-	for i := 0; i <= c.wp.OperationCount; i++ {
+	var wg sync.WaitGroup
+	wg.Add(c.wp.ThreadCount)
 
-		if txnDB, ok := c.db.(ycsb.TransactionDB); ok {
-			if i%c.wp.TxnOperationGroup == 0 {
-				if i != 0 {
-					txnDB.Commit()
-				}
-				if i != c.wp.OperationCount {
-					txnDB.Start()
-				}
-			}
-		}
-		if i == c.wp.OperationCount {
-			break
-		}
+	for i := 0; i < c.wp.ThreadCount; i++ {
 
-		operation := operationType(c.operationChooser.Next(c.r))
-		switch operation {
-		case read:
-			_ = c.doRead(ctx, c.db)
-		case update:
-			_ = c.doUpdate(ctx, c.db)
-		case insert:
-			_ = c.doInsert(ctx, c.db)
-		case scan:
-			continue
-		default:
-			_ = c.doReadModifyWrite(ctx, c.db)
-		}
+		go func(threadID int) {
+			defer wg.Done()
+			db, _ := c.dbCreator.Create()
+			w := newWorker(c, c.wp, threadID, c.wp.ThreadCount, db)
+			w.RunBenchmark(ctx)
+		}(i)
 	}
 
-	// fmt.Printf(" elapsed time: %dμs\n OPS: %f\n",
-	// 	elapsedTime.Microseconds(), float64(c.wp.OperationCount)/elapsedTime.Seconds())
+	wg.Wait()
 
-}
-
-func (c *Client) doRead(ctx context.Context, db ycsb.DB) error {
-	keyNum := c.keyChooser.Next(c.r)
-	keyName := c.buildKeyName(keyNum)
-
-	_, err := db.Read(ctx, c.table, keyName)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Client) doUpdate(ctx context.Context, db ycsb.DB) error {
-	keyNum := c.keyChooser.Next(c.r)
-	keyName := c.buildKeyName(keyNum)
-
-	value := c.buildRandomValue()
-
-	err := db.Update(ctx, c.table, keyName, value)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Client) doInsert(ctx context.Context, db ycsb.DB) error {
-	keyNum := c.keyChooser.Next(c.r)
-	keyName := c.buildKeyName(keyNum)
-
-	value := c.buildRandomValue()
-
-	err := db.Insert(ctx, c.table, keyName, value)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *Client) doReadModifyWrite(ctx context.Context, db ycsb.DB) error {
-	keyNum := c.keyChooser.Next(c.r)
-	keyName := c.buildKeyName(keyNum)
-
-	_, err := db.Read(ctx, c.table, keyName)
-	if err != nil {
-		return err
-	}
-
-	value := c.buildRandomValue()
-
-	err = db.Update(ctx, c.table, keyName, value)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (c *Client) buildRandomValue() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	len := c.r.Intn(MAX_VALUE_LENGTH) + 1
 	buf := make([]byte, len)
 	util.RandBytes(c.r, buf)
