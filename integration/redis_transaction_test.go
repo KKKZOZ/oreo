@@ -1974,4 +1974,142 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 			executionTime, time.Duration(X)*delay, threshold)
 		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
 	})
+
+}
+
+func TestRedis_AsyncLevel(t *testing.T) {
+
+	t.Run("test AsyncLevelZero", func(t *testing.T) {
+		// Params
+		config.Config.AsyncLevel = config.AsyncLevelZero
+		X := 10
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= X; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+		executionTime := endTime.Sub(startTime)
+		threshold := 45 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(2*X+4)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("\n Execution Time: %v\n Expected  Time: %v +-%v ",
+			executionTime, time.Duration(2*X+4)*delay, threshold)
+		config.Config.AsyncLevel = config.AsyncLevelZero
+	})
+	t.Run("test AsyncLevelOne", func(t *testing.T) {
+		// Params
+		config.Config.AsyncLevel = config.AsyncLevelOne
+		X := 10
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= X; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+		executionTime := endTime.Sub(startTime)
+		threshold := 45 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(2*X+3)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(2*X+3)*delay, threshold)
+		config.Config.AsyncLevel = config.AsyncLevelZero
+	})
+
+	t.Run("test AsyncLevelTwo", func(t *testing.T) {
+		// Params
+		config.Config.AsyncLevel = config.AsyncLevelTwo
+		X := 10
+		delay := 50 * time.Millisecond
+
+		preTxn1 := NewTransactionWithSetup(REDIS)
+		preTxn1.Start()
+		for i := 1; i <= X; i++ {
+			dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+			preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+		}
+		err := preTxn1.Commit()
+		assert.NoError(t, err)
+
+		startTime := time.Now()
+
+		txn := txn.NewTransaction()
+		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+			delay, func() error { time.Sleep(1 * time.Second); return nil })
+		rds := redis.NewRedisDatastore(REDIS, mockConn)
+		txn.AddDatastore(rds)
+		txn.SetGlobalDatastore(rds)
+		txn.Start()
+
+		for i := 1; i <= X; i++ {
+			var item testutil.TestItem
+			txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+			item.Value = "item" + strconv.Itoa(i) + "-modified"
+			txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+		}
+		err = txn.Commit()
+		assert.NoError(t, err)
+
+		endTime := time.Now()
+		executionTime := endTime.Sub(startTime)
+		threshold := 45 * time.Millisecond
+
+		ok := testutil.RoughlyEqual(time.Duration(2*X+2)*delay, executionTime, threshold)
+		assert.True(t, ok)
+		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
+			executionTime, time.Duration(2*X+2)*delay, threshold)
+		config.Config.AsyncLevel = config.AsyncLevelZero
+	})
 }

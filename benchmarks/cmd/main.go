@@ -24,15 +24,15 @@ func PureRedisDB() client.DbWrapper {
 	})
 
 	// try to warm up the connection
-	// var wg sync.WaitGroup
-	// for i := 1; i <= 15; i++ {
-	// 	wg.Add(1)
-	// 	go func() {
-	// 		defer wg.Done()
-	// 		redisConn.Get("1")
-	// 	}()
-	// }
-	// wg.Wait()
+	var wg sync.WaitGroup
+	for i := 1; i <= 15; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			redisConn.Get("1")
+		}()
+	}
+	wg.Wait()
 	return client.DbWrapper{DB: redis.NewRedis(redisConn)}
 }
 
@@ -59,18 +59,19 @@ func main() {
 	args := os.Args
 
 	wp := &ycsb.WorkloadParameter{
-		RecordCount:               100,
-		OperationCount:            10,
+		RecordCount:               2000,
+		OperationCount:            100,
 		TxnOperationGroup:         10,
-		ReadProportion:            0,
-		UpdateProportion:          0,
+		ReadProportion:            0.5,
+		UpdateProportion:          0.5,
 		InsertProportion:          0,
 		ScanProportion:            0,
-		ReadModifyWriteProportion: 1.0,
+		ReadModifyWriteProportion: 0,
 	}
 
 	// ignore INFO level messages
-	config.Config.ConcurrentOptimizationLevel = config.DEFAULT
+	config.Config.ConcurrentOptimizationLevel = config.PARALLELIZE_ON_UPDATE
+	config.Config.AsyncLevel = config.AsyncLevelTwo
 
 	// f, err := os.Create("trace.out")
 	// if err != nil {
