@@ -65,10 +65,10 @@ func (r *RedisDatastore) CleanupThread(ctx context.Context) {
 func (r *RedisDatastore) Read(ctx context.Context, table string, key string) (string, error) {
 	keyName := getKeyName(table, key)
 	var value string
-	_ = r.txn.Read("redis", keyName, &value)
-	// if err != nil {
-	// 	return "", err
-	// }
+	err := r.txn.Read("redis", keyName, &value)
+	if err != nil {
+		return "", err
+	}
 	return value, nil
 }
 

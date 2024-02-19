@@ -2,6 +2,7 @@ package client
 
 import (
 	"benchmark/pkg/generator"
+	"benchmark/pkg/measurement"
 	"benchmark/pkg/util"
 	"benchmark/ycsb"
 	"context"
@@ -58,10 +59,10 @@ func NewClient(wp *ycsb.WorkloadParameter, dbCreator ycsb.DBCreator) *Client {
 	var keyrangeLowerBound int64 = insertStart
 	var keyrangeUpperBound int64 = insertStart + insertCount - 1
 
-	insertProportion := wp.InsertProportion
-	opCount := wp.OperationCount
-	expectedNewKeys := int64(float64(opCount) * insertProportion * 2.0)
-	keyrangeUpperBound = insertStart + insertCount + expectedNewKeys
+	// insertProportion := wp.InsertProportion
+	// opCount := wp.OperationCount
+	// // expectedNewKeys := int64(float64(opCount) * insertProportion * 2.0)
+	// // keyrangeUpperBound = insertStart + insertCount + expectedNewKeys
 	c.keyChooser = generator.NewScrambledZipfian(keyrangeLowerBound, keyrangeUpperBound, generator.ZipfianConstant)
 
 	return c
@@ -108,6 +109,7 @@ func (c *Client) RunLoad() {
 }
 
 func (c *Client) RunBenchmark() {
+	start := time.Now()
 
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -125,9 +127,35 @@ func (c *Client) RunBenchmark() {
 
 	wg.Wait()
 
+	fmt.Println("**********************************************************")
+	fmt.Printf("Run finished, takes %s\n", time.Since(start))
+	measurement.Output()
+
+	if c.wp.DataConsistencyTest {
+		time.Sleep(5 * time.Second)
+		// reset the key sequence
+		c.keySequence = generator.NewCounter(0)
+		resChan := make(chan int, c.wp.PostCheckWorkerThread)
+		for i := 0; i < c.wp.PostCheckWorkerThread; i++ {
+			go func(threadID int) {
+				db, _ := c.dbCreator.Create()
+				w := newWorker(c, c.wp, threadID, c.wp.PostCheckWorkerThread, db)
+				w.RunPostCheck(ctx, resChan)
+			}(i)
+		}
+
+		curTotalAmount := 0
+		for i := 0; i < c.wp.PostCheckWorkerThread; i++ {
+			curTotalAmount += <-resChan
+		}
+		fmt.Println("**********************************************************")
+		fmt.Printf("Data consistency check finished.\n")
+		fmt.Printf("Expected Amount: %v\nCurrent  Amount: %v\n",
+			c.wp.TotalAmount, curTotalAmount)
+	}
 }
 
-func (c *Client) buildRandomValue() string {
+func (c *Client) BuildRandomValue() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	len := c.r.Intn(MAX_VALUE_LENGTH) + 1
@@ -138,8 +166,7 @@ func (c *Client) buildRandomValue() string {
 
 func (c *Client) buildKeyName(keyNum int64) string {
 
-	keyNum = util.Hash64(keyNum)
-
+	// keyNum = util.Hash64(keyNum)
 	prefix := "benchmark"
 	return fmt.Sprintf("%s%0[3]*[2]d", prefix, keyNum, c.zeroPadding)
 }

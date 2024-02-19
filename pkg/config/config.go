@@ -18,12 +18,12 @@ const (
 	DEFAULT int = 0
 
 	// PARALLELIZE_ON_UPDATE sets the concurrent optimization level to 1, which
-	// means there is NO guarantee that one transaction will success when a write
+	// means there is NO guarantee that any transaction will success when a write
 	// conflict happens in a single datastore
 	PARALLELIZE_ON_UPDATE int = 1
 
 	// PARALLELIZE_ON_PREPARE sets the concurrent optimization level to 2, which
-	// means there is NO guarantee that one transaction will success when a write
+	// means there is NO guarantee that any transaction will success when a write
 	// conflict happens in different datastores
 	PARALLELIZE_ON_PREPARE int = 2
 
