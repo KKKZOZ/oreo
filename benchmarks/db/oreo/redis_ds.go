@@ -8,6 +8,16 @@ import (
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
+var _ ycsb.DBCreator = (*OreoRedisCreator)(nil)
+
+type OreoRedisCreator struct {
+	Conn *redis.RedisConnection
+}
+
+func (rc *OreoRedisCreator) Create() (ycsb.DB, error) {
+	return NewRedisDatastore(rc.Conn), nil
+}
+
 var _ ycsb.DB = (*RedisDatastore)(nil)
 
 var _ ycsb.TransactionDB = (*RedisDatastore)(nil)
@@ -55,10 +65,10 @@ func (r *RedisDatastore) CleanupThread(ctx context.Context) {
 func (r *RedisDatastore) Read(ctx context.Context, table string, key string) (string, error) {
 	keyName := getKeyName(table, key)
 	var value string
-	_ = r.txn.Read("redis", keyName, &value)
-	// if err != nil {
-	// 	return "", err
-	// }
+	err := r.txn.Read("redis", keyName, &value)
+	if err != nil {
+		return "", err
+	}
 	return value, nil
 }
 

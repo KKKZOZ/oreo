@@ -2113,3 +2113,66 @@ func TestRedis_AsyncLevel(t *testing.T) {
 		config.Config.AsyncLevel = config.AsyncLevelZero
 	})
 }
+
+func TestRedis_AbortOptimization(t *testing.T) {
+	config.Config.AsyncLevel = config.AsyncLevelZero
+	config.Config.ConcurrentOptimizationLevel = config.DEFAULT
+	X := 5
+	delay := 50 * time.Millisecond
+
+	conn := NewConnectionWithSetup(REDIS)
+	conn.Delete("item5")
+	conn.Delete("Just another running transaction")
+
+	preTxn1 := NewTransactionWithSetup(REDIS)
+	preTxn1.Start()
+	for i := 1; i <= X; i++ {
+		dbItem := testutil.NewTestItem("item" + strconv.Itoa(i) + "-pre")
+		preTxn1.Write(REDIS, "item"+strconv.Itoa(i), dbItem)
+	}
+	err := preTxn1.Commit()
+	assert.NoError(t, err)
+
+	dbItem5 := &redis.RedisItem{
+		RKey:       "item5",
+		RValue:     util.ToJSONString(testutil.NewTestItem("item5-preparing")),
+		RTxnId:     "Just another running transaction",
+		RTxnState:  config.PREPARED,
+		RTValid:    time.Now().Add(0 * time.Second),
+		RTLease:    time.Now().Add(2 * time.Second),
+		RLinkedLen: 1,
+		RVersion:   "1",
+	}
+
+	_, err = conn.PutItem("item5", dbItem5)
+	assert.NoError(t, err)
+
+	startTime := time.Now()
+
+	txn := txn.NewTransaction()
+	mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+		delay, func() error { time.Sleep(1 * time.Second); return nil })
+	rds := redis.NewRedisDatastore(REDIS, mockConn)
+	txn.AddDatastore(rds)
+	txn.SetGlobalDatastore(rds)
+	txn.Start()
+
+	for i := 1; i <= X; i++ {
+		var item testutil.TestItem
+		txn.Read(REDIS, "item"+strconv.Itoa(i), &item)
+		item.Value = "item" + strconv.Itoa(i) + "-modified"
+		txn.Write(REDIS, "item"+strconv.Itoa(i), item)
+	}
+	err = txn.Commit()
+	assert.NotNil(t, err)
+
+	endTime := time.Now()
+	executionTime := endTime.Sub(startTime)
+	threshold := 45 * time.Millisecond
+
+	ok := testutil.RoughlyEqual(time.Duration(4*X+1)*delay, executionTime, threshold)
+	assert.True(t, ok)
+	t.Logf("\nExecution Time: %v\nExpected  Time: %v +-%v ",
+		executionTime, time.Duration(4*X+1)*delay, threshold)
+	t.Logf("\nGetTimes: %d\nPutTimes: %d\n", mockConn.GetTimes, mockConn.PutTimes)
+}
