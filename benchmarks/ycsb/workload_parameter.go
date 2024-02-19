@@ -1,6 +1,7 @@
 package ycsb
 
 type WorkloadParameter struct {
+	DBName    string
 	TableName string
 
 	ThreadCount int
@@ -10,12 +11,19 @@ type WorkloadParameter struct {
 	OperationCount    int
 	TxnOperationGroup int
 
-	ReadProportion   float64
-	UpdateProportion float64
-	InsertProportion float64
-	ScanProportion   float64
-
+	ReadProportion            float64
+	UpdateProportion          float64
+	InsertProportion          float64
+	ScanProportion            float64
 	ReadModifyWriteProportion float64
+
+	DataConsistencyTest   bool
+	InitialAmountPerKey   int
+	TransferAmountPerTxn  int
+	TotalAmount           int
+	PostCheckWorkerThread int
+
+	TxnPerformanceTest bool
 }
 
 // ----------------------------------------------------------------------------
