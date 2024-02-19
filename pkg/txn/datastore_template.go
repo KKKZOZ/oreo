@@ -40,6 +40,9 @@ type Datastore struct {
 	// writeCache is the cache for write operations in Datastore.
 	writeCache map[string]DataItem
 
+	// writtenSet is the set of keys that have successfully been written to the DB.
+	writtenSet util.ConcurrentMap[string, bool]
+
 	// invisibleSet is the set of keys that are not visible to the current transaction.
 	invisibleSet map[string]bool
 
@@ -61,6 +64,7 @@ func NewDatastore(name string, conn Connector, factory DataItemFactory) *Datasto
 		conn:         conn,
 		readCache:    util.NewConcurrentMap[DataItem](),
 		writeCache:   make(map[string]DataItem),
+		writtenSet:   util.NewConcurrentMap[bool](),
 		invisibleSet: make(map[string]bool),
 		se:           config.Config.Serializer,
 		itemFactory:  factory,
@@ -109,8 +113,6 @@ func (r *Datastore) readFromConn(key string, value any) error {
 	}
 
 	logicFunc := func(curItem DataItem, isFound bool) error {
-		r.mu.Lock()
-		defer r.mu.Unlock()
 		// if the record has been deleted
 		if !isFound || curItem.IsDeleted() {
 			if curItem.IsDeleted() {
@@ -447,13 +449,14 @@ func (r *Datastore) Prepare() error {
 	for _, v := range r.writeCache {
 		items = append(items, v)
 	}
-	// sort records by key
-	slices.SortFunc(
-		items, func(i, j DataItem) int {
-			return cmp.Compare(i.Key(), j.Key())
-		},
-	)
+
 	if config.Config.ConcurrentOptimizationLevel < config.PARALLELIZE_ON_UPDATE {
+		// sort records by key
+		slices.SortFunc(
+			items, func(i, j DataItem) int {
+				return cmp.Compare(i.Key(), j.Key())
+			},
+		)
 		for _, item := range items {
 			if err := r.conditionalUpdate(item); err != nil {
 				return err
@@ -509,10 +512,7 @@ func (r *Datastore) Commit() error {
 	}
 	wg.Wait()
 	logger.Log.Debugw("Datastore.Commit() finishes", "TxnId", r.Txn.TxnId)
-	// clear the cache
-	r.readCache = util.NewConcurrentMap[DataItem]()
-	r.writeCache = make(map[string]DataItem)
-	r.invisibleSet = make(map[string]bool)
+	r.clear()
 	return nil
 }
 
@@ -523,8 +523,7 @@ func (r *Datastore) Commit() error {
 func (r *Datastore) Abort(hasCommitted bool) error {
 
 	if !hasCommitted {
-		r.writeCache = make(map[string]DataItem)
-		r.invisibleSet = make(map[string]bool)
+		r.clear()
 		return nil
 	}
 
@@ -539,9 +538,7 @@ func (r *Datastore) Abort(hasCommitted bool) error {
 			r.rollback(item)
 		}
 	}
-	r.readCache = util.NewConcurrentMap[DataItem]()
-	r.writeCache = make(map[string]DataItem)
-	r.invisibleSet = make(map[string]bool)
+	r.clear()
 	return nil
 }
 
@@ -654,4 +651,11 @@ func (r *Datastore) DeleteTSR(txnId string) error {
 // It is used to create a copy of the Datastore object.
 func (r *Datastore) Copy() Datastorer {
 	return NewDatastore(r.Name, r.conn, r.itemFactory)
+}
+
+func (r *Datastore) clear() {
+	r.readCache = util.NewConcurrentMap[DataItem]()
+	r.writeCache = make(map[string]DataItem)
+	r.writtenSet = util.NewConcurrentMap[bool]()
+	r.invisibleSet = make(map[string]bool)
 }
