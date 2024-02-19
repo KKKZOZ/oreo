@@ -11,7 +11,7 @@ type DBConfig struct {
 
 // DBCreator creates a database layer.
 type DBCreator interface {
-	Create(p DBConfig) (DB, error)
+	Create() (DB, error)
 }
 
 // DB is the layer to access the database to be benchmarked.
