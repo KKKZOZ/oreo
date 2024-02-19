@@ -17,6 +17,7 @@ type WorkloadParameter struct {
 	ScanProportion            float64
 	ReadModifyWriteProportion float64
 
+	// These parameters are for the data consistency test
 	DataConsistencyTest   bool
 	InitialAmountPerKey   int
 	TransferAmountPerTxn  int
@@ -24,6 +25,12 @@ type WorkloadParameter struct {
 	PostCheckWorkerThread int
 
 	TxnPerformanceTest bool
+
+	// These parameters are for the data distribution test
+	AcrossDatastoreTest bool
+	GlobalDatastoreName string
+	RedisProportion     float64
+	MongoProportion     float64
 }
 
 // ----------------------------------------------------------------------------
