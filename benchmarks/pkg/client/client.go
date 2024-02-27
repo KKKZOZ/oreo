@@ -219,6 +219,7 @@ func (c *Client) RunBenchmark() {
 			curTotalAmount := 0
 			for i := 0; i < c.wp.PostCheckWorkerThread; i++ {
 				curTotalAmount += <-resChan
+				fmt.Printf("Progress: %v/%v\n", i+1, c.wp.PostCheckWorkerThread)
 			}
 			amountMap["oreo-redis"] = curTotalAmount
 
@@ -237,6 +238,7 @@ func (c *Client) RunBenchmark() {
 			curTotalAmount = 0
 			for i := 0; i < c.wp.PostCheckWorkerThread; i++ {
 				curTotalAmount += <-resChan
+				fmt.Printf("Progress: %v/%v\n", i+1, c.wp.PostCheckWorkerThread)
 			}
 			amountMap["oreo-mongo"] = curTotalAmount
 

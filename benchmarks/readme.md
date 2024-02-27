@@ -42,6 +42,8 @@ go run main.go redis load 2
 go run main.go redis run 2
 ```
 
+
+
 ## Start a benchmark
 
 ```bash

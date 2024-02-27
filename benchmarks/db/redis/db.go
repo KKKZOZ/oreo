@@ -3,6 +3,7 @@ package redis
 import (
 	"benchmark/ycsb"
 	"context"
+	"sync"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -10,11 +11,20 @@ import (
 var _ ycsb.DBCreator = (*RedisCreator)(nil)
 
 type RedisCreator struct {
-	Rdb *redis.Client
+	mu      sync.Mutex
+	RdbList []*redis.Client
+	next    int
 }
 
 func (rc *RedisCreator) Create() (ycsb.DB, error) {
-	return NewRedis(rc.Rdb), nil
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	rdb := rc.RdbList[rc.next]
+	rc.next++
+	if rc.next >= len(rc.RdbList) {
+		rc.next = 0
+	}
+	return NewRedis(rdb), nil
 }
 
 var _ ycsb.DB = (*Redis)(nil)
