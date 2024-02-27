@@ -29,6 +29,12 @@ const (
 	OreoRedisAddr = "43.139.62.221:6380"
 )
 
+// const (
+// 	RedisDBAddr   = "localhost:6379"
+// 	MongoDBAddr   = "mongodb://43.139.62.221:27017"
+// 	OreoRedisAddr = "localhost:6380"
+// )
+
 func main() {
 
 	args := os.Args
@@ -43,16 +49,16 @@ func main() {
 		RecordCount:               10000,
 		OperationCount:            10000,
 		TxnOperationGroup:         10,
-		ReadProportion:            0.95,
-		UpdateProportion:          0.05,
+		ReadProportion:            0,
+		UpdateProportion:          0,
 		InsertProportion:          0,
 		ScanProportion:            0,
-		ReadModifyWriteProportion: 0,
+		ReadModifyWriteProportion: 1,
 
 		DataConsistencyTest:   false,
 		InitialAmountPerKey:   1000,
-		TransferAmountPerTxn:  1,
-		PostCheckWorkerThread: 10,
+		TransferAmountPerTxn:  5,
+		PostCheckWorkerThread: 50,
 
 		RedisProportion: 0.5,
 		MongoProportion: 0.5,
@@ -111,6 +117,9 @@ func main() {
 		fmt.Println("Load finished")
 	case "run":
 		wp.DoBenchmark = true
+		fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\n",
+			config.Config.ConcurrentOptimizationLevel, config.Config.AsyncLevel)
+
 		fmt.Println("Start to run benchmark")
 		measurement.EnableWarmUp(false)
 		client.RunBenchmark()
@@ -185,7 +194,14 @@ func genClient(wp *ycsb.WorkloadParameter, dbName string) *client.Client {
 	return c
 }
 func RedisCreator() (ycsb.DBCreator, error) {
-	rdb := goredis.NewClient(&goredis.Options{
+	rdb1 := goredis.NewClient(&goredis.Options{
+		Addr: RedisDBAddr,
+	})
+
+	rdb2 := goredis.NewClient(&goredis.Options{
+		Addr: RedisDBAddr,
+	})
+	rdb3 := goredis.NewClient(&goredis.Options{
 		Addr: RedisDBAddr,
 	})
 
@@ -195,11 +211,14 @@ func RedisCreator() (ycsb.DBCreator, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			rdb.Get(context.Background(), "1")
+			rdb1.Get(context.Background(), "1")
+			rdb2.Get(context.Background(), "1")
+			rdb3.Get(context.Background(), "1")
 		}()
 	}
 	wg.Wait()
-	return &redis.RedisCreator{Rdb: rdb}, nil
+
+	return &redis.RedisCreator{RdbList: []*goredis.Client{rdb1, rdb2, rdb3}}, nil
 }
 
 func MongoCreator() (ycsb.DBCreator, error) {
@@ -224,7 +243,13 @@ func MongoCreator() (ycsb.DBCreator, error) {
 }
 
 func OreoRedisCreator() (ycsb.DBCreator, error) {
-	redisConn := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
+	redisConn1 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
+		Address: OreoRedisAddr,
+	})
+	redisConn2 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
+		Address: OreoRedisAddr,
+	})
+	redisConn3 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
 		Address: OreoRedisAddr,
 	})
 
@@ -234,11 +259,13 @@ func OreoRedisCreator() (ycsb.DBCreator, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			redisConn.Get("1")
+			redisConn1.Get("1")
+			redisConn2.Get("1")
+			redisConn3.Get("1")
 		}()
 	}
 	wg.Wait()
-	return &oreo.OreoRedisCreator{Conn: redisConn}, nil
+	return &oreo.OreoRedisCreator{ConnList: []*redisCo.RedisConnection{redisConn1, redisConn2, redisConn3}}, nil
 }
 
 func OreoCreator() (ycsb.DBCreator, error) {

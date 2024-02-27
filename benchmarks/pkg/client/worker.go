@@ -77,7 +77,11 @@ func newWorker(c *Client,
 func (w *worker) RunLoad(ctx context.Context, dbName string) {
 
 	if txnDB, ok := w.wrappedDBMap[dbName].(ycsb.TransactionDB); ok {
-		txnDB.Start()
+		err := txnDB.Start()
+		if err != nil {
+			fmt.Printf("Error when loading data: %v\n", err)
+			return
+		}
 	}
 	recordList := make([]string, 0)
 	for i := 0; i < w.opCount; i++ {
@@ -231,6 +235,7 @@ func (w *worker) doReadModifyWrite(ctx context.Context, db ycsb.DB) error {
 }
 
 func (w *worker) doAccountTransaction(ctx context.Context, db ycsb.DB) error {
+	transferAmount := w.wp.TransferAmountPerTxn
 	dbName := w.wp.DBName
 	key1 := w.c.NextKeyName()
 	key2 := w.c.NextKeyName()
@@ -251,8 +256,8 @@ func (w *worker) doAccountTransaction(ctx context.Context, db ycsb.DB) error {
 		return err
 	}
 	// fmt.Printf("key1: %s v1: %s\nkey2: %s v2: %s\n", key1, v1, key2, v2)
-	v1 = fmt.Sprintf("%d", util.ToInt(v1)-1)
-	v2 = fmt.Sprintf("%d", util.ToInt(v2)+1)
+	v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
+	v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
 	// fmt.Printf("[Updated]key1: %s v1: %s\n[Updated]key2: %s v2: %s\n", key1, v1, key2, v2)
 
 	err = db.Update(ctx, w.wp.TableName, key1, v1)
@@ -273,10 +278,10 @@ func (w *worker) doAccountTransaction(ctx context.Context, db ycsb.DB) error {
 // Only supports Read-Modify-Write pattern
 func (w *worker) doTxnPerformanceTest(ctx context.Context, db ycsb.DB) error {
 
-	opCount := 10
+	opCount := 5
 	start := time.Now()
 	defer func() {
-		fmt.Printf("TxnPerformanceTest: %v\n", time.Since(start))
+		// fmt.Printf("TxnPerformanceTest: %v\n", time.Since(start))
 	}()
 
 	if w.wp.DBName == "redis" {
@@ -301,8 +306,8 @@ func (w *worker) doTxnPerformanceTest(ctx context.Context, db ycsb.DB) error {
 				}
 			}
 
-			fmt.Printf("Read done: %v\n", time.Since(start))
-			mid := time.Now()
+			// fmt.Printf("Read done: %v\n", time.Since(start))
+			// mid := time.Now()
 
 			// Operation is commited only if the watched keys remain unchanged.
 			_, err := tx.TxPipelined(ctx, func(pipe goredis.Pipeliner) error {
@@ -312,7 +317,7 @@ func (w *worker) doTxnPerformanceTest(ctx context.Context, db ycsb.DB) error {
 				return nil
 			})
 
-			fmt.Printf("TxPipelined done: %v\n", time.Since(mid))
+			// fmt.Printf("TxPipelined done: %v\n", time.Since(mid))
 			if err != nil {
 				fmt.Printf("TxPipelined error: %v\n", err)
 			}
@@ -400,6 +405,7 @@ func (w *worker) doTxnPerformanceTest(ctx context.Context, db ycsb.DB) error {
 }
 
 func (w *worker) doAccountTransactionAcrossDatastores(ctx context.Context) error {
+	transferAmount := w.wp.TransferAmountPerTxn
 	key1 := w.c.NextKeyName()
 	db1 := w.c.NextDatastore()
 	key2 := w.c.NextKeyName()
@@ -409,7 +415,7 @@ func (w *worker) doAccountTransactionAcrossDatastores(ctx context.Context) error
 		return nil
 	}
 
-	fmt.Printf("key1: %s db1: %s\nkey2: %s db2: %s\n", key1, db1, key2, db2)
+	// fmt.Printf("key1: %s db1: %s\nkey2: %s db2: %s\n", key1, db1, key2, db2)
 
 	// special case
 	if db, ok := w.originDBMap["oreo"]; ok {
@@ -426,8 +432,8 @@ func (w *worker) doAccountTransactionAcrossDatastores(ctx context.Context) error
 		if err != nil {
 			return err
 		}
-		v1 = fmt.Sprintf("%d", util.ToInt(v1)-1)
-		v2 = fmt.Sprintf("%d", util.ToInt(v2)+1)
+		v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
+		v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
 		_ = txnDB.Update(ctx, db1, key1, v1)
 		_ = txnDB.Update(ctx, db2, key2, v2)
 		return txnDB.Commit()
@@ -442,8 +448,8 @@ func (w *worker) doAccountTransactionAcrossDatastores(ctx context.Context) error
 		return err
 	}
 	// fmt.Printf("key1: %s v1: %s\nkey2: %s v2: %s\n", key1, v1, key2, v2)
-	v1 = fmt.Sprintf("%d", util.ToInt(v1)-1)
-	v2 = fmt.Sprintf("%d", util.ToInt(v2)+1)
+	v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
+	v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
 	// fmt.Printf("[Updated]key1: %s v1: %s\n[Updated]key2: %s v2: %s\n", key1, v1, key2, v2)
 
 	err = w.wrappedDBMap[db1].Update(ctx, w.wp.TableName, key1, v1)
