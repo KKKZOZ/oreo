@@ -65,6 +65,10 @@ func NewMongoConnection(config *ConnectionOptions) *MongoConnection {
 // Connect establishes a connection to the MongoDB server.
 // It returns an error if the connection cannot be established.
 func (m *MongoConnection) Connect() error {
+	if m.hasConnected {
+		return nil
+	}
+
 	clientOptions := options.Client().ApplyURI(m.Address)
 	if m.config.Username != "" && m.config.Password != "" {
 		clientOptions.SetAuth(options.Credential{

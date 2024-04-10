@@ -3,6 +3,7 @@ package oreo
 import (
 	"benchmark/ycsb"
 	"context"
+	"sync"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -11,11 +12,20 @@ import (
 var _ ycsb.DBCreator = (*OreoRedisCreator)(nil)
 
 type OreoRedisCreator struct {
-	Conn *redis.RedisConnection
+	mu       sync.Mutex
+	ConnList []*redis.RedisConnection
+	next     int
 }
 
 func (rc *OreoRedisCreator) Create() (ycsb.DB, error) {
-	return NewRedisDatastore(rc.Conn), nil
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	conn := rc.ConnList[rc.next]
+	rc.next++
+	if rc.next >= len(rc.ConnList) {
+		rc.next = 0
+	}
+	return NewRedisDatastore(conn), nil
 }
 
 var _ ycsb.DB = (*RedisDatastore)(nil)
