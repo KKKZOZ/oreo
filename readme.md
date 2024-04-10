@@ -1,4 +1,4 @@
-# Oreo - An Easy-to-use Distributed Transaciotn Framework
+# Oreo - An Easy-to-use Distributed Transaction Framework
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/kkkzoz/oreo)](https://goreportcard.com/report/github.com/kkkzoz/oreo)
 [![Go Reference](https://pkg.go.dev/badge/github.com/kkkzoz/oreo.svg)](https://pkg.go.dev/github.com/kkkzoz/oreo)
@@ -29,7 +29,7 @@ It provides:
   + Snapshot Isolation
   + Serializable
 
-> ***It is currently alpha***.
+> ***It is currently beta***.
 
 ## Main Features
 

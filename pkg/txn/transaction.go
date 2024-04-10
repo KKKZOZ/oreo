@@ -122,6 +122,19 @@ func (t *Transaction) AddDatastore(ds Datastorer) error {
 	return nil
 }
 
+// AddDatastores adds multiple datastores to the transaction.
+// It takes a variadic parameter `dss` of type `Datastorer` which represents the datastores to be added.
+// It returns an error if any datastore fails to be added, otherwise it returns nil.
+func (t *Transaction) AddDatastores(dss ...Datastorer) error {
+	for _, ds := range dss {
+		err := t.AddDatastore(ds)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SetGlobalDatastore sets the global datastore for the transaction.
 // It takes a Datastore parameter and assigns it to the globalDataStore field of the Transaction struct.
 func (t *Transaction) SetGlobalDatastore(ds Datastorer) {
