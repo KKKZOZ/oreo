@@ -103,11 +103,6 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) (string, err
 	return rev, nil
 }
 
-/*
-	Conditional update in this style isn't the same as in CouchDB due to their different concurrency controls.
-
-Consider using CouchDB's conflict resolution system by checking for conflicts on Get(), or apply updates using previous _rev as a reference to ensure atomicity
-*/
 func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
 	if !r.hasConnected {
 		return "", fmt.Errorf("not connected to CouchDB")

@@ -12,6 +12,7 @@ import (
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/logger"
 	"github.com/kkkzoz/oreo/pkg/serializer"
+	"golang.org/x/sync/errgroup"
 )
 
 var _ Datastorer = (*Datastore)(nil)
@@ -465,24 +466,15 @@ func (r *Datastore) Prepare() error {
 		return nil
 	}
 
-	resChan := make(chan error, len(items))
+	var eg errgroup.Group
+	eg.SetLimit(config.Config.MaxOutstandingRequest)
 	for _, item := range items {
-		go func(it DataItem) { resChan <- r.conditionalUpdate(it) }(item)
+		it := item
+		eg.Go(func() error {
+			return r.conditionalUpdate(it)
+		})
 	}
-
-	//TODO: replace it with errgroup
-	success := true
-	var cause error
-	for i := 0; i < len(items); i++ {
-		err := <-resChan
-		if err != nil {
-			success, cause = false, err
-		}
-	}
-	if !success {
-		return cause
-	}
-	return nil
+	return eg.Wait()
 }
 
 // Commit updates the state of records in the data store to COMMITTED.
@@ -490,27 +482,27 @@ func (r *Datastore) Prepare() error {
 // After updating the records, it clears the write cache.
 // Returns an error if there is any issue updating the records.
 func (r *Datastore) Commit() error {
-
 	logger.Log.Debugw("Datastore.Commit() starts", "TxnId", r.Txn.TxnId)
 	// update record's state to the COMMITTED state in the data store
-	var wg sync.WaitGroup
+	var eg errgroup.Group
+	eg.SetLimit(config.Config.MaxOutstandingRequest)
 	for _, item := range r.writeCache {
-		wg.Add(1)
-		go func(item DataItem) {
-			defer wg.Done()
-			item.SetTxnState(config.COMMITTED)
-			util.RetryHelper(3, RETRYINTERVAL, func() error {
-				_, err := r.conn.ConditionalUpdate(item.Key(), item, false)
-				if errors.Is(err, VersionMismatch) {
-					// this indicates that the record has been rolled forward
-					// by another transaction.
-					return nil
-				}
-				return err
-			})
-		}(item)
+		it := item
+		eg.Go(func() error {
+			it.SetTxnState(config.COMMITTED)
+			return util.RetryHelper(3, RETRYINTERVAL,
+				func() error {
+					_, err := r.conn.ConditionalUpdate(it.Key(), it, false)
+					if errors.Is(err, VersionMismatch) {
+						// this indicates that the record has been rolled forward
+						// by another transaction.
+						return nil
+					}
+					return err
+				})
+		})
 	}
-	wg.Wait()
+	eg.Wait()
 	logger.Log.Debugw("Datastore.Commit() finishes", "TxnId", r.Txn.TxnId)
 	r.clear()
 	return nil

@@ -14,6 +14,9 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readconcern"
+	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 )
 
 type worker struct {
@@ -255,9 +258,20 @@ func (w *worker) doAccountTransaction(ctx context.Context, db ycsb.DB) error {
 	if err != nil {
 		return err
 	}
+	v1Num := util.ToInt(v1)
+	v2Num := util.ToInt(v2)
+	if v1Num < v2Num {
+		v1Num -= int64(transferAmount)
+		v2Num += int64(transferAmount)
+	} else {
+		v1Num += int64(transferAmount)
+		v2Num -= int64(transferAmount)
+	}
+	v1 = fmt.Sprintf("%d", v1Num)
+	v2 = fmt.Sprintf("%d", v2Num)
 	// fmt.Printf("key1: %s v1: %s\nkey2: %s v2: %s\n", key1, v1, key2, v2)
-	v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
-	v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
+	// v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
+	// v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
 	// fmt.Printf("[Updated]key1: %s v1: %s\n[Updated]key2: %s v2: %s\n", key1, v1, key2, v2)
 
 	err = db.Update(ctx, w.wp.TableName, key1, v1)
@@ -336,7 +350,12 @@ func (w *worker) doTxnPerformanceTest(ctx context.Context, db ycsb.DB) error {
 		db := m.Client.Database("oreo")
 		coll := db.Collection("benchmark")
 
-		session, err := m.Client.StartSession()
+		sessionOpts := options.Session().
+			SetDefaultReadConcern(readconcern.Linearizable()).
+			SetDefaultWriteConcern(writeconcern.Majority())
+
+		session, err := m.Client.StartSession(sessionOpts)
+
 		if err != nil {
 			fmt.Printf("StartSession error: %v\n", err)
 			return err
@@ -432,8 +451,18 @@ func (w *worker) doAccountTransactionAcrossDatastores(ctx context.Context) error
 		if err != nil {
 			return err
 		}
-		v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
-		v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
+		v1Num := util.ToInt(v1)
+		v2Num := util.ToInt(v2)
+		if v1Num < v2Num {
+			v1Num -= int64(transferAmount)
+			v2Num += int64(transferAmount)
+		} else {
+			v1Num += int64(transferAmount)
+			v2Num -= int64(transferAmount)
+		}
+		v1 = fmt.Sprintf("%d", v1Num)
+		v2 = fmt.Sprintf("%d", v2Num)
+
 		_ = txnDB.Update(ctx, db1, key1, v1)
 		_ = txnDB.Update(ctx, db2, key2, v2)
 		return txnDB.Commit()
@@ -447,9 +476,21 @@ func (w *worker) doAccountTransactionAcrossDatastores(ctx context.Context) error
 	if err != nil {
 		return err
 	}
+
+	v1Num := util.ToInt(v1)
+	v2Num := util.ToInt(v2)
+	if v1Num < v2Num {
+		v1Num -= int64(transferAmount)
+		v2Num += int64(transferAmount)
+	} else {
+		v1Num += int64(transferAmount)
+		v2Num -= int64(transferAmount)
+	}
+	v1 = fmt.Sprintf("%d", v1Num)
+	v2 = fmt.Sprintf("%d", v2Num)
 	// fmt.Printf("key1: %s v1: %s\nkey2: %s v2: %s\n", key1, v1, key2, v2)
-	v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
-	v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
+	// v1 = fmt.Sprintf("%d", util.ToInt(v1)-int64(transferAmount))
+	// v2 = fmt.Sprintf("%d", util.ToInt(v2)+int64(transferAmount))
 	// fmt.Printf("[Updated]key1: %s v1: %s\n[Updated]key2: %s v2: %s\n", key1, v1, key2, v2)
 
 	err = w.wrappedDBMap[db1].Update(ctx, w.wp.TableName, key1, v1)
