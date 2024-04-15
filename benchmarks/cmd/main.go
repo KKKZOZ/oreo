@@ -6,11 +6,13 @@ import (
 	"benchmark/db/redis"
 	"benchmark/pkg/client"
 	"benchmark/pkg/measurement"
+	"benchmark/pkg/workload"
 	"benchmark/ycsb"
 	"context"
+	"flag"
 	"fmt"
 	"os"
-	"strconv"
+	"runtime/trace"
 	"sync"
 	"time"
 
@@ -37,19 +39,49 @@ const (
 // 	OreoRedisAddr = "localhost:6380"
 // )
 
+var help = flag.Bool("help", false, "Show help")
+var dbType = ""
+var mode = "load"
+var workloadType = ""
+var threadNum = 1
+var traceFlag = false
+
+// fmt.Println("Usage: main [DBType] [load|run] [ThreadNum] [TestTypeFlag]")
 func main() {
 
-	args := os.Args
-	argsLen := len(args)
-	if argsLen < 4 {
-		fmt.Println("Usage: main [DBType] [load|run] [ThreadNum] [TestTypeFlag]")
+	flag.StringVar(&dbType, "d", "", "DB type")
+	flag.StringVar(&mode, "m", "load", "Mode: load or run")
+	flag.StringVar(&workloadType, "wl", "", "Workload type")
+	flag.IntVar(&threadNum, "t", 1, "Thread number")
+	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
+	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	if threadNum <= 0 {
+		fmt.Println("ThreadNum should be a positive integer")
 		return
 	}
 
+	if traceFlag {
+		f, err := os.Create("trace.out")
+		if err != nil {
+			panic(err)
+		}
+		err = trace.Start(f)
+		if err != nil {
+			panic(err)
+		}
+		defer trace.Stop()
+	}
+
 	// TODO: Read it from file
-	wp := &ycsb.WorkloadParameter{
-		RecordCount:               10000,
-		OperationCount:            10000,
+	wp := &workload.WorkloadParameter{
+		RecordCount:               100,
+		OperationCount:            100,
 		TxnOperationGroup:         10,
 		ReadProportion:            0,
 		UpdateProportion:          0,
@@ -57,7 +89,6 @@ func main() {
 		ScanProportion:            0,
 		ReadModifyWriteProportion: 1.0,
 
-		DataConsistencyTest:   false,
 		InitialAmountPerKey:   1000,
 		TransferAmountPerTxn:  5,
 		PostCheckWorkerThread: 50,
@@ -72,48 +103,17 @@ func main() {
 	config.Config.MaxOutstandingRequest = 3
 	// config.Config.MaxRecordLength = 2
 
-	// f, err := os.Create("trace.out")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// err = trace.Start(f)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// defer trace.Stop()
-
-	client := genClient(wp, args[1])
-
 	measurement.InitMeasure()
 	measurement.EnableWarmUp(true)
 
-	mode := args[2]
-	threadNum, err := strconv.Atoi(args[3])
-	if err != nil || threadNum <= 0 {
-		fmt.Println("ThreadNum should be a positive integer")
-		return
-	}
 	wp.ThreadCount = threadNum
+	wl := createWorkload(wp)
+	client := generateClient(&wl, wp, dbType)
 
-	if argsLen == 5 {
-		switch args[4] {
-		case "-dc":
-			wp.DataConsistencyTest = true
-			fmt.Println("This is a data consistency test")
-		case "-tp":
-			wp.TxnPerformanceTest = true
-			fmt.Println("This is a transaction performance test")
-		case "-ad":
-			wp.AcrossDatastoreTest = true
-			fmt.Println("This is a across datastore test")
-		default:
-			fmt.Println("Invalid TestTypeFlag")
-		}
-	}
+	displayBenchmarkInfo()
 
 	switch mode {
 	case "load":
-		// TODO:
 		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
 		wp.DoBenchmark = false
 		fmt.Println("Start to load data")
@@ -121,10 +121,6 @@ func main() {
 		fmt.Println("Load finished")
 	case "run":
 		wp.DoBenchmark = true
-		fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\n",
-			config.Config.ConcurrentOptimizationLevel, config.Config.AsyncLevel,
-			config.Config.MaxOutstandingRequest)
-		fmt.Printf("ThreadNum: %d\n", threadNum)
 		fmt.Println("Start to run benchmark")
 		measurement.EnableWarmUp(false)
 		client.RunBenchmark()
@@ -133,7 +129,46 @@ func main() {
 	}
 }
 
-func genClient(wp *ycsb.WorkloadParameter, dbName string) *client.Client {
+func displayBenchmarkInfo() {
+	fmt.Printf("-----------------\n")
+	fmt.Printf("DBType: %s\n", dbType)
+	fmt.Printf("Mode: %s\n", mode)
+	fmt.Printf("WorkloadType: %s\n", workloadType)
+	fmt.Printf("ThreadNum: %d\n", threadNum)
+	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\n",
+		config.Config.ConcurrentOptimizationLevel, config.Config.AsyncLevel,
+		config.Config.MaxOutstandingRequest)
+	fmt.Printf("-----------------\n")
+}
+
+func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
+	if workloadType != "" {
+		switch workloadType {
+		case "ycsb":
+			fmt.Println("This is a YCSB benchmark")
+			return workload.NewYCSBWorkload(wp)
+		case "dc":
+			fmt.Println("This is a data consistency test")
+			return workload.NewDataConsistencyWorkload(wp)
+		case "tp":
+			fmt.Println("This is a transaction performance test")
+			return workload.NewTxnPerformanceWorkload(wp)
+		case "ad":
+			fmt.Println("This is a across datastore test")
+			return workload.NewAcrossDatastoreWorkload(wp)
+		default:
+			panic("Invalid workload type")
+		}
+	} else {
+		panic("WorkloadType should be specified")
+	}
+}
+
+func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbName string) *client.Client {
+	if dbType == "" {
+		panic("DBType should be specified")
+	}
+
 	var c *client.Client
 	switch dbName {
 	case "redis":
@@ -146,7 +181,7 @@ func genClient(wp *ycsb.WorkloadParameter, dbName string) *client.Client {
 		creatorMap := map[string]ycsb.DBCreator{
 			dbName: creator,
 		}
-		c = client.NewClient(wp, creatorMap)
+		c = client.NewClient(wl, wp, creatorMap)
 	case "mongo":
 		wp.DBName = "mongo"
 		creator, err := MongoCreator()
@@ -157,7 +192,7 @@ func genClient(wp *ycsb.WorkloadParameter, dbName string) *client.Client {
 		creatorMap := map[string]ycsb.DBCreator{
 			dbName: creator,
 		}
-		c = client.NewClient(wp, creatorMap)
+		c = client.NewClient(wl, wp, creatorMap)
 	case "redis-mongo":
 		wp.DBName = "redis-mongo"
 		redisCreator, err1 := RedisCreator()
@@ -166,11 +201,17 @@ func genClient(wp *ycsb.WorkloadParameter, dbName string) *client.Client {
 			fmt.Printf("Error when creating client: %v %v\n", err1, err2)
 			return nil
 		}
-		creatorMap := map[string]ycsb.DBCreator{
-			"redis": redisCreator,
-			"mongo": mongoCreator,
+		dbSetCreator := workload.DBSetCreator{
+			CreatorMap: map[string]ycsb.DBCreator{
+				"redis": redisCreator,
+				"mongo": mongoCreator,
+			},
 		}
-		c = client.NewClient(wp, creatorMap)
+
+		creatorMap := map[string]ycsb.DBCreator{
+			"redis-mongo": &dbSetCreator,
+		}
+		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo-redis":
 		wp.DBName = "oreo-redis"
 		creator, err := OreoRedisCreator()
@@ -181,7 +222,7 @@ func genClient(wp *ycsb.WorkloadParameter, dbName string) *client.Client {
 		creatorMap := map[string]ycsb.DBCreator{
 			dbName: creator,
 		}
-		c = client.NewClient(wp, creatorMap)
+		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo":
 		wp.DBName = "oreo"
 		creator, err := OreoCreator()
@@ -192,7 +233,7 @@ func genClient(wp *ycsb.WorkloadParameter, dbName string) *client.Client {
 		creatorMap := map[string]ycsb.DBCreator{
 			dbName: creator,
 		}
-		c = client.NewClient(wp, creatorMap)
+		c = client.NewClient(wl, wp, creatorMap)
 	default:
 		panic("Unsupport db type")
 	}
@@ -208,9 +249,6 @@ func RedisCreator() (ycsb.DBCreator, error) {
 		Addr:     RedisDBAddr,
 		Password: "@ljy123456",
 	})
-	// rdb3 := goredis.NewClient(&goredis.Options{
-	// 	Addr: RedisDBAddr,
-	// })
 
 	// try to warm up the connection
 	var wg sync.WaitGroup
@@ -220,7 +258,6 @@ func RedisCreator() (ycsb.DBCreator, error) {
 			defer wg.Done()
 			rdb1.Get(context.Background(), "1")
 			rdb2.Get(context.Background(), "1")
-			// rdb3.Get(context.Background(), "1")
 		}()
 	}
 	wg.Wait()
@@ -235,6 +272,7 @@ func MongoCreator() (ycsb.DBCreator, error) {
 		Password: "admin",
 	})
 	context1, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	client, err := mongo.Connect(context1, clientOptions)
 	if err != nil {
 		return nil, err
