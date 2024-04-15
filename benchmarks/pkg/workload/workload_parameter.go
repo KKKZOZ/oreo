@@ -1,4 +1,4 @@
-package ycsb
+package workload
 
 type WorkloadParameter struct {
 	DBName    string
@@ -18,16 +18,12 @@ type WorkloadParameter struct {
 	ReadModifyWriteProportion float64
 
 	// These parameters are for the data consistency test
-	DataConsistencyTest   bool
 	InitialAmountPerKey   int
 	TransferAmountPerTxn  int
 	TotalAmount           int
 	PostCheckWorkerThread int
 
-	TxnPerformanceTest bool
-
 	// These parameters are for the data distribution test
-	AcrossDatastoreTest bool
 	GlobalDatastoreName string
 	RedisProportion     float64
 	MongoProportion     float64
