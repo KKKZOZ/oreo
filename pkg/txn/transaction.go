@@ -122,6 +122,19 @@ func (t *Transaction) AddDatastore(ds Datastorer) error {
 	return nil
 }
 
+// AddDatastores adds multiple datastores to the transaction.
+// It takes a variadic parameter `dss` of type `Datastorer` which represents the datastores to be added.
+// It returns an error if any datastore fails to be added, otherwise it returns nil.
+func (t *Transaction) AddDatastores(dss ...Datastorer) error {
+	for _, ds := range dss {
+		err := t.AddDatastore(ds)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SetGlobalDatastore sets the global datastore for the transaction.
 // It takes a Datastore parameter and assigns it to the globalDataStore field of the Transaction struct.
 func (t *Transaction) SetGlobalDatastore(ds Datastorer) {
@@ -170,7 +183,6 @@ func (t *Transaction) Delete(dsName string, key string) error {
 	t.isReadOnly = false
 	msgStr := fmt.Sprintf("delete in %v: [Key: %v]", dsName, key)
 	Log.Debugw(msgStr, "txnId", t.TxnId, "topic", testutil.DDelete)
-	// t.debug(testutil.DDelete, "delete in %v: [Key: %v]", dsName, key)
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Delete(key)
 	}
@@ -231,6 +243,7 @@ func (t *Transaction) Commit() error {
 		}
 		wg.Wait()
 	} else {
+		// TODO: nondeterministic order, get it right
 		for _, ds := range t.dataStoreMap {
 			prepareDatastore(ds)
 		}
@@ -241,7 +254,7 @@ func (t *Transaction) Commit() error {
 		if stackError, ok := err.(*errors.Error); ok {
 			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", stackError.ErrorStack())
 		}
-		t.Abort()
+		go t.Abort()
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
@@ -252,14 +265,14 @@ func (t *Transaction) Commit() error {
 	txnState, err := t.GetTSRState(t.TxnId)
 	if err == nil && txnState == config.ABORTED {
 		Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
-		t.Abort()
+		go t.Abort()
 		return errors.New("transaction is aborted by other transaction")
 	}
 
 	Log.Infow("Writing TSR", "txnId", t.TxnId)
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
-		t.Abort()
+		go t.Abort()
 		return err
 	}
 
@@ -325,6 +338,7 @@ func (t *Transaction) Abort() error {
 		hasCommitted = true
 	}
 	Log.Infow("aborting transaction", "txnId", t.TxnId, "hasCommitted", hasCommitted)
+	t.WriteTSR(t.TxnId, config.ABORTED)
 	for _, ds := range t.dataStoreMap {
 		err := ds.Abort(hasCommitted)
 		if err != nil {
