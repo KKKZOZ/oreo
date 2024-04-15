@@ -59,6 +59,9 @@ type config struct {
 
 	// AsyncLevel specifies the level of asynchronous commit in the transaction
 	AsyncLevel int
+
+	// MaxOutstandingRequest specifies the maximum number of outstanding requests
+	MaxOutstandingRequest int
 }
 
 var Config = config{
@@ -69,6 +72,7 @@ var Config = config{
 	LogLevel:                    zapcore.InfoLevel,
 	ConcurrentOptimizationLevel: DEFAULT,
 	AsyncLevel:                  AsyncLevelZero,
+	MaxOutstandingRequest:       5,
 }
 
 type State int
