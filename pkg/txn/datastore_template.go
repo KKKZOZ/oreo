@@ -93,8 +93,20 @@ func (r *Datastore) Read(key string, value any) error {
 		return r.getValue(item, value)
 	}
 
-	// else get if from connection
-	return r.readFromConn(key, value)
+	if r.Txn.isRemote {
+		item, err := r.Txn.RemoteRead(r.Name, key)
+		if err != nil {
+			return err
+		}
+		if item.IsDeleted() {
+			return errors.New(KeyNotFound)
+		}
+		r.readCache.Set(item.Key(), item)
+		return r.getValue(item, value)
+	} else {
+		// else get if from connection
+		return r.readFromConn(key, value)
+	}
 }
 
 func (r *Datastore) readFromConn(key string, value any) error {
@@ -118,6 +130,13 @@ func (r *Datastore) readFromConn(key string, value any) error {
 		if !isFound || curItem.IsDeleted() {
 			if curItem.IsDeleted() {
 				// put into cache anyway
+				//
+				// This is a special case for getting the corresponding version
+				// Consider the case where the record is deleted by another transaction
+				// and the current transaction tries to read it to get version info
+				// If it is not put into the cache, the record is invisible for prepare phase
+				// so the code will regard it as a new record
+				// and create a new record in the prepare phase (set `doCreate` to true)
 				r.readCache.Set(curItem.Key(), curItem)
 			}
 			return errors.New(KeyNotFound)
@@ -277,7 +296,7 @@ func (r *Datastore) Write(key string, value any) error {
 // writeToCache writes the given DataItem to the cache.
 // It will find the corresponding version of the item.
 //   - If the item already exists in the read cache, it follows the read-modified-commit pattern
-//   - If this is a direct write, it will set the version to -1
+//   - If this is a direct write, it will set the version to ""
 //
 // The item is then added to the write cache.
 func (r *Datastore) writeToCache(cacheItem DataItem) error {
@@ -366,11 +385,15 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 	return r.doConditionalUpdate(cacheItem, dbItem)
 }
 
-// truncate truncates the linked list of DataItems if the length exceeds the maximum record length defined in the configuration.
+// truncate truncates the linked list of DataItems
+// if the length exceeds the maximum record length defined in the configuration.
+//
 // It takes a pointer to a DataItem as input and returns the truncated DataItem and an error, if any.
 // If the length of the linked list is greater than the maximum record length, it creates a stack of DataItems and pops the items from the stack until the length is reduced to the maximum record length.
+//
 // It then updates the Prev and LinkedLen fields of the DataItems in the stack accordingly.
 // Finally, it returns the last popped DataItem as the truncated DataItem.
+//
 // If the length of the linked list is less than or equal to the maximum record length, it returns the input DataItem as is.
 func (r *Datastore) truncate(newItem DataItem) (DataItem, error) {
 	maxLen := config.Config.MaxRecordLength
@@ -415,8 +438,10 @@ func (r *Datastore) truncate(newItem DataItem) (DataItem, error) {
 }
 
 // updateMetadata updates the metadata of a DataItem by comparing it with the oldItem.
+//
 // If the oldItem is empty, it sets the LinkedLen of the newItem to 1.
 // Otherwise, it increments the LinkedLen of the newItem by 1 and sets the Prev and Version fields based on the oldItem.
+//
 // It then truncates the record using the truncate method and sets the TxnState, TValid, and TLease fields of the newItem.
 // Finally, it returns the updated newItem and any error that occurred during the process.
 func (r *Datastore) updateMetadata(newItem DataItem, oldItem DataItem) (DataItem, error) {
@@ -451,6 +476,32 @@ func (r *Datastore) Prepare() error {
 		items = append(items, v)
 	}
 
+	if r.Txn.isRemote {
+
+		// for those whose version is clear, update their metadata
+		for _, item := range items {
+			if item.Version() != "" {
+				dbItem, _ := r.readCache.Get(item.Key())
+				newItem, err := r.updateMetadata(item, dbItem)
+				if err != nil {
+					return err
+				}
+				r.writeCache[item.Key()] = newItem
+			}
+		}
+
+		verMap, err := r.Txn.RemotePrepare(r.Name, items)
+		logger.Log.Infow("Remote prepare Result",
+			"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err)
+		if err != nil {
+			return errors.Join(errors.New("Remote prepare failed"), err)
+		}
+		for k, v := range verMap {
+			r.writeCache[k].SetVersion(v)
+		}
+		return nil
+	}
+
 	if config.Config.ConcurrentOptimizationLevel < config.PARALLELIZE_ON_UPDATE {
 		// sort records by key
 		slices.SortFunc(
@@ -478,11 +529,28 @@ func (r *Datastore) Prepare() error {
 }
 
 // Commit updates the state of records in the data store to COMMITTED.
+//
 // It iterates over the write cache and updates each record's state to COMMITTED.
+//
 // After updating the records, it clears the write cache.
 // Returns an error if there is any issue updating the records.
 func (r *Datastore) Commit() error {
 	logger.Log.Debugw("Datastore.Commit() starts", "TxnId", r.Txn.TxnId)
+
+	if r.Txn.isRemote {
+		infoList := make([]CommitInfo, 0, len(r.writeCache))
+		for _, item := range r.writeCache {
+			infoList = append(infoList, CommitInfo{Key: item.Key(), Version: item.Version()})
+		}
+
+		err := r.Txn.RemoteCommit(r.Name, infoList)
+		if err != nil {
+			logger.Log.Infow("Remote commit failed", "TxnId", r.Txn.TxnId)
+			return err
+		}
+		return err
+	}
+
 	// update record's state to the COMMITTED state in the data store
 	var eg errgroup.Group
 	eg.SetLimit(config.Config.MaxOutstandingRequest)
@@ -509,8 +577,10 @@ func (r *Datastore) Commit() error {
 }
 
 // Abort discards the changes made in the current transaction.
-// If hasCommitted is false, it clears the write cache.
-// If hasCommitted is true, it rolls back the changes made by the current transaction.
+//
+//   - If hasCommitted is false, it clears the write cache.
+//   - If hasCommitted is true, it rolls back the changes made by the current transaction.
+//
 // It returns an error if there is any issue during the rollback process.
 func (r *Datastore) Abort(hasCommitted bool) error {
 

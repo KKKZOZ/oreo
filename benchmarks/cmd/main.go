@@ -1,36 +1,31 @@
 package main
 
 import (
-	mongoDB "benchmark/db/mongo"
-	"benchmark/db/oreo"
-	"benchmark/db/redis"
 	"benchmark/pkg/client"
+	"benchmark/pkg/config"
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
-	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"runtime/trace"
-	"sync"
-	"time"
 
-	"github.com/kkkzoz/oreo/pkg/config"
-	mongoCo "github.com/kkkzoz/oreo/pkg/datastore/mongo"
-	redisCo "github.com/kkkzoz/oreo/pkg/datastore/redis"
-	"github.com/kkkzoz/oreo/pkg/txn"
-	goredis "github.com/redis/go-redis/v9"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	cfg "github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/network"
 )
 
 const (
-	RedisDBAddr      = "43.139.62.221:6371"
-	MongoDBAddr      = "mongodb://43.139.62.221:27017"
+	RedisDBAddr = "43.139.62.221:6371"
+	// MongoDBAddr      = "mongodb://43.139.62.221:27017"
+	MongoDBAddr      = "mongodb://localhost:27017"
 	MongoDBAddr2     = "mongodb://43.139.62.221:27021"
 	MongoDBGroupAddr = "mongodb://43.139.62.221:27021,43.139.62.221:27022,43.139.62.221:27023/?replicaSet=dbrs"
-	OreoRedisAddr    = "43.139.62.221:6380"
+	OreoRedisAddr    = "43.139.62.221:6379"
+	// OreoRedisAddr = "localhost:6380"
+
+	OreoCouchDBAddr = "http://admin:password@43.139.62.221:5984"
 )
 
 // const (
@@ -45,6 +40,7 @@ var mode = "load"
 var workloadType = ""
 var threadNum = 1
 var traceFlag = false
+var isRemote = false
 
 // fmt.Println("Usage: main [DBType] [load|run] [ThreadNum] [TestTypeFlag]")
 func main() {
@@ -54,6 +50,7 @@ func main() {
 	flag.StringVar(&workloadType, "wl", "", "Workload type")
 	flag.IntVar(&threadNum, "t", 1, "Thread number")
 	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
+	flag.BoolVar(&isRemote, "remote", false, "Run in remote mode (for Oreo series)")
 	flag.Parse()
 
 	if *help {
@@ -80,14 +77,14 @@ func main() {
 
 	// TODO: Read it from file
 	wp := &workload.WorkloadParameter{
-		RecordCount:               100,
-		OperationCount:            100,
-		TxnOperationGroup:         10,
+		RecordCount:               1000,
+		OperationCount:            5,
+		TxnOperationGroup:         5,
 		ReadProportion:            0,
 		UpdateProportion:          0,
-		InsertProportion:          0,
+		InsertProportion:          1.0,
 		ScanProportion:            0,
-		ReadModifyWriteProportion: 1.0,
+		ReadModifyWriteProportion: 0,
 
 		InitialAmountPerKey:   1000,
 		TransferAmountPerTxn:  5,
@@ -98,10 +95,10 @@ func main() {
 	}
 	wp.TotalAmount = wp.InitialAmountPerKey * wp.RecordCount
 
-	config.Config.ConcurrentOptimizationLevel = 0
-	config.Config.AsyncLevel = 2
-	config.Config.MaxOutstandingRequest = 3
-	// config.Config.MaxRecordLength = 2
+	cfg.Config.ConcurrentOptimizationLevel = 0
+	cfg.Config.AsyncLevel = 1
+	cfg.Config.MaxOutstandingRequest = 5
+	// cfg.Config.MaxRecordLength = 2
 
 	measurement.InitMeasure()
 	measurement.EnableWarmUp(true)
@@ -110,11 +107,12 @@ func main() {
 	wl := createWorkload(wp)
 	client := generateClient(&wl, wp, dbType)
 
+	warmUpHttpClient()
 	displayBenchmarkInfo()
 
 	switch mode {
 	case "load":
-		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
+		cfg.Config.ConcurrentOptimizationLevel = cfg.DEFAULT
 		wp.DoBenchmark = false
 		fmt.Println("Start to load data")
 		client.RunLoad()
@@ -135,10 +133,25 @@ func displayBenchmarkInfo() {
 	fmt.Printf("Mode: %s\n", mode)
 	fmt.Printf("WorkloadType: %s\n", workloadType)
 	fmt.Printf("ThreadNum: %d\n", threadNum)
+	fmt.Printf("Remote Mode: %v\n", isRemote)
 	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\n",
-		config.Config.ConcurrentOptimizationLevel, config.Config.AsyncLevel,
-		config.Config.MaxOutstandingRequest)
+		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
+		cfg.Config.MaxOutstandingRequest)
 	fmt.Printf("-----------------\n")
+}
+
+func warmUpHttpClient() {
+	url := fmt.Sprintf("http://%s/ping", config.RemoteAddress)
+	for i := 0; i < 5; i++ {
+		resp, err := network.HttpClient.Get(url)
+		if err != nil {
+			fmt.Printf("Error when warming up http client: %v\n", err)
+		}
+		defer func() {
+			_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
+			_ = resp.Body.Close()
+		}()
+	}
 }
 
 func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
@@ -214,9 +227,31 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo-redis":
 		wp.DBName = "oreo-redis"
-		creator, err := OreoRedisCreator()
+		creator, err := OreoRedisCreator(isRemote)
 		if err != nil {
 			fmt.Printf("Error when creating oreo-redis client: %v\n", err)
+			return nil
+		}
+		creatorMap := map[string]ycsb.DBCreator{
+			dbName: creator,
+		}
+		c = client.NewClient(wl, wp, creatorMap)
+	case "oreo-mongo":
+		wp.DBName = "oreo-mongo"
+		creator, err := OreoMongoCreator()
+		if err != nil {
+			fmt.Printf("Error when creating oreo-mongo client: %v\n", err)
+			return nil
+		}
+		creatorMap := map[string]ycsb.DBCreator{
+			dbName: creator,
+		}
+		c = client.NewClient(wl, wp, creatorMap)
+	case "oreo-couch":
+		wp.DBName = "oreo-couch"
+		creator, err := OreoCouchCreator()
+		if err != nil {
+			fmt.Printf("Error when creating oreo-couch client: %v\n", err)
 			return nil
 		}
 		creatorMap := map[string]ycsb.DBCreator{
@@ -238,127 +273,4 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		panic("Unsupport db type")
 	}
 	return c
-}
-func RedisCreator() (ycsb.DBCreator, error) {
-	rdb1 := goredis.NewClient(&goredis.Options{
-		Addr:     RedisDBAddr,
-		Password: "@ljy123456",
-	})
-
-	rdb2 := goredis.NewClient(&goredis.Options{
-		Addr:     RedisDBAddr,
-		Password: "@ljy123456",
-	})
-
-	// try to warm up the connection
-	var wg sync.WaitGroup
-	for i := 1; i <= 15; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			rdb1.Get(context.Background(), "1")
-			rdb2.Get(context.Background(), "1")
-		}()
-	}
-	wg.Wait()
-
-	return &redis.RedisCreator{RdbList: []*goredis.Client{rdb1, rdb2}}, nil
-}
-
-func MongoCreator() (ycsb.DBCreator, error) {
-	clientOptions := options.Client().ApplyURI(MongoDBAddr)
-	clientOptions.SetAuth(options.Credential{
-		Username: "admin",
-		Password: "admin",
-	})
-	context1, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client, err := mongo.Connect(context1, clientOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	err = client.Ping(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return &mongoDB.MongoCreator{Client: client}, nil
-}
-
-func OreoRedisCreator() (ycsb.DBCreator, error) {
-	redisConn1 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
-		Address:  OreoRedisAddr,
-		Password: "@ljy123456",
-	})
-	redisConn2 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
-		Address:  OreoRedisAddr,
-		Password: "@ljy123456",
-	})
-	redisConn3 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
-		Address:  OreoRedisAddr,
-		Password: "@ljy123456",
-	})
-	redisConn4 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
-		Address:  OreoRedisAddr,
-		Password: "@ljy123456",
-	})
-
-	redisConn1.Connect()
-	redisConn2.Connect()
-	redisConn3.Connect()
-	redisConn4.Connect()
-	// try to warm up the connection
-	var wg sync.WaitGroup
-	for i := 1; i <= 30; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			redisConn1.Get("1")
-			redisConn2.Get("1")
-			redisConn3.Get("1")
-			redisConn4.Get("1")
-		}()
-	}
-	wg.Wait()
-	return &oreo.OreoRedisCreator{
-		ConnList: []*redisCo.RedisConnection{
-			redisConn1, redisConn2, redisConn3, redisConn4}}, nil
-}
-
-func OreoCreator() (ycsb.DBCreator, error) {
-	redisConn := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
-		Address: OreoRedisAddr,
-	})
-	mongoConn := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-		Address:        MongoDBAddr,
-		DBName:         "oreo",
-		CollectionName: "benchmark",
-		Username:       "admin",
-		Password:       "admin",
-	})
-	mongoConn.Connect()
-
-	// try to warm up the connection
-	var wg sync.WaitGroup
-	for i := 1; i <= 15; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			redisConn.Get("1")
-			mongoConn.Get("1")
-		}()
-	}
-	wg.Wait()
-
-	connMap := map[string]txn.Connector{
-		"redis": redisConn,
-		"mongo": mongoConn,
-	}
-	return &oreo.OreoCreator{
-		ConnMap:             connMap,
-		GlobalDatastoreName: "redis",
-	}, nil
 }

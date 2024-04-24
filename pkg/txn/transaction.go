@@ -60,6 +60,11 @@ type Transaction struct {
 	// isReadOnly indicates whether the transaction is read-only.
 	isReadOnly bool
 
+	// client is the network client used by the transaction.
+	client RemoteClient
+
+	isRemote bool
+
 	*StateMachine
 }
 
@@ -72,6 +77,19 @@ func NewTransaction() *Transaction {
 		locker:       locker.AMemoryLocker,
 		isReadOnly:   true,
 		StateMachine: NewStateMachine(),
+		isRemote:     false,
+	}
+}
+
+func NewTransactionWithRemote(client RemoteClient) *Transaction {
+	return &Transaction{
+		dataStoreMap: make(map[string]Datastorer),
+		timeSource:   LOCAL,
+		locker:       locker.AMemoryLocker,
+		isReadOnly:   true,
+		StateMachine: NewStateMachine(),
+		client:       client,
+		isRemote:     true,
 	}
 }
 
@@ -196,6 +214,12 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Finally, it deletes the transaction state record.
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
+
+	startTime := time.Now()
+	defer func() {
+		fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
+	}()
+
 	Log.Infow("Starts to txn.Commit()", "txnId", t.TxnId)
 	err := t.SetState(config.COMMITTED)
 	if err != nil {
@@ -207,7 +231,7 @@ func (t *Transaction) Commit() error {
 		return nil
 	}
 
-	// Prepare phase
+	// ------------------- Prepare phase ----------------------------
 	t.TxnCommitTime, err = t.getTime()
 	if err != nil {
 		return err
@@ -260,15 +284,16 @@ func (t *Transaction) Commit() error {
 
 	Log.Infow("finishes prepare phase", "txnId", t.TxnId)
 
-	// Commit phase
+	// ------------------- Commit phase ----------------------------
 	// The sync point
+	fmt.Printf("Before getting TSR latency: %v\n", time.Since(startTime))
 	txnState, err := t.GetTSRState(t.TxnId)
 	if err == nil && txnState == config.ABORTED {
 		Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
 		go t.Abort()
 		return errors.New("transaction is aborted by other transaction")
 	}
-
+	fmt.Printf("Before writing TSR latency: %v\n", time.Since(startTime))
 	Log.Infow("Writing TSR", "txnId", t.TxnId)
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
@@ -295,7 +320,7 @@ func (t *Transaction) Commit() error {
 		}()
 		return nil
 	}
-
+	fmt.Printf("Before commit ds latency: %v\n", time.Since(startTime))
 	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
@@ -307,6 +332,7 @@ func (t *Transaction) Commit() error {
 		}(ds)
 	}
 	wg.Wait()
+	fmt.Printf("After commit ds latency: %v\n", time.Since(startTime))
 
 	if config.Config.AsyncLevel == config.AsyncLevelOne {
 		go func() {
@@ -421,6 +447,30 @@ func (t *Transaction) Unlock(key string, id string) error {
 		return errors.New("locker not set")
 	}
 	return t.locker.Unlock(key, id)
+}
+
+func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, error) {
+	// TODO: Handle dsName
+	if !t.isRemote {
+		return nil, errors.New("not a remote transaction")
+	}
+	return t.client.Read(key, t.TxnStartTime)
+}
+
+func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem) (map[string]string, error) {
+	// TODO: Handle dsName
+	if !t.isRemote {
+		return nil, errors.New("not a remote transaction")
+	}
+	return t.client.Prepare(itemList, t.TxnStartTime, t.TxnCommitTime)
+}
+
+func (t *Transaction) RemoteCommit(dsName string, infoList []CommitInfo) error {
+	// TODO: Handle dsName
+	if !t.isRemote {
+		return errors.New("not a remote transaction")
+	}
+	return t.client.Commit(infoList)
 }
 
 func (t *Transaction) debug(topic testutil.TxnTopic, format string, a ...interface{}) {

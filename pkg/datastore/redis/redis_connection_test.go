@@ -312,6 +312,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 
 	t.Run("this is a update", func(t *testing.T) {
 		conn := NewRedisConnection(nil)
+		conn.Connect()
 
 		key := "test_key"
 		olderPerson := testutil.NewDefaultPerson()
@@ -353,6 +354,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 					globalId = id
 					resChan <- true
 				} else {
+					fmt.Printf("error: %v\n", err)
 					resChan <- false
 				}
 			}(i)
@@ -375,6 +377,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 
 	t.Run("this is a create", func(t *testing.T) {
 		conn := NewRedisConnection(nil)
+		conn.Connect()
 		key := "test_key"
 		conn.Delete(key)
 
@@ -499,7 +502,7 @@ func TestRedisConnectionGetNoExist(t *testing.T) {
 	conn.Delete(key)
 
 	_, err := conn.Get(key)
-	assert.EqualError(t, err, fmt.Sprintf("key not found"))
+	assert.EqualError(t, err, "key not found")
 }
 
 func TestRedisConnectionPutDirectItem(t *testing.T) {
@@ -603,5 +606,39 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, false)
 		assert.NoError(t, err)
 	})
+
+}
+
+func TestRedisConnectionConditionalCommit(t *testing.T) {
+
+	dbItem := &RedisItem{
+		RKey:       "item1",
+		RValue:     util.ToJSONString(testutil.NewTestItem("item1-db")),
+		RTxnId:     "1",
+		RTxnState:  config.COMMITTED,
+		RTValid:    time.Now().Add(-3 * time.Second),
+		RTLease:    time.Now().Add(-2 * time.Second),
+		RPrev:      "",
+		RIsDeleted: false,
+		RLinkedLen: 1,
+		RVersion:   "1",
+	}
+
+	conn := NewRedisConnection(nil)
+	conn.Connect()
+	conn.PutItem(dbItem.Key(), dbItem)
+
+	_, err := conn.ConditionalCommit(dbItem.Key(), dbItem.Version())
+	assert.NoError(t, err)
+
+	item, err := conn.GetItem(dbItem.Key())
+	assert.NoError(t, err)
+
+	dbItem.RVersion = util.AddToString(dbItem.RVersion, 1)
+	dbItem.RTxnState = config.COMMITTED
+
+	if !dbItem.Equal(item) {
+		t.Fail()
+	}
 
 }

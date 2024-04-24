@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/logger"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -23,12 +24,14 @@ type RedisConnection struct {
 	connected            bool
 	atomicCreateSHA      string
 	conditionalUpdateSHA string
+	conditionalCommitSHA string
 }
 
 type ConnectionOptions struct {
 	Address  string
 	Password string
 	se       serializer.Serializer
+	PoolSize int
 }
 
 const AtomicCreateScript = `
@@ -67,12 +70,25 @@ else
 end
 `
 
+const ConditionalCommitScript = `
+if redis.call('HGET', KEYS[1], 'Version') == ARGV[1] then
+	redis.call('HSET', KEYS[1], 'TxnState', ARGV[2])
+	redis.call('HSET', KEYS[1], 'Version', ARGV[3])
+	return redis.call('HGETALL', KEYS[1])
+else
+	return redis.error_reply('version mismatch')
+end
+`
+
 // NewRedisConnection creates a new Redis connection using the provided configuration options.
 // If the config parameter is nil, default values will be used.
+//
 // The Redis connection is established using the specified address and password.
 // The address format should be in the form "host:port".
+//
 // The se parameter is used for data serialization and deserialization.
 // If se is nil, a default JSON serializer will be used.
+//
 // Returns a pointer to the created RedisConnection.
 func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
 	if config == nil {
@@ -88,10 +104,15 @@ func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
 		config.se = serializer.NewJSONSerializer()
 	}
 
+	if config.PoolSize == 0 {
+		config.PoolSize = 60
+	}
+
 	return &RedisConnection{
 		rdb: redis.NewClient(&redis.Options{
 			Addr:     config.Address,
 			Password: config.Password,
+			PoolSize: config.PoolSize,
 		}),
 		Address: config.Address,
 		se:      config.se,
@@ -129,6 +150,15 @@ func (r *RedisConnection) Connect() error {
 			return err
 		}
 		r.conditionalUpdateSHA = sha
+		return nil
+	})
+
+	eg.Go(func() error {
+		sha, err := r.rdb.ScriptLoad(ctx, ConditionalCommitScript).Result()
+		if err != nil {
+			return err
+		}
+		r.conditionalCommitSHA = sha
 		return nil
 	})
 
@@ -212,6 +242,29 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		return "", err
 	}
 	return newVer, nil
+}
+
+// ConditionalCommit updates the txnState and version of a Redis item if the version matches the provided value.
+// It takes a key string and a version string as parameters.
+// If the item's version does not match, it returns a version mismatch error.
+// Otherwise, it updates the item with the provided values and returns the updated item.
+func (r *RedisConnection) ConditionalCommit(key string, version string) (string, error) {
+	logger.Log.Debugw("Start  ConditionalCommit", "key", key)
+	defer logger.Log.Debugw("End    ConditionalCommit", "key", key)
+
+	ctx := context.Background()
+	newVer := util.AddToString(version, 1)
+
+	_, err := r.rdb.EvalSha(ctx, r.conditionalCommitSHA,
+		[]string{key}, version, config.COMMITTED, newVer).Result()
+	if err != nil {
+		if err.Error() == "version mismatch" {
+			return "", errors.New(txn.VersionMismatch)
+		}
+		return "", err
+	}
+	return newVer, nil
+
 }
 
 // Get retrieves the value associated with the given key from the Redis database.
