@@ -1,9 +1,9 @@
 package client
 
 import (
+	"benchmark/pkg/errrecord"
 	"benchmark/ycsb"
 	"context"
-	"fmt"
 	"time"
 )
 
@@ -21,6 +21,7 @@ func (db *TxnDbWrapper) Start() (err error) {
 	start := time.Now()
 	defer func() {
 		measure(start, "Start", err)
+		errrecord.Record("Start", err)
 	}()
 	return db.DB.Start()
 }
@@ -28,11 +29,12 @@ func (db *TxnDbWrapper) Start() (err error) {
 func (db *TxnDbWrapper) Commit() (err error) {
 	start := time.Now()
 	defer func() {
-		if err != nil {
-			fmt.Println("Error in Commit(): ", err)
-		}
+		// if err != nil {
+		// 	fmt.Println("Error in Commit(): ", err)
+		// }
 		measure(start, "COMMIT", err)
 		measure(db.TxnStart, "TXN", err)
+		errrecord.Record("COMMIT", err)
 	}()
 	return db.DB.Commit()
 }
@@ -56,10 +58,11 @@ func (db *TxnDbWrapper) CleanupThread(ctx context.Context) {
 func (db *TxnDbWrapper) Read(ctx context.Context, table string, key string) (_ string, err error) {
 	start := time.Now()
 	defer func() {
-		if err != nil {
-			fmt.Println("Error in Read: ", err)
-		}
+		// if err != nil {
+		// 	fmt.Println("Error in Read: ", err)
+		// }
 		measure(start, "READ", err)
+		errrecord.Record("READ", err)
 	}()
 
 	return db.DB.Read(ctx, table, key)
@@ -96,6 +99,7 @@ func (db *TxnDbWrapper) Update(ctx context.Context, table string, key string, va
 	start := time.Now()
 	defer func() {
 		measure(start, "UPDATE", err)
+		errrecord.Record("UPDATE", err)
 	}()
 
 	return db.DB.Update(ctx, table, key, value)
@@ -123,6 +127,7 @@ func (db *TxnDbWrapper) Insert(ctx context.Context, table string, key string, va
 	start := time.Now()
 	defer func() {
 		measure(start, "INSERT", err)
+		errrecord.Record("INSERT", err)
 	}()
 
 	return db.DB.Insert(ctx, table, key, value)

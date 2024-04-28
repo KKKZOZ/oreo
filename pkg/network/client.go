@@ -17,9 +17,9 @@ var _ txn.RemoteClient = (*Client)(nil)
 
 var HttpClient = &http.Client{
 	Transport: &http.Transport{
-		MaxIdleConns:        600,
-		MaxIdleConnsPerHost: 300,
-		MaxConnsPerHost:     300,
+		MaxIdleConns:        2000,
+		MaxIdleConnsPerHost: 1000,
+		MaxConnsPerHost:     1000,
 	},
 }
 
