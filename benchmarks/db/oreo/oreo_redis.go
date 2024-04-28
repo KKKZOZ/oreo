@@ -1,11 +1,13 @@
 package oreo
 
 import (
+	"benchmark/pkg/config"
 	"benchmark/ycsb"
 	"context"
 	"sync"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
+	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
@@ -15,6 +17,7 @@ type OreoRedisCreator struct {
 	mu       sync.Mutex
 	ConnList []*redis.RedisConnection
 	next     int
+	IsRemote bool
 }
 
 func (rc *OreoRedisCreator) Create() (ycsb.DB, error) {
@@ -25,7 +28,7 @@ func (rc *OreoRedisCreator) Create() (ycsb.DB, error) {
 	if rc.next >= len(rc.ConnList) {
 		rc.next = 0
 	}
-	return NewRedisDatastore(conn), nil
+	return NewRedisDatastore(conn, rc.IsRemote), nil
 }
 
 var _ ycsb.DB = (*RedisDatastore)(nil)
@@ -33,23 +36,31 @@ var _ ycsb.DB = (*RedisDatastore)(nil)
 var _ ycsb.TransactionDB = (*RedisDatastore)(nil)
 
 type RedisDatastore struct {
-	conn *redis.RedisConnection
-	txn  *txn.Transaction
+	conn     *redis.RedisConnection
+	txn      *txn.Transaction
+	isRemote bool
 }
 
-func NewRedisDatastore(conn *redis.RedisConnection) *RedisDatastore {
+func NewRedisDatastore(conn *redis.RedisConnection, isRemote bool) *RedisDatastore {
 
 	return &RedisDatastore{
-		conn: conn,
+		conn:     conn,
+		isRemote: isRemote,
 	}
 }
 
 func (r *RedisDatastore) Start() error {
-	txn := txn.NewTransaction()
+	var txn1 *txn.Transaction
+	if r.isRemote {
+		client := network.NewClient(config.RemoteAddress)
+		txn1 = txn.NewTransactionWithRemote(client)
+	} else {
+		txn1 = txn.NewTransaction()
+	}
 	rds := redis.NewRedisDatastore("redis", r.conn)
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
-	r.txn = txn
+	txn1.AddDatastore(rds)
+	txn1.SetGlobalDatastore(rds)
+	r.txn = txn1
 	return r.txn.Start()
 }
 
@@ -95,8 +106,4 @@ func (r *RedisDatastore) Insert(ctx context.Context, table string, key string, v
 func (r *RedisDatastore) Delete(ctx context.Context, table string, key string) error {
 	keyName := getKeyName(table, key)
 	return r.txn.Delete("redis", keyName)
-}
-
-func getKeyName(table string, key string) string {
-	return table + "/" + key
 }

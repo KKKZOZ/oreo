@@ -530,7 +530,7 @@ func TestCouchDB_ConcurrentTransaction(t *testing.T) {
 	assert.NoError(t, err)
 
 	resChan := make(chan bool)
-	conNum := 10
+	conNum := 2001
 
 	conn := NewConnectionWithSetup(COUCHDB)
 
