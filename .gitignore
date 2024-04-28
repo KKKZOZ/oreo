@@ -9,8 +9,9 @@ cover.out
 cover.html
 coverage.out
 coverage.html
-
 .VSCodeCounter
-
 design-note.md
 trace.out
+
+/benchmarks/cmd/cmd
+/component/component

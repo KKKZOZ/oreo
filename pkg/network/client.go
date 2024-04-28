@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -19,8 +18,8 @@ var _ txn.RemoteClient = (*Client)(nil)
 var HttpClient = &http.Client{
 	Transport: &http.Transport{
 		MaxIdleConns:        600,
-		MaxIdleConnsPerHost: 120,
-		MaxConnsPerHost:     120,
+		MaxIdleConnsPerHost: 300,
+		MaxConnsPerHost:     300,
 	},
 }
 
@@ -36,10 +35,10 @@ func NewClient(serverAddr string) *Client {
 }
 
 func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
-	startTime := time.Now()
-	defer func() {
-		fmt.Printf("Read request latency: %v\n", time.Since(startTime))
-	}()
+	// startTime := time.Now()
+	// defer func() {
+	// 	fmt.Printf("Read request latency: %v\n", time.Since(startTime))
+	// }()
 
 	data := ReadRequest{
 		Key:       key,
@@ -80,10 +79,10 @@ func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
 
 func (c *Client) Prepare(itemList []txn.DataItem,
 	startTime time.Time, commitTime time.Time) (map[string]string, error) {
-	sTime := time.Now()
-	defer func() {
-		fmt.Printf("Prepare request latency: %v\n", time.Since(sTime))
-	}()
+	// sTime := time.Now()
+	// defer func() {
+	// 	fmt.Printf("Prepare request latency: %v\n", time.Since(sTime))
+	// }()
 
 	itemArr := make([]redis.RedisItem, 0)
 	for _, item := range itemList {
@@ -130,10 +129,10 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 }
 
 func (c *Client) Commit(infoList []txn.CommitInfo) error {
-	startTime := time.Now()
-	defer func() {
-		fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
-	}()
+	// startTime := time.Now()
+	// defer func() {
+	// 	fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
+	// }()
 
 	data := CommitRequest{
 		List: infoList,
@@ -141,6 +140,44 @@ func (c *Client) Commit(infoList []txn.CommitInfo) error {
 	json_data, _ := json.Marshal(data)
 
 	reqUrl := c.ServerAddr + "/commit"
+
+	// Create a new POST request
+	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))
+	if err != nil {
+		log.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := HttpClient.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var response Response[string]
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if response.Status == "OK" {
+		return nil
+	} else {
+		errMsg := response.ErrMsg
+		return errors.New(errMsg)
+	}
+}
+
+func (c *Client) Abort(keyList []string, txnId string) error {
+	data := AbortRequest{
+		KeyList: keyList,
+		TxnId:   txnId,
+	}
+	json_data, _ := json.Marshal(data)
+
+	reqUrl := c.ServerAddr + "/abort"
 
 	// Create a new POST request
 	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))

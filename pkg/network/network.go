@@ -33,3 +33,8 @@ type PrepareRequest struct {
 type CommitRequest struct {
 	List []txn.CommitInfo
 }
+
+type AbortRequest struct {
+	KeyList []string
+	TxnId   string
+}

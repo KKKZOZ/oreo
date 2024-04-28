@@ -589,6 +589,14 @@ func (r *Datastore) Abort(hasCommitted bool) error {
 		return nil
 	}
 
+	if r.Txn.isRemote {
+		keyList := make([]string, 0, len(r.writeCache))
+		for _, item := range r.writeCache {
+			keyList = append(keyList, item.Key())
+		}
+		return r.Txn.RemoteAbort(r.Name, keyList)
+	}
+
 	for _, v := range r.writeCache {
 		item, err := r.conn.GetItem(v.Key())
 		if err != nil {
