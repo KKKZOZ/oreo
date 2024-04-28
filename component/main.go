@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -47,7 +48,7 @@ func (s *Server) Run() {
 	address := fmt.Sprintf(":%d", s.port)
 	fmt.Println(banner)
 	Log.Infow("Server running", "address", address)
-	http.ListenAndServe(address, nil)
+	log.Fatalf("Server failed: %v", http.ListenAndServe(address, nil))
 }
 
 func (s *Server) pingHandler(w http.ResponseWriter, r *http.Request) {
@@ -197,12 +198,14 @@ func (s *Server) abortHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 var port = 8000
+var poolSize = 60
 
 var Log *zap.SugaredLogger
 
 func main() {
 
 	flag.IntVar(&port, "p", 8000, "Server Port")
+	flag.IntVar(&poolSize, "s", 60, "Pool Size")
 	flag.Parse()
 
 	newLogger()
@@ -211,6 +214,7 @@ func main() {
 	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address:  "localhost:6379",
 		Password: "@ljy123456",
+		PoolSize: poolSize,
 	})
 	server := NewServer(port, redisConn, &redis.RedisItemFactory{})
 	server.Run()
