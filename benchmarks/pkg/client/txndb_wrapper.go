@@ -28,6 +28,9 @@ func (db *TxnDbWrapper) Start() (err error) {
 func (db *TxnDbWrapper) Commit() (err error) {
 	start := time.Now()
 	defer func() {
+		if err != nil {
+			fmt.Println("Error in Commit(): ", err)
+		}
 		measure(start, "COMMIT", err)
 		measure(db.TxnStart, "TXN", err)
 	}()

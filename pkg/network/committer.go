@@ -36,8 +36,6 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 	var eg errgroup.Group
 	versionMap := make(map[string]string)
 
-	// fmt.Printf("itemList: %v\n", itemList)
-
 	for _, it := range itemList {
 		item := it
 		eg.Go(func() error {
@@ -47,19 +45,16 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 				doCreate = false
 			} else {
 				// else we do a txn Read to determine its version
-				// fmt.Println("Doing Txn Read")
 				dbItem, err := c.reader.Read(item.Key(), startTime)
 				if err != nil && err.Error() != "key not found" {
 					return err
 				}
-				// fmt.Printf("dbItem: %v\nerror: %v\n", dbItem, err)
 				if dbItem == nil {
 					doCreate = true
 				} else {
 					doCreate = false
 				}
 				item, _ = c.updateMetadata(item, dbItem, commitTime)
-				// fmt.Printf("The ready item: %v\n", item)
 			}
 			ver, err := c.conn.ConditionalUpdate(item.Key(), item, doCreate)
 			mu.Lock()
@@ -72,9 +67,27 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 	return versionMap, err
 }
 
-func (c *Committer) Commit(infoList []txn.CommitInfo) error {
-	// fmt.Printf("infoList: %v\n", infoList)
+func (c *Committer) Abort(keyList []string, txnId string) error {
+	var eg errgroup.Group
+	for _, k := range keyList {
+		key := k
+		eg.Go(func() error {
+			item, err := c.conn.GetItem(key)
+			if err != nil {
+				return err
+			}
+			if item.TxnId() == txnId {
+				_, err = c.rollback(item)
+				return err
+			} else {
+				return nil
+			}
+		})
+	}
+	return eg.Wait()
+}
 
+func (c *Committer) Commit(infoList []txn.CommitInfo) error {
 	var eg errgroup.Group
 	for _, info := range infoList {
 		item := info
@@ -178,4 +191,37 @@ func (c *Committer) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 		return nil, err
 	}
 	return preItem, nil
+}
+
+// rollback overwrites the record with the application data
+// and metadata that found in field Prev.
+// if the `Prev` is empty, it simply deletes the record
+func (c *Committer) rollback(item txn.DataItem) (txn.DataItem, error) {
+
+	if item.Prev() == "" {
+		item.SetIsDeleted(true)
+		item.SetTxnState(config.COMMITTED)
+		newVer, err := c.conn.ConditionalUpdate(item.Key(), item, false)
+		if err != nil {
+			return nil, errors.Join(errors.New("rollback failed"), err)
+		}
+		item.SetVersion(newVer)
+		return item, err
+	}
+
+	newItem, err := c.getPrevItem(item)
+	if err != nil {
+		return nil, errors.Join(errors.New("rollback failed"), err)
+	}
+	// try to rollback through ConditionalUpdate
+	newItem.SetVersion(item.Version())
+	newVer, err := c.conn.ConditionalUpdate(item.Key(), newItem, false)
+	// err = r.conn.PutItem(item.Key, newItem)
+	if err != nil {
+		return nil, errors.Join(errors.New("rollback failed"), err)
+	}
+	// update the version
+	newItem.SetVersion(newVer)
+
+	return newItem, err
 }

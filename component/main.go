@@ -39,16 +39,15 @@ func NewServer(port int, conn txn.Connector, factory txn.DataItemFactory) *Serve
 }
 
 func (s *Server) Run() {
-
 	http.HandleFunc("/ping", s.pingHandler)
 	http.HandleFunc("/read", s.readHandler)
 	http.HandleFunc("/prepare", s.prepareHandler)
 	http.HandleFunc("/commit", s.commitHandler)
+	http.HandleFunc("/abort", s.abortHandler)
 	address := fmt.Sprintf(":%d", s.port)
 	fmt.Println(banner)
 	Log.Infow("Server running", "address", address)
 	http.ListenAndServe(address, nil)
-
 }
 
 func (s *Server) pingHandler(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +70,6 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log.Infow("Read request", "key", req.Key, "start_time", req.StartTime)
-
 	item, err := s.reader.Read(req.Key, req.StartTime)
 
 	var response network.ReadResponse
@@ -153,6 +151,36 @@ func (s *Server) commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Log.Infow("Commit request", "item_list", req.List)
 	err = s.committer.Commit(req.List)
+	var resp network.Response[string]
+	if err != nil {
+		resp = network.Response[string]{
+			Status: "Error",
+			ErrMsg: err.Error(),
+		}
+	} else {
+		resp = network.Response[string]{
+			Status: "OK",
+		}
+	}
+	respBytes, _ := json.Marshal(resp)
+	w.Write(respBytes)
+}
+
+func (s *Server) abortHandler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	defer func() {
+		Log.Infow("Abort request", "latency", time.Since(startTime))
+	}()
+
+	body, _ := io.ReadAll(r.Body)
+	var req network.AbortRequest
+	err := json.Unmarshal(body, &req)
+	if err != nil {
+		http.Error(w, "Invalid request body.", http.StatusBadRequest)
+	}
+
+	// Log.Infow("Abort request", "key_list", req.KeyList, "txn_id", req.TxnId)
+	err = s.committer.Abort(req.KeyList, req.TxnId)
 	var resp network.Response[string]
 	if err != nil {
 		resp = network.Response[string]{

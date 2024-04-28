@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"runtime/trace"
+	"sync"
 
 	cfg "github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/network"
@@ -78,7 +79,7 @@ func main() {
 	// TODO: Read it from file
 	wp := &workload.WorkloadParameter{
 		RecordCount:               1000,
-		OperationCount:            5,
+		OperationCount:            100000,
 		TxnOperationGroup:         5,
 		ReadProportion:            0,
 		UpdateProportion:          0,
@@ -107,7 +108,10 @@ func main() {
 	wl := createWorkload(wp)
 	client := generateClient(&wl, wp, dbType)
 
-	warmUpHttpClient()
+	if isRemote {
+		cfg.Config.AsyncLevel = 2
+		warmUpHttpClient()
+	}
 	displayBenchmarkInfo()
 
 	switch mode {
@@ -142,16 +146,25 @@ func displayBenchmarkInfo() {
 
 func warmUpHttpClient() {
 	url := fmt.Sprintf("http://%s/ping", config.RemoteAddress)
-	for i := 0; i < 5; i++ {
-		resp, err := network.HttpClient.Get(url)
-		if err != nil {
-			fmt.Printf("Error when warming up http client: %v\n", err)
-		}
-		defer func() {
-			_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
-			_ = resp.Body.Close()
+	num := min(100, threadNum)
+
+	var wg sync.WaitGroup
+	wg.Add(num)
+
+	for i := 0; i < num; i++ {
+		go func() {
+			defer wg.Done()
+			resp, err := network.HttpClient.Get(url)
+			if err != nil {
+				fmt.Printf("Error when warming up http client: %v\n", err)
+			}
+			defer func() {
+				_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
+				_ = resp.Body.Close()
+			}()
 		}()
 	}
+	wg.Wait()
 }
 
 func createWorkload(wp *workload.WorkloadParameter) workload.Workload {

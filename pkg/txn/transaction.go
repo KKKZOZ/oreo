@@ -215,10 +215,10 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
 
-	startTime := time.Now()
-	defer func() {
-		fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
-	}()
+	// startTime := time.Now()
+	// defer func() {
+	// 	fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
+	// }()
 
 	Log.Infow("Starts to txn.Commit()", "txnId", t.TxnId)
 	err := t.SetState(config.COMMITTED)
@@ -286,14 +286,14 @@ func (t *Transaction) Commit() error {
 
 	// ------------------- Commit phase ----------------------------
 	// The sync point
-	fmt.Printf("Before getting TSR latency: %v\n", time.Since(startTime))
+	// fmt.Printf("Before getting TSR latency: %v\n", time.Since(startTime))
 	txnState, err := t.GetTSRState(t.TxnId)
 	if err == nil && txnState == config.ABORTED {
 		Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
 		go t.Abort()
 		return errors.New("transaction is aborted by other transaction")
 	}
-	fmt.Printf("Before writing TSR latency: %v\n", time.Since(startTime))
+	// fmt.Printf("Before writing TSR latency: %v\n", time.Since(startTime))
 	Log.Infow("Writing TSR", "txnId", t.TxnId)
 	err = t.WriteTSR(t.TxnId, config.COMMITTED)
 	if err != nil {
@@ -320,7 +320,7 @@ func (t *Transaction) Commit() error {
 		}()
 		return nil
 	}
-	fmt.Printf("Before commit ds latency: %v\n", time.Since(startTime))
+	// fmt.Printf("Before commit ds latency: %v\n", time.Since(startTime))
 	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
@@ -332,7 +332,7 @@ func (t *Transaction) Commit() error {
 		}(ds)
 	}
 	wg.Wait()
-	fmt.Printf("After commit ds latency: %v\n", time.Since(startTime))
+	// fmt.Printf("After commit ds latency: %v\n", time.Since(startTime))
 
 	if config.Config.AsyncLevel == config.AsyncLevelOne {
 		go func() {
@@ -471,6 +471,14 @@ func (t *Transaction) RemoteCommit(dsName string, infoList []CommitInfo) error {
 		return errors.New("not a remote transaction")
 	}
 	return t.client.Commit(infoList)
+}
+
+func (t *Transaction) RemoteAbort(dsName string, keyList []string) error {
+	// TODO: Handle dsName
+	if !t.isRemote {
+		return errors.New("not a remote transaction")
+	}
+	return t.client.Abort(keyList, t.TxnId)
 }
 
 func (t *Transaction) debug(topic testutil.TxnTopic, format string, a ...interface{}) {
