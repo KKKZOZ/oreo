@@ -140,6 +140,27 @@ func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, do
 	return newVer, nil
 }
 
+func (r *CouchDBConnection) ConditionalCommit(key string, version string) (string, error) {
+	if !r.hasConnected {
+		return "", fmt.Errorf("not connected to CouchDB")
+	}
+	var existing CouchDBItem
+	err := r.db.Get(context.Background(), key).ScanDoc(&existing)
+
+	if err != nil {
+		return "", errors.New(txn.VersionMismatch)
+	}
+
+	existing.SetTxnState(config.COMMITTED)
+	// Update the document
+	newVer, err := r.db.Put(context.Background(), key, existing)
+	if err != nil {
+		return "", txn.VersionMismatch
+	}
+
+	return newVer, nil
+}
+
 // Retrieve the value associated with the given key
 func (r *CouchDBConnection) Get(name string) (string, error) {
 	if !r.hasConnected {

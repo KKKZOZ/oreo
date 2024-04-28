@@ -3,6 +3,7 @@ package client
 import (
 	"benchmark/ycsb"
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -27,6 +28,9 @@ func (db *TxnDbWrapper) Start() (err error) {
 func (db *TxnDbWrapper) Commit() (err error) {
 	start := time.Now()
 	defer func() {
+		if err != nil {
+			fmt.Println("Error in Commit(): ", err)
+		}
 		measure(start, "COMMIT", err)
 		measure(db.TxnStart, "TXN", err)
 	}()
@@ -52,6 +56,9 @@ func (db *TxnDbWrapper) CleanupThread(ctx context.Context) {
 func (db *TxnDbWrapper) Read(ctx context.Context, table string, key string) (_ string, err error) {
 	start := time.Now()
 	defer func() {
+		if err != nil {
+			fmt.Println("Error in Read: ", err)
+		}
 		measure(start, "READ", err)
 	}()
 

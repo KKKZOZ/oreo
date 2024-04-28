@@ -10,7 +10,12 @@ import (
 
 type DataStoreType string
 
+type Mode string
+
 const (
+	REMOTE Mode = "remote"
+	LOCAL  Mode = "local"
+
 	MEMORY DataStoreType = "memory"
 
 	// DEFAULT sets the concurrent optimization level to 0, which means that
@@ -38,6 +43,11 @@ const (
 )
 
 type config struct {
+
+	// Mode specifies the mode of the transaction.
+	// It can be either REMOTE or LOCAL.
+	Mode Mode
+
 	// LeaseTime specifies the duration of time for which a record is leased.
 	LeaseTime time.Duration
 

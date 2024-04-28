@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -34,10 +35,13 @@ type ConnectionOptions struct {
 
 // NewMongoConnection creates a new MongoDB connection using the provided configuration options.
 // If the config parameter is nil, default values will be used.
+//
 // The MongoDB connection is established using the specified address, username, password, and database name.
 // The address format should be in the form "mongodb://host:port".
+//
 // The se parameter is used for data serialization and deserialization.
 // If se is nil, a default JSON serializer will be used.
+//
 // Returns a pointer to the created MongoConnection.
 func NewMongoConnection(config *ConnectionOptions) *MongoConnection {
 	if config == nil {
@@ -188,6 +192,42 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		return "", errors.New(txn.VersionMismatch)
 	}
 
+	return newVer, nil
+}
+
+// ConditionalCommit updates the txnState and version of a Mongo item if the version matches the provided value.
+// It takes a key string and a version string as parameters.
+// If the item's version does not match, it returns a version mismatch error.
+// Otherwise, it updates the item with the provided values and returns the updated item.
+func (m *MongoConnection) ConditionalCommit(key string, version string) (string, error) {
+	if !m.hasConnected {
+		return "", errors.Errorf("not connected to MongoDB")
+	}
+
+	newVer := util.AddToString(version, 1)
+
+	filter := bson.M{"_id": key, "Version": version}
+	update := bson.D{
+		{Key: "$set", Value: bson.D{
+			{Key: "TxnState", Value: config.COMMITTED},
+			{Key: "Version", Value: newVer},
+		}},
+	}
+	after := options.After
+	opts := &options.FindOneAndUpdateOptions{
+		ReturnDocument: &after,
+	}
+	var updatedItem MongoItem
+	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return "", errors.New(txn.VersionMismatch)
+		}
+		return "", err
+	}
+	if updatedItem.Version() != newVer {
+		return "", errors.New(txn.VersionMismatch)
+	}
 	return newVer, nil
 }
 
