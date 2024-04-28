@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/serializer"
@@ -199,6 +200,7 @@ func (s *Server) abortHandler(w http.ResponseWriter, r *http.Request) {
 
 var port = 8000
 var poolSize = 60
+var maxLen = 2
 
 var Log *zap.SugaredLogger
 
@@ -206,10 +208,11 @@ func main() {
 
 	flag.IntVar(&port, "p", 8000, "Server Port")
 	flag.IntVar(&poolSize, "s", 60, "Pool Size")
+	flag.IntVar(&maxLen, "m", 2, "Record Max Length")
 	flag.Parse()
 
 	newLogger()
-	// Log.Infow("Hello?")
+	config.Config.MaxRecordLength = maxLen
 
 	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address:  "localhost:6379",

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"benchmark/pkg/errrecord"
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
@@ -109,6 +110,7 @@ func (c *Client) RunBenchmark() {
 	fmt.Println("----------------------------------")
 	fmt.Printf("Run finished, takes %s\n", time.Since(start))
 	measurement.Output()
+	errrecord.Summary()
 
 	if !c.wl.NeedPostCheck() {
 		return

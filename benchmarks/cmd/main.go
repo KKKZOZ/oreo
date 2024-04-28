@@ -83,9 +83,9 @@ func main() {
 		TxnOperationGroup:         5,
 		ReadProportion:            0,
 		UpdateProportion:          0,
-		InsertProportion:          1.0,
+		InsertProportion:          0,
 		ScanProportion:            0,
-		ReadModifyWriteProportion: 0,
+		ReadModifyWriteProportion: 1.0,
 
 		InitialAmountPerKey:   1000,
 		TransferAmountPerTxn:  5,
@@ -99,7 +99,7 @@ func main() {
 	cfg.Config.ConcurrentOptimizationLevel = 0
 	cfg.Config.AsyncLevel = 1
 	cfg.Config.MaxOutstandingRequest = 5
-	// cfg.Config.MaxRecordLength = 2
+	cfg.Config.MaxRecordLength = 5
 
 	measurement.InitMeasure()
 	measurement.EnableWarmUp(true)
@@ -138,9 +138,9 @@ func displayBenchmarkInfo() {
 	fmt.Printf("WorkloadType: %s\n", workloadType)
 	fmt.Printf("ThreadNum: %d\n", threadNum)
 	fmt.Printf("Remote Mode: %v\n", isRemote)
-	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\n",
+	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
 		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
-		cfg.Config.MaxOutstandingRequest)
+		cfg.Config.MaxOutstandingRequest, cfg.Config.MaxRecordLength)
 	fmt.Printf("-----------------\n")
 }
 
