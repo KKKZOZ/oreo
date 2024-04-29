@@ -28,7 +28,7 @@ func NewReader(conn txn.Connector, itemFactory txn.DataItemFactory, se serialize
 // If the record is marked as IsDeleted, this function will return it.
 //
 // Let the upper layer decide what to do with it
-func (r *Reader) Read(key string, ts time.Time) (txn.DataItem, error) {
+func (r *Reader) Read(key string, ts time.Time, isRemoteCall bool) (txn.DataItem, error) {
 	item, err := r.conn.GetItem(key)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func (r *Reader) Read(key string, ts time.Time) (txn.DataItem, error) {
 		if !isFound {
 			return nil, errors.New("key not found")
 		}
-		if config.Config.MaxRecordLength > 2 {
+		if isRemoteCall && config.Config.MaxRecordLength > 2 {
 			curItem.SetPrev("")
 			curItem.SetVersion("")
 		}

@@ -72,7 +72,7 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log.Infow("Read request", "key", req.Key, "start_time", req.StartTime)
-	item, err := s.reader.Read(req.Key, req.StartTime)
+	item, err := s.reader.Read(req.Key, req.StartTime, true)
 
 	var response network.ReadResponse
 	if err != nil {
@@ -215,7 +215,7 @@ func main() {
 	config.Config.MaxRecordLength = maxLen
 
 	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address:  "localhost:6379",
+		Address:  "localhost:6380",
 		Password: "@ljy123456",
 		PoolSize: poolSize,
 	})
