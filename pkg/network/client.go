@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -98,6 +99,8 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 		CommitTime: commitTime,
 	}
 	json_data, _ := json.Marshal(data)
+
+	fmt.Printf("Prepare request: %v\n", data)
 
 	reqUrl := c.ServerAddr + "/prepare"
 	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))

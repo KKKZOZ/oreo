@@ -79,7 +79,7 @@ func main() {
 	// TODO: Read it from file
 	wp := &workload.WorkloadParameter{
 		RecordCount:               1000,
-		OperationCount:            10000,
+		OperationCount:            5,
 		TxnOperationGroup:         5,
 		ReadProportion:            0,
 		UpdateProportion:          0,

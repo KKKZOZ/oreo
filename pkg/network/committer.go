@@ -45,7 +45,7 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 				doCreate = false
 			} else {
 				// else we do a txn Read to determine its version
-				dbItem, err := c.reader.Read(item.Key(), startTime)
+				dbItem, err := c.reader.Read(item.Key(), startTime, false)
 				if err != nil && err.Error() != "key not found" {
 					return err
 				}
