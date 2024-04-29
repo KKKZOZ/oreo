@@ -477,7 +477,6 @@ func (r *Datastore) Prepare() error {
 	}
 
 	if r.Txn.isRemote {
-
 		// for those whose version is clear, update their metadata
 		for _, item := range items {
 			if item.Version() != "" {

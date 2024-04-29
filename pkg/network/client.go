@@ -17,7 +17,7 @@ var _ txn.RemoteClient = (*Client)(nil)
 
 var HttpClient = &http.Client{
 	Transport: &http.Transport{
-		MaxIdleConns:        2000,
+		MaxIdleConns:        6000,
 		MaxIdleConnsPerHost: 1000,
 		MaxConnsPerHost:     1000,
 	},
@@ -118,7 +118,7 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 	var response Response[map[string]string]
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Prepare call resp Unmarshal error: %v\nbody: %v", err, string(body))
 	}
 	if response.Status == "OK" {
 		return response.Data, nil
@@ -160,7 +160,7 @@ func (c *Client) Commit(infoList []txn.CommitInfo) error {
 	var response Response[string]
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Commit call resp Unmarshal error: %v\nbody: %v", err, string(body))
 	}
 	if response.Status == "OK" {
 		return nil
@@ -198,7 +198,7 @@ func (c *Client) Abort(keyList []string, txnId string) error {
 	var response Response[string]
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Abort call resp Unmarshal error: %v\nbody: %v", err, string(body))
 	}
 	if response.Status == "OK" {
 		return nil
