@@ -78,7 +78,7 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response = network.ReadResponse{
 			Status: "Error",
-			ErrMsg: "key not found",
+			ErrMsg: err.Error(),
 		}
 	} else {
 		redisItem, ok := item.(*redis.RedisItem)
