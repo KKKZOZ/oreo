@@ -34,8 +34,6 @@ func (r *Reader) Read(key string, ts time.Time) (txn.DataItem, error) {
 		return nil, err
 	}
 
-	// fmt.Printf("Before visCheck: %v\n", item)
-
 	resItem, err := r.basicVisibilityProcessor(item, ts)
 	if err != nil {
 		return nil, err
@@ -44,9 +42,12 @@ func (r *Reader) Read(key string, ts time.Time) (txn.DataItem, error) {
 		if !isFound {
 			return nil, errors.New("key not found")
 		}
+		if config.Config.MaxRecordLength > 2 {
+			curItem.SetPrev("")
+			curItem.SetVersion("")
+		}
 		return curItem, nil
 	}
-
 	return r.treatAsCommitted(resItem, ts, logicFunc)
 }
 

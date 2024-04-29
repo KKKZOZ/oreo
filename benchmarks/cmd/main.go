@@ -99,7 +99,7 @@ func main() {
 	cfg.Config.ConcurrentOptimizationLevel = 0
 	cfg.Config.AsyncLevel = 1
 	cfg.Config.MaxOutstandingRequest = 5
-	cfg.Config.MaxRecordLength = 5
+	cfg.Config.MaxRecordLength = 2
 
 	measurement.InitMeasure()
 	measurement.EnableWarmUp(true)
@@ -146,7 +146,7 @@ func displayBenchmarkInfo() {
 
 func warmUpHttpClient() {
 	url := fmt.Sprintf("http://%s/ping", config.RemoteAddress)
-	num := min(100, threadNum)
+	num := min(300, threadNum)
 
 	var wg sync.WaitGroup
 	wg.Add(num)
