@@ -65,6 +65,7 @@ func OreoRedisCreator(isRemote bool) (ycsb.DBCreator, error) {
 	redisConn1 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
 		Address:  OreoRedisAddr,
 		Password: "@ljy123456",
+		PoolSize: 100,
 	})
 
 	redisConn1.Connect()

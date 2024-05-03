@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
@@ -35,10 +36,10 @@ func NewClient(serverAddr string) *Client {
 }
 
 func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
-	// startTime := time.Now()
-	// defer func() {
-	// 	fmt.Printf("Read request latency: %v\n", time.Since(startTime))
-	// }()
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.AdditionalLatency)
+	}
 
 	data := ReadRequest{
 		Key:       key,
@@ -79,10 +80,9 @@ func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
 
 func (c *Client) Prepare(itemList []txn.DataItem,
 	startTime time.Time, commitTime time.Time) (map[string]string, error) {
-	// sTime := time.Now()
-	// defer func() {
-	// 	fmt.Printf("Prepare request latency: %v\n", time.Since(sTime))
-	// }()
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.AdditionalLatency)
+	}
 
 	itemArr := make([]redis.RedisItem, 0)
 	for _, item := range itemList {
@@ -131,10 +131,10 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 }
 
 func (c *Client) Commit(infoList []txn.CommitInfo) error {
-	// startTime := time.Now()
-	// defer func() {
-	// 	fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
-	// }()
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.AdditionalLatency)
+	}
 
 	data := CommitRequest{
 		List: infoList,
@@ -173,6 +173,11 @@ func (c *Client) Commit(infoList []txn.CommitInfo) error {
 }
 
 func (c *Client) Abort(keyList []string, txnId string) error {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.AdditionalLatency)
+	}
+
 	data := AbortRequest{
 		KeyList: keyList,
 		TxnId:   txnId,

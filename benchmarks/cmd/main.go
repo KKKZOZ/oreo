@@ -12,6 +12,7 @@ import (
 	"os"
 	"runtime/trace"
 	"sync"
+	"time"
 
 	cfg "github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/network"
@@ -78,9 +79,9 @@ func main() {
 
 	// TODO: Read it from file
 	wp := &workload.WorkloadParameter{
-		RecordCount:               1000,
-		OperationCount:            5000,
-		TxnOperationGroup:         5,
+		RecordCount:               10000,
+		OperationCount:            10000,
+		TxnOperationGroup:         4,
 		ReadProportion:            0,
 		UpdateProportion:          0,
 		InsertProportion:          0,
@@ -95,6 +96,9 @@ func main() {
 		MongoProportion: 0.5,
 	}
 	wp.TotalAmount = wp.InitialAmountPerKey * wp.RecordCount
+
+	cfg.Debug.DebugMode = true
+	cfg.Debug.AdditionalLatency = 140 * time.Millisecond
 
 	cfg.Config.ConcurrentOptimizationLevel = 0
 	cfg.Config.AsyncLevel = 1
@@ -141,6 +145,7 @@ func displayBenchmarkInfo() {
 	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
 		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
 		cfg.Config.MaxOutstandingRequest, cfg.Config.MaxRecordLength)
+	fmt.Printf("AdditionalLatency: %v\n", cfg.Debug.AdditionalLatency)
 	fmt.Printf("-----------------\n")
 }
 
