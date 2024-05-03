@@ -42,6 +42,13 @@ const (
 	AsyncLevelTwo int = 2
 )
 
+type debug struct {
+	// DebugMode specifies whether to enable debug mode
+	DebugMode bool
+
+	AdditionalLatency time.Duration
+}
+
 type config struct {
 
 	// Mode specifies the mode of the transaction.
@@ -83,6 +90,11 @@ var Config = config{
 	ConcurrentOptimizationLevel: DEFAULT,
 	AsyncLevel:                  AsyncLevelZero,
 	MaxOutstandingRequest:       5,
+}
+
+var Debug = debug{
+	DebugMode:         false,
+	AdditionalLatency: 0,
 }
 
 type State int
