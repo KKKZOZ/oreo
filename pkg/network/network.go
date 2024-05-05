@@ -22,12 +22,14 @@ type ReadResponse struct {
 type ReadRequest struct {
 	Key       string
 	StartTime time.Time
+	Config    txn.RecordConfig
 }
 
 type PrepareRequest struct {
 	ItemList   []redis.RedisItem
 	StartTime  time.Time
 	CommitTime time.Time
+	Config     txn.RecordConfig
 }
 
 type CommitRequest struct {

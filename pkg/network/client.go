@@ -35,7 +35,7 @@ func NewClient(serverAddr string) *Client {
 	}
 }
 
-func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
+func (c *Client) Read(key string, ts time.Time, cfg txn.RecordConfig) (txn.DataItem, error) {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.AdditionalLatency)
@@ -44,6 +44,7 @@ func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
 	data := ReadRequest{
 		Key:       key,
 		StartTime: ts,
+		Config:    cfg,
 	}
 	json_data, _ := json.Marshal(data)
 
@@ -79,7 +80,7 @@ func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
 }
 
 func (c *Client) Prepare(itemList []txn.DataItem,
-	startTime time.Time, commitTime time.Time) (map[string]string, error) {
+	startTime time.Time, commitTime time.Time, cfg txn.RecordConfig) (map[string]string, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.AdditionalLatency)
 	}
@@ -96,6 +97,7 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 		ItemList:   itemArr,
 		StartTime:  startTime,
 		CommitTime: commitTime,
+		Config:     cfg,
 	}
 	json_data, _ := json.Marshal(data)
 

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/serializer"
@@ -72,7 +71,7 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log.Infow("Read request", "key", req.Key, "start_time", req.StartTime)
-	item, err := s.reader.Read(req.Key, req.StartTime, true)
+	item, err := s.reader.Read(req.Key, req.StartTime, req.Config, true)
 
 	var response network.ReadResponse
 	if err != nil {
@@ -121,7 +120,8 @@ func (s *Server) prepareHandler(w http.ResponseWriter, r *http.Request) {
 	// Log.Infow("Prepare request", "item_list", itemList, "start_time",
 	// 	req.StartTime, "commit_time", req.CommitTime)
 
-	verMap, err := s.committer.Prepare(itemList, req.StartTime, req.CommitTime)
+	verMap, err := s.committer.Prepare(itemList, req.StartTime,
+		req.CommitTime, req.Config)
 	var resp network.Response[map[string]string]
 	if err != nil {
 		resp = network.Response[map[string]string]{
@@ -151,7 +151,6 @@ func (s *Server) commitHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body.", http.StatusBadRequest)
 	}
 
-	// Log.Infow("Commit request", "item_list", req.List)
 	err = s.committer.Commit(req.List)
 	var resp network.Response[string]
 	if err != nil {
@@ -181,7 +180,6 @@ func (s *Server) abortHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body.", http.StatusBadRequest)
 	}
 
-	// Log.Infow("Abort request", "key_list", req.KeyList, "txn_id", req.TxnId)
 	err = s.committer.Abort(req.KeyList, req.TxnId)
 	var resp network.Response[string]
 	if err != nil {
@@ -200,7 +198,6 @@ func (s *Server) abortHandler(w http.ResponseWriter, r *http.Request) {
 
 var port = 8000
 var poolSize = 60
-var maxLen = 2
 
 var Log *zap.SugaredLogger
 
@@ -208,14 +205,11 @@ func main() {
 
 	flag.IntVar(&port, "p", 8000, "Server Port")
 	flag.IntVar(&poolSize, "s", 60, "Pool Size")
-	flag.IntVar(&maxLen, "m", 2, "Record Max Length")
 	flag.Parse()
-
 	newLogger()
-	config.Config.MaxRecordLength = maxLen
 
 	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address:  "localhost:6380",
+		Address:  "localhost:6379",
 		Password: "@ljy123456",
 		PoolSize: poolSize,
 	})
@@ -227,7 +221,7 @@ func newLogger() {
 	conf := zap.NewDevelopmentConfig()
 	conf.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	conf.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
+	conf.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	conf.EncoderConfig.MessageKey = "msg"
 	logger, _ := conf.Build()
 	Log = logger.Sugar()

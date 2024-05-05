@@ -26,6 +26,7 @@ var (
 	DirtyRead        = errors.Errorf("dirty read")
 	DeserializeError = errors.Errorf("deserialize error")
 	VersionMismatch  = errors.Errorf("version mismatch")
+	ReadFailed       = errors.Errorf("read failed due to unknown txn status")
 )
 
 const (
@@ -454,7 +455,9 @@ func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, error) {
 	if !t.isRemote {
 		return nil, errors.New("not a remote transaction")
 	}
-	return t.client.Read(key, t.TxnStartTime)
+	return t.client.Read(key, t.TxnStartTime, RecordConfig{
+		MaxRecordLen: config.Config.MaxRecordLength,
+	})
 }
 
 func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem) (map[string]string, error) {
@@ -462,7 +465,9 @@ func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem) (map[str
 	if !t.isRemote {
 		return nil, errors.New("not a remote transaction")
 	}
-	return t.client.Prepare(itemList, t.TxnStartTime, t.TxnCommitTime)
+	return t.client.Prepare(itemList, t.TxnStartTime, t.TxnCommitTime, RecordConfig{
+		MaxRecordLen: config.Config.MaxRecordLength,
+	})
 }
 
 func (t *Transaction) RemoteCommit(dsName string, infoList []CommitInfo) error {

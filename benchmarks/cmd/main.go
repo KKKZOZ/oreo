@@ -43,6 +43,7 @@ var workloadType = ""
 var threadNum = 1
 var traceFlag = false
 var isRemote = false
+var preset = ""
 
 // fmt.Println("Usage: main [DBType] [load|run] [ThreadNum] [TestTypeFlag]")
 func main() {
@@ -53,6 +54,7 @@ func main() {
 	flag.IntVar(&threadNum, "t", 1, "Thread number")
 	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
 	flag.BoolVar(&isRemote, "remote", false, "Run in remote mode (for Oreo series)")
+	flag.StringVar(&preset, "ps", "", "Preset configuration for evaluation")
 	flag.Parse()
 
 	if *help {
@@ -81,12 +83,13 @@ func main() {
 	wp := &workload.WorkloadParameter{
 		RecordCount:               10000,
 		OperationCount:            10000,
-		TxnOperationGroup:         4,
+		TxnOperationGroup:         5,
 		ReadProportion:            0,
 		UpdateProportion:          0,
 		InsertProportion:          0,
 		ScanProportion:            0,
 		ReadModifyWriteProportion: 1.0,
+		DoubleSeqCommitProportion: 0,
 
 		InitialAmountPerKey:   1000,
 		TransferAmountPerTxn:  5,
@@ -97,11 +100,21 @@ func main() {
 	}
 	wp.TotalAmount = wp.InitialAmountPerKey * wp.RecordCount
 
-	cfg.Debug.DebugMode = true
-	cfg.Debug.AdditionalLatency = 140 * time.Millisecond
+	switch preset {
+	case "cg":
+		cfg.Debug.DebugMode = true
+		cfg.Debug.AdditionalLatency = 0 * time.Millisecond
+		cfg.Config.ConcurrentOptimizationLevel = 0
+		cfg.Config.AsyncLevel = 1
 
-	cfg.Config.ConcurrentOptimizationLevel = 0
-	cfg.Config.AsyncLevel = 1
+	default:
+		cfg.Debug.DebugMode = false
+		cfg.Debug.AdditionalLatency = 0 * time.Millisecond
+		cfg.Config.ConcurrentOptimizationLevel = 1
+		cfg.Config.AsyncLevel = 2
+
+	}
+
 	cfg.Config.MaxOutstandingRequest = 5
 	cfg.Config.MaxRecordLength = 2
 
@@ -177,6 +190,7 @@ func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
 		switch workloadType {
 		case "ycsb":
 			fmt.Println("This is a YCSB benchmark")
+			wp.WorkloadName = "ycsb"
 			return workload.NewYCSBWorkload(wp)
 		case "dc":
 			fmt.Println("This is a data consistency test")

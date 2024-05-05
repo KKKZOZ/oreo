@@ -13,6 +13,7 @@ const (
 	insert
 	scan
 	readModifyWrite
+	doubleSeqCommit
 )
 
 type datastoreType int64

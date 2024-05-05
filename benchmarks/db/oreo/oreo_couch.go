@@ -61,6 +61,11 @@ func (r *CouchDatastore) Abort() error {
 	return r.txn.Abort()
 }
 
+func (r *CouchDatastore) NewTransaction() ycsb.TransactionDB {
+	rds := NewCouchDatastore(r.conn)
+	return rds
+}
+
 func (r *CouchDatastore) Close() error {
 	return nil
 }
