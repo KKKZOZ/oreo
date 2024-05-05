@@ -1,8 +1,9 @@
 package workload
 
 type WorkloadParameter struct {
-	DBName    string
-	TableName string
+	DBName       string
+	TableName    string
+	WorkloadName string
 
 	ThreadCount int
 	DoBenchmark bool
@@ -16,6 +17,7 @@ type WorkloadParameter struct {
 	InsertProportion          float64
 	ScanProportion            float64
 	ReadModifyWriteProportion float64
+	DoubleSeqCommitProportion float64
 
 	// These parameters are for the data consistency test
 	InitialAmountPerKey   int

@@ -208,6 +208,7 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		}
 		// if TSR does not exist
 		// and if t_lease has expired
+		// that is, item's TLease < txn's TStart
 		// we should roll back the record
 		if item.TLease().Before(r.Txn.TxnStartTime) {
 			// the corresponding transaction is considered ABORTED
@@ -218,23 +219,33 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 			}
 			return rollbackFunc()
 		}
-		// the corresponding transaction is running,
-		// we should try previous record instead of raising an error
 
-		// a little trick here:
-		// if the record is not found in the treatAsCommitted,
-		// we should add it to the invisibleSet.
-		// if the record can be found in the treatAsCommitted,
-		// it will be stored in the readCache,
-		// so we don't bother dirtyReadChecker anymore.
-		r.invisibleSet[item.Key()] = true
-		// if prev is empty
-		if item.Prev() == "" {
-			return nil, errors.New(KeyNotFound)
+		// if TSR does not exist
+		// and if the corresponding transaction is a concurrent transaction
+		// that is, txn's TStart < item's TValid < item's TLease
+		// we should try check the previous record
+		if r.Txn.TxnStartTime.Before(item.TValid()) {
+
+			// Origin Cherry Garcia would do
+			if config.Debug.CherryGarciaMode {
+				return nil, errors.New(ReadFailed)
+			}
+
+			// a little trick here:
+			// if the record is not found in the treatAsCommitted,
+			// we should add it to the invisibleSet.
+			// if the record can be found in the treatAsCommitted,
+			// it will be stored in the readCache,
+			// so we don't bother dirtyReadChecker anymore.
+			r.invisibleSet[item.Key()] = true
+			// if prev is empty
+			if item.Prev() == "" {
+				return nil, errors.New(KeyNotFound)
+			}
+			return r.getPrevItem(item)
 		}
 
-		return r.getPrevItem(item)
-		// return DataItem{}, DirtyRead
+		return nil, errors.New(ReadFailed)
 	}
 	return nil, errors.New(KeyNotFound)
 }

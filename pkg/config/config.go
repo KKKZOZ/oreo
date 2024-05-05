@@ -46,6 +46,8 @@ type debug struct {
 	// DebugMode specifies whether to enable debug mode
 	DebugMode bool
 
+	CherryGarciaMode bool
+
 	AdditionalLatency time.Duration
 }
 
@@ -94,6 +96,7 @@ var Config = config{
 
 var Debug = debug{
 	DebugMode:         false,
+	CherryGarciaMode:  false,
 	AdditionalLatency: 0,
 }
 

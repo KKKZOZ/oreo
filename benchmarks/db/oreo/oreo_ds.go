@@ -72,6 +72,10 @@ func (r *OreoDatastore) Abort() error {
 	return r.txn.Abort()
 }
 
+func (r *OreoDatastore) NewTransaction() ycsb.TransactionDB {
+	panic("implement me")
+}
+
 func (r *OreoDatastore) Close() error {
 	return nil
 }

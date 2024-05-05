@@ -52,6 +52,7 @@ func createOperationGenerator(wp *WorkloadParameter) *generator.Discrete {
 	insertProportion := wp.InsertProportion
 	scanProportion := wp.ScanProportion
 	readModifyWriteProportion := wp.ReadModifyWriteProportion
+	doubleSeqCommitProportion := wp.DoubleSeqCommitProportion
 
 	operationChooser := generator.NewDiscrete()
 	if readProportion > 0 {
@@ -72,6 +73,10 @@ func createOperationGenerator(wp *WorkloadParameter) *generator.Discrete {
 
 	if readModifyWriteProportion > 0 {
 		operationChooser.Add(readModifyWriteProportion, int64(readModifyWrite))
+	}
+
+	if doubleSeqCommitProportion > 0 {
+		operationChooser.Add(doubleSeqCommitProportion, int64(doubleSeqCommit))
 	}
 
 	return operationChooser

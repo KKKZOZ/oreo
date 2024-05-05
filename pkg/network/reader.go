@@ -10,6 +10,10 @@ import (
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
+const (
+	ReadFailed = "read failed due to unknown txn status"
+)
+
 type Reader struct {
 	conn        txn.Connector
 	itemFactory txn.DataItemFactory
@@ -28,7 +32,7 @@ func NewReader(conn txn.Connector, itemFactory txn.DataItemFactory, se serialize
 // If the record is marked as IsDeleted, this function will return it.
 //
 // Let the upper layer decide what to do with it
-func (r *Reader) Read(key string, ts time.Time, isRemoteCall bool) (txn.DataItem, error) {
+func (r *Reader) Read(key string, ts time.Time, cfg txn.RecordConfig, isRemoteCall bool) (txn.DataItem, error) {
 	item, err := r.conn.GetItem(key)
 	if err != nil {
 		return nil, err
@@ -42,13 +46,13 @@ func (r *Reader) Read(key string, ts time.Time, isRemoteCall bool) (txn.DataItem
 		if !isFound {
 			return nil, errors.New("key not found")
 		}
-		if isRemoteCall && config.Config.MaxRecordLength > 2 {
+		if isRemoteCall && cfg.MaxRecordLen > 2 {
 			curItem.SetPrev("")
 			curItem.SetVersion("")
 		}
 		return curItem, nil
 	}
-	return r.treatAsCommitted(resItem, ts, logicFunc)
+	return r.treatAsCommitted(resItem, ts, logicFunc, cfg)
 }
 
 // basicVisibilityProcessor performs basic visibility processing on a DataItem.
@@ -106,23 +110,35 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem, startTime time.Time
 			}
 			return rollbackFunc()
 		}
-		// the corresponding transaction is running,
-		// we should try previous record instead of raising an error
+		// if TSR does not exist
+		// and if the corresponding transaction is a concurrent transaction
+		// that is, txn's TStart < item's TValid < item's TLease
+		// we should try check the previous record
+		if startTime.Before(item.TValid()) {
 
-		// a little trick here:
-		// if the record is not found in the treatAsCommitted,
-		// we should add it to the invisibleSet.
-		// if the record can be found in the treatAsCommitted,
-		// it will be stored in the readCache,
-		// so we don't bother dirtyReadChecker anymore.
-		// r.invisibleSet[item.Key()] = true
-		// if prev is empty
-		if item.Prev() == "" {
-			return nil, errors.New("key not found")
+			// Origin Cherry Garcia would do
+			if config.Debug.CherryGarciaMode {
+				return nil, errors.New(ReadFailed)
+			}
+
+			// a little trick here:
+			// if the record is not found in the treatAsCommitted,
+			// we should add it to the invisibleSet.
+			// if the record can be found in the treatAsCommitted,
+			// it will be stored in the readCache,
+			// so we don't bother dirtyReadChecker anymore.
+
+			// r.invisibleSet[item.Key()] = true
+
+			// if prev is empty
+			if item.Prev() == "" {
+				return nil, errors.New("key not found")
+			}
+			return r.getPrevItem(item)
 		}
 
-		return r.getPrevItem(item)
-		// return DataItem{}, DirtyRead
+		return nil, errors.New(ReadFailed)
+
 	}
 	return nil, errors.New("key not found")
 }
@@ -198,16 +214,17 @@ func (r *Reader) writeTSR(txnId string, txnState config.State) error {
 // treatAsCommitted treats a DataItem as committed, finds a corresponding version
 // according to its timestamp, and performs the given logic function on it.
 func (r *Reader) treatAsCommitted(item txn.DataItem,
-	startTime time.Time, logicFunc func(txn.DataItem, bool) (txn.DataItem, error)) (txn.DataItem, error) {
+	startTime time.Time, logicFunc func(txn.DataItem, bool) (txn.DataItem, error),
+	cfg txn.RecordConfig) (txn.DataItem, error) {
 	curItem := item
-	for i := 1; i <= config.Config.MaxRecordLength; i++ {
+	for i := 1; i <= cfg.MaxRecordLen; i++ {
 
 		if curItem.TValid().Before(startTime) {
 			// find the corresponding version,
 			// do some business logic.
 			return logicFunc(curItem, true)
 		}
-		if i == config.Config.MaxRecordLength {
+		if i == cfg.MaxRecordLen {
 			break
 		}
 		// if prev is empty

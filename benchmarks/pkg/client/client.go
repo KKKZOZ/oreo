@@ -112,6 +112,11 @@ func (c *Client) RunBenchmark() {
 	measurement.Output()
 	errrecord.Summary()
 
+	// if c.wp.WorkloadName == "ycsb" {
+	// 	fmt.Printf("Check record distribution\n")
+	// 	c.wl.DisplayCheckResult()
+	// }
+
 	if !c.wl.NeedPostCheck() {
 		return
 	}

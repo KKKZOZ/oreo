@@ -4,11 +4,16 @@ import (
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"sort"
+	"sync"
 )
 
 type YCSBWorkload struct {
 	Randomizer
 	wp *WorkloadParameter
+
+	mu        sync.Mutex
+	recordMap map[string]int
 }
 
 var _ Workload = (*YCSBWorkload)(nil)
@@ -18,6 +23,7 @@ func NewYCSBWorkload(wp *WorkloadParameter) *YCSBWorkload {
 	return &YCSBWorkload{
 		Randomizer: *NewRandomizer(wp),
 		wp:         wp,
+		recordMap:  make(map[string]int),
 	}
 }
 
@@ -73,8 +79,12 @@ func (wl *YCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 			_ = wl.doInsert(ctx, db)
 		case scan:
 			continue
-		default:
+		case readModifyWrite:
 			_ = wl.doReadModifyWrite(ctx, db)
+		case doubleSeqCommit:
+			_ = wl.doDoubleSeqCommit(ctx, db)
+		default:
+			panic("Unknown operation")
 		}
 	}
 }
@@ -92,6 +102,24 @@ func (wl *YCSBWorkload) PostCheck(ctx context.Context, db ycsb.DB,
 }
 
 func (wl *YCSBWorkload) DisplayCheckResult() {
+	type pair struct {
+		key   string
+		value int
+	}
+	pairs := make([]pair, 0)
+	for k, v := range wl.recordMap {
+		pairs = append(pairs, pair{k, v})
+	}
+	// sort pairs by value in descending order
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].value > pairs[j].value
+	})
+
+	topN := 20
+	for i := 0; i < topN && i < len(pairs); i++ {
+		fmt.Printf("Key: %s, Count: %d\n", pairs[i].key, pairs[i].value)
+	}
+
 }
 
 func (wl *YCSBWorkload) doRead(ctx context.Context, db ycsb.DB) error {
@@ -140,4 +168,64 @@ func (wl *YCSBWorkload) doReadModifyWrite(ctx context.Context, db ycsb.DB) error
 		return err
 	}
 	return nil
+}
+
+func (wl *YCSBWorkload) doDoubleSeqCommit(ctx context.Context, db ycsb.DB) error {
+	if txnDB, ok := db.(ycsb.TransactionDB); ok {
+		newDB := txnDB.NewTransaction()
+		keyName := "benchmark211"
+		value := wl.BuildRandomValue()
+
+		err := newDB.Start()
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Read(ctx, wl.wp.TableName, keyName)
+		if err != nil {
+			return err
+		}
+
+		err = db.Update(ctx, wl.wp.TableName, keyName, value)
+		if err != nil {
+			return err
+		}
+
+		err = newDB.Commit()
+		if err != nil {
+			return err
+		}
+
+		// Second commit
+		err = newDB.Start()
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Read(ctx, wl.wp.TableName, keyName)
+		if err != nil {
+			return err
+		}
+
+		err = db.Update(ctx, wl.wp.TableName, keyName, value)
+		if err != nil {
+			return err
+		}
+
+		err = newDB.Commit()
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("DB does not support transaction")
+}
+
+func (wl *YCSBWorkload) NextKeyName() string {
+	keyName := wl.Randomizer.NextKeyName()
+
+	wl.mu.Lock()
+	defer wl.mu.Unlock()
+	wl.recordMap[keyName]++
+	return keyName
 }

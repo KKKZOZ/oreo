@@ -43,6 +43,10 @@ func (db *TxnDbWrapper) Abort() error {
 	return db.DB.Abort()
 }
 
+func (db *TxnDbWrapper) NewTransaction() ycsb.TransactionDB {
+	return db.DB.NewTransaction()
+}
+
 func (db *TxnDbWrapper) Close() error {
 	return db.DB.Close()
 }

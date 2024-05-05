@@ -61,6 +61,11 @@ func (r *MongoDatastore) Abort() error {
 	return r.txn.Abort()
 }
 
+func (r *MongoDatastore) NewTransaction() ycsb.TransactionDB {
+	rds := NewMongoDatastore(r.conn)
+	return rds
+}
+
 func (r *MongoDatastore) Close() error {
 	return nil
 }

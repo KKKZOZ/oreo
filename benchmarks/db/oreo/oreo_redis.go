@@ -72,6 +72,11 @@ func (r *RedisDatastore) Abort() error {
 	return r.txn.Abort()
 }
 
+func (r *RedisDatastore) NewTransaction() ycsb.TransactionDB {
+	rds := NewRedisDatastore(r.conn, r.isRemote)
+	return rds
+}
+
 func (r *RedisDatastore) Close() error {
 	return nil
 }

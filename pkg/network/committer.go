@@ -30,7 +30,7 @@ func NewCommitter(conn txn.Connector, se serializer.Serializer, itemFactory txn.
 }
 
 func (c *Committer) Prepare(itemList []txn.DataItem,
-	startTime time.Time, commitTime time.Time) (map[string]string, error) {
+	startTime time.Time, commitTime time.Time, cfg txn.RecordConfig) (map[string]string, error) {
 
 	var mu sync.Mutex
 	var eg errgroup.Group
@@ -45,7 +45,7 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 				doCreate = false
 			} else {
 				// else we do a txn Read to determine its version
-				dbItem, err := c.reader.Read(item.Key(), startTime, false)
+				dbItem, err := c.reader.Read(item.Key(), startTime, cfg, false)
 				if err != nil && err.Error() != "key not found" {
 					return err
 				}
@@ -54,7 +54,7 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 				} else {
 					doCreate = false
 				}
-				item, _ = c.updateMetadata(item, dbItem, commitTime)
+				item, _ = c.updateMetadata(item, dbItem, commitTime, cfg)
 			}
 			ver, err := c.conn.ConditionalUpdate(item.Key(), item, doCreate)
 			mu.Lock()
@@ -109,8 +109,8 @@ func (c *Committer) Commit(infoList []txn.CommitInfo) error {
 // Finally, it returns the last popped DataItem as the truncated DataItem.
 //
 // If the length of the linked list is less than or equal to the maximum record length, it returns the input DataItem as is.
-func (c *Committer) truncate(newItem txn.DataItem) (txn.DataItem, error) {
-	maxLen := config.Config.MaxRecordLength
+func (c *Committer) truncate(newItem txn.DataItem, cfg txn.RecordConfig) (txn.DataItem, error) {
+	maxLen := cfg.MaxRecordLen
 
 	if newItem.LinkedLen() > maxLen {
 		stack := util.NewStack[txn.DataItem]()
@@ -159,7 +159,7 @@ func (c *Committer) truncate(newItem txn.DataItem) (txn.DataItem, error) {
 // It then truncates the record using the truncate method and sets the TxnState, TValid, and TLease fields of the newItem.
 // Finally, it returns the updated newItem and any error that occurred during the process.
 func (c *Committer) updateMetadata(newItem txn.DataItem,
-	oldItem txn.DataItem, commitTime time.Time) (txn.DataItem, error) {
+	oldItem txn.DataItem, commitTime time.Time, cfg txn.RecordConfig) (txn.DataItem, error) {
 	if oldItem == nil {
 		newItem.SetLinkedLen(1)
 	} else {
@@ -173,7 +173,7 @@ func (c *Committer) updateMetadata(newItem txn.DataItem,
 	}
 
 	// truncate the record
-	newItem, err := c.truncate(newItem)
+	newItem, err := c.truncate(newItem, cfg)
 	if err != nil {
 		return nil, err
 	}
