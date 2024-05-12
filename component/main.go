@@ -209,7 +209,7 @@ func main() {
 	newLogger()
 
 	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address:  "localhost:6379",
+		Address:  "localhost:6380",
 		Password: "@ljy123456",
 		PoolSize: poolSize,
 	})

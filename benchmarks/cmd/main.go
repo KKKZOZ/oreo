@@ -24,7 +24,8 @@ const (
 	MongoDBAddr      = "mongodb://localhost:27017"
 	MongoDBAddr2     = "mongodb://43.139.62.221:27021"
 	MongoDBGroupAddr = "mongodb://43.139.62.221:27021,43.139.62.221:27022,43.139.62.221:27023/?replicaSet=dbrs"
-	OreoRedisAddr    = "43.139.62.221:6379"
+	OreoRedisAddr    = "43.139.62.221:6380"
+	// OreoRedisAddr    = "43.139.62.221:6379"
 	// OreoRedisAddr = "localhost:6380"
 
 	OreoCouchDBAddr = "http://admin:password@43.139.62.221:5984"
@@ -82,7 +83,7 @@ func main() {
 	// TODO: Read it from file
 	wp := &workload.WorkloadParameter{
 		RecordCount:               10000,
-		OperationCount:            10000,
+		OperationCount:            20000,
 		TxnOperationGroup:         5,
 		ReadProportion:            0,
 		UpdateProportion:          0,
@@ -102,17 +103,19 @@ func main() {
 
 	switch preset {
 	case "cg":
+		cfg.Debug.CherryGarciaMode = true
 		cfg.Debug.DebugMode = true
-		cfg.Debug.AdditionalLatency = 0 * time.Millisecond
+		cfg.Debug.ConnAdditionalLatency = 0 * time.Millisecond
 		cfg.Config.ConcurrentOptimizationLevel = 0
 		cfg.Config.AsyncLevel = 1
 
 	default:
+		fmt.Printf("No preset configuration\n")
 		cfg.Debug.DebugMode = false
-		cfg.Debug.AdditionalLatency = 0 * time.Millisecond
+		cfg.Debug.HTTPAdditionalLatency = 0 * time.Millisecond
+		cfg.Debug.ConnAdditionalLatency = 0 * time.Millisecond
 		cfg.Config.ConcurrentOptimizationLevel = 1
 		cfg.Config.AsyncLevel = 2
-
 	}
 
 	cfg.Config.MaxOutstandingRequest = 5
@@ -158,13 +161,14 @@ func displayBenchmarkInfo() {
 	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
 		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
 		cfg.Config.MaxOutstandingRequest, cfg.Config.MaxRecordLength)
-	fmt.Printf("AdditionalLatency: %v\n", cfg.Debug.AdditionalLatency)
+	fmt.Printf("HTTPAdditionalLatency: %v ConnAdditionalLatency: %v\n",
+		cfg.Debug.HTTPAdditionalLatency, cfg.Debug.ConnAdditionalLatency)
 	fmt.Printf("-----------------\n")
 }
 
 func warmUpHttpClient() {
 	url := fmt.Sprintf("http://%s/ping", config.RemoteAddress)
-	num := min(300, threadNum)
+	num := min(800, threadNum+300)
 
 	var wg sync.WaitGroup
 	wg.Add(num)

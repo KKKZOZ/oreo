@@ -170,7 +170,7 @@ func (r *RedisConnection) Connect() error {
 func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	var value RedisItem
@@ -191,7 +191,7 @@ func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error) {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	ctx := context.Background()
@@ -222,7 +222,7 @@ func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error
 func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	logger.Log.Debugw("Start  ConditionalUpdate", "key", key)
@@ -266,7 +266,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 func (r *RedisConnection) ConditionalCommit(key string, version string) (string, error) {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	logger.Log.Debugw("Start  ConditionalCommit", "key", key)
@@ -294,7 +294,7 @@ func (r *RedisConnection) ConditionalCommit(key string, version string) (string,
 func (r *RedisConnection) Get(name string) (string, error) {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	str, err := r.rdb.Get(context.Background(), name).Result()
@@ -313,7 +313,7 @@ func (r *RedisConnection) Get(name string) (string, error) {
 func (r *RedisConnection) Put(name string, value any) error {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	return r.rdb.Set(context.Background(), name, value, 0).Err()
@@ -324,7 +324,7 @@ func (r *RedisConnection) Put(name string, value any) error {
 func (r *RedisConnection) Delete(name string) error {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	return r.rdb.Del(context.Background(), name).Err()
