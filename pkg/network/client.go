@@ -38,7 +38,7 @@ func NewClient(serverAddr string) *Client {
 func (c *Client) Read(key string, ts time.Time, cfg txn.RecordConfig) (txn.DataItem, error) {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
 	data := ReadRequest{
@@ -82,7 +82,7 @@ func (c *Client) Read(key string, ts time.Time, cfg txn.RecordConfig) (txn.DataI
 func (c *Client) Prepare(itemList []txn.DataItem,
 	startTime time.Time, commitTime time.Time, cfg txn.RecordConfig) (map[string]string, error) {
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
 	itemArr := make([]redis.RedisItem, 0)
@@ -135,7 +135,7 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 func (c *Client) Commit(infoList []txn.CommitInfo) error {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
 	data := CommitRequest{
@@ -177,7 +177,7 @@ func (c *Client) Commit(infoList []txn.CommitInfo) error {
 func (c *Client) Abort(keyList []string, txnId string) error {
 
 	if config.Debug.DebugMode {
-		time.Sleep(config.Debug.AdditionalLatency)
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
 	data := AbortRequest{

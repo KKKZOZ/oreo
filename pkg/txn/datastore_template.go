@@ -706,6 +706,11 @@ func (r *Datastore) SetSerializer(se serializer.Serializer) {
 // ReadTSR reads the transaction state from the Redis datastore.
 // It takes a transaction ID as input and returns the corresponding state and an error, if any.
 func (r *Datastore) ReadTSR(txnId string) (config.State, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
 	var txnState config.State
 	state, err := r.conn.Get(txnId)
 	if err != nil {
@@ -718,6 +723,11 @@ func (r *Datastore) ReadTSR(txnId string) (config.State, error) {
 // WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the Redis datastore.
 // It returns an error if the write operation fails.
 func (r *Datastore) WriteTSR(txnId string, txnState config.State) error {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
 	return r.conn.Put(txnId, util.ToString(txnState))
 }
 

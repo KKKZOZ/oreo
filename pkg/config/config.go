@@ -48,7 +48,9 @@ type debug struct {
 
 	CherryGarciaMode bool
 
-	AdditionalLatency time.Duration
+	HTTPAdditionalLatency time.Duration
+
+	ConnAdditionalLatency time.Duration
 }
 
 type config struct {
@@ -95,9 +97,10 @@ var Config = config{
 }
 
 var Debug = debug{
-	DebugMode:         false,
-	CherryGarciaMode:  false,
-	AdditionalLatency: 0,
+	DebugMode:             false,
+	CherryGarciaMode:      false,
+	HTTPAdditionalLatency: 0,
+	ConnAdditionalLatency: 0,
 }
 
 type State int
