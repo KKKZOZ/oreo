@@ -35,7 +35,7 @@ func NewClient(serverAddr string) *Client {
 	}
 }
 
-func (c *Client) Read(key string, ts time.Time, cfg txn.RecordConfig) (txn.DataItem, error) {
+func (c *Client) Read(key string, ts time.Time, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataType, error) {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
@@ -72,10 +72,10 @@ func (c *Client) Read(key string, ts time.Time, cfg txn.RecordConfig) (txn.DataI
 		log.Fatal(err)
 	}
 	if response.Status == "OK" {
-		return response.Data, nil
+		return response.Data, response.DataType, nil
 	} else {
 		errMsg := response.ErrMsg
-		return nil, errors.New(errMsg)
+		return nil, txn.Normal, errors.New(errMsg)
 	}
 }
 

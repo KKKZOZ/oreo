@@ -23,6 +23,12 @@ const (
 	RETRYINTERVAL        = 10 * time.Millisecond
 )
 
+type PredicateInfo struct {
+	State     config.State
+	Item      DataItem
+	LeaseTime time.Time
+}
+
 // Datastore represents a datastorer implementation using the underlying connector.
 type Datastore struct {
 
@@ -47,6 +53,8 @@ type Datastore struct {
 	// invisibleSet is the set of keys that are not visible to the current transaction.
 	invisibleSet map[string]bool
 
+	validationSet util.ConcurrentMap[string, PredicateInfo]
+
 	// se is the serializer used for serializing and deserializing data in Datastore.
 	se serializer.Serializer
 
@@ -61,14 +69,15 @@ type Datastore struct {
 // It initializes the read and write caches, as well as the serializer.
 func NewDatastore(name string, conn Connector, factory DataItemFactory) *Datastore {
 	return &Datastore{
-		Name:         name,
-		conn:         conn,
-		readCache:    util.NewConcurrentMap[DataItem](),
-		writeCache:   make(map[string]DataItem),
-		writtenSet:   util.NewConcurrentMap[bool](),
-		invisibleSet: make(map[string]bool),
-		se:           config.Config.Serializer,
-		itemFactory:  factory,
+		Name:          name,
+		conn:          conn,
+		readCache:     util.NewConcurrentMap[DataItem](),
+		writeCache:    make(map[string]DataItem),
+		writtenSet:    util.NewConcurrentMap[bool](),
+		invisibleSet:  make(map[string]bool),
+		validationSet: util.NewConcurrentMap[PredicateInfo](),
+		se:            config.Config.Serializer,
+		itemFactory:   factory,
 	}
 }
 
@@ -94,10 +103,22 @@ func (r *Datastore) Read(key string, value any) error {
 	}
 
 	if r.Txn.isRemote {
-		item, err := r.Txn.RemoteRead(r.Name, key)
+		item, dataType, err := r.Txn.RemoteRead(r.Name, key)
 		if err != nil {
 			return err
 		}
+		// TODO: logic for AssumeCommit and AssumeAbort
+		switch dataType {
+		case AssumeCommit:
+			r.validationSet.Set(item.TxnId(), PredicateInfo{
+				State: config.COMMITTED,
+			})
+		case AssumeAbort:
+			r.validationSet.Set(item.TxnId(), PredicateInfo{
+				State: config.ABORTED,
+			})
+		}
+
 		if item.IsDeleted() {
 			return errors.New(KeyNotFound)
 		}
@@ -208,9 +229,9 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		}
 		// if TSR does not exist
 		// and if t_lease has expired
-		// that is, item's TLease < txn's TStart
+		// that is, item's TLease < current time
 		// we should roll back the record
-		if item.TLease().Before(r.Txn.TxnStartTime) {
+		if item.TLease().Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
 			err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
@@ -225,7 +246,6 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		// that is, txn's TStart < item's TValid < item's TLease
 		// we should try check the previous record
 		if r.Txn.TxnStartTime.Before(item.TValid()) {
-
 			// Origin Cherry Garcia would do
 			if config.Debug.CherryGarciaMode {
 				return nil, errors.New(ReadFailed)
@@ -245,7 +265,27 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 			return r.getPrevItem(item)
 		}
 
-		return nil, errors.New(ReadFailed)
+		if config.Config.ReadStrategy == config.Pessimistic {
+			return nil, errors.New(ReadFailed)
+		} else {
+			switch config.Config.ReadStrategy {
+			case config.AssumeCommit:
+				r.validationSet.Set(item.TxnId(), PredicateInfo{
+					State: config.COMMITTED,
+				})
+				return item, nil
+			case config.AssumeAbort:
+				r.validationSet.Set(item.TxnId(), PredicateInfo{
+					State:     config.ABORTED,
+					Item:      item,
+					LeaseTime: item.TLease(),
+				})
+				if item.Prev() == "" {
+					return nil, errors.New("key not found in AssumeAbort")
+				}
+				return r.getPrevItem(item)
+			}
+		}
 	}
 	return nil, errors.New(KeyNotFound)
 }
@@ -480,8 +520,76 @@ func (r *Datastore) updateMetadata(newItem DataItem, oldItem DataItem) (DataItem
 	return newItem, nil
 }
 
+func (r *Datastore) rollbackFromConn(key string, txnId string) error {
+
+	item, err := r.conn.GetItem(key)
+	if err != nil {
+		return err
+	}
+
+	if item.TxnState() != config.PREPARED {
+		return errors.New("rollback failed due to wrong state")
+	}
+	if item.TxnId() != txnId {
+		return errors.New("rollback failed due to wrong txnId")
+	}
+
+	if item.TLease().Before(time.Now()) {
+		err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+		if err != nil {
+			return err
+		}
+		_, err = r.rollback(item)
+		return err
+	}
+	return nil
+}
+
+func (r *Datastore) validate() error {
+
+	if config.Config.ReadStrategy == config.Pessimistic {
+		return nil
+	}
+
+	var eg errgroup.Group
+	set := r.validationSet.Items()
+	for tId, predicate := range set {
+		txnId := tId
+		pred := predicate
+		eg.Go(func() error {
+			curState, err := r.Txn.tsrMaintainer.ReadTSR(txnId)
+			if err != nil {
+				if config.Config.ReadStrategy == config.AssumeAbort {
+					if pred.LeaseTime.Before(time.Now()) {
+						err := r.rollbackFromConn(pred.Item.Key(), txnId)
+						if err != nil {
+							return errors.Join(errors.New("validation failed in AA mode"), err)
+						} else {
+							return nil
+						}
+					}
+				}
+				return errors.New("validation failed due to unknown status")
+			}
+			if curState != pred.State {
+				return errors.New("validation failed due to false assumption")
+			} else {
+				return nil
+			}
+		})
+	}
+
+	return eg.Wait()
+}
+
 // Prepare prepares the Datastore for commit.
 func (r *Datastore) Prepare() error {
+
+	err := r.validate()
+	if err != nil {
+		return err
+	}
+
 	items := make([]DataItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
 		items = append(items, v)
@@ -559,6 +667,22 @@ func (r *Datastore) Commit() error {
 			return err
 		}
 		return err
+	}
+
+	if config.Debug.CherryGarciaMode {
+		for _, item := range r.writeCache {
+			item.SetTxnState(config.COMMITTED)
+			_, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+			if errors.Is(err, VersionMismatch) {
+				// this indicates that the record has been rolled forward
+				// by another transaction.
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	// update record's state to the COMMITTED state in the data store
