@@ -1,0 +1,18 @@
+recordcount: 10000,
+operationcount: 10000,
+txnoperationgroup: 2,
+
+readproportion: 0.5,
+updateproportion: 0.5,
+insertproportion: 0,
+scanproportion: 0,
+readmodifywriteproportion: 0,
+doubleseqcommitproportion: 0,
+
+initialamountperkey: 1000,
+transferamountpertxn: 5,
+postcheckworkerthread: 50,
+
+redisproportion: 0.5,
+mongoproportion: 0.5,
+couchdbproportion: 0,

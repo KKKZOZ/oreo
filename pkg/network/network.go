@@ -14,9 +14,10 @@ type Response[T any] struct {
 }
 
 type ReadResponse struct {
-	Status string
-	ErrMsg string
-	Data   *redis.RedisItem
+	Status   string
+	ErrMsg   string
+	DataType txn.RemoteDataType
+	Data     *redis.RedisItem
 }
 
 type ReadRequest struct {

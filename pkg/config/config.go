@@ -12,6 +12,8 @@ type DataStoreType string
 
 type Mode string
 
+type ReadStrategy string
+
 const (
 	REMOTE Mode = "remote"
 	LOCAL  Mode = "local"
@@ -40,6 +42,10 @@ const (
 
 	// AsyncLevelTwo means async ds.Commit() and delete the TSR after return
 	AsyncLevelTwo int = 2
+
+	Pessimistic  ReadStrategy = "pessimistic"
+	AssumeCommit ReadStrategy = "commit"
+	AssumeAbort  ReadStrategy = "abort"
 )
 
 type debug struct {
@@ -83,6 +89,8 @@ type config struct {
 
 	// MaxOutstandingRequest specifies the maximum number of outstanding requests
 	MaxOutstandingRequest int
+
+	ReadStrategy ReadStrategy
 }
 
 var Config = config{
@@ -94,6 +102,7 @@ var Config = config{
 	ConcurrentOptimizationLevel: DEFAULT,
 	AsyncLevel:                  AsyncLevelZero,
 	MaxOutstandingRequest:       5,
+	ReadStrategy:                Pessimistic,
 }
 
 var Debug = debug{

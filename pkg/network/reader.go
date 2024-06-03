@@ -32,15 +32,18 @@ func NewReader(conn txn.Connector, itemFactory txn.DataItemFactory, se serialize
 // If the record is marked as IsDeleted, this function will return it.
 //
 // Let the upper layer decide what to do with it
-func (r *Reader) Read(key string, ts time.Time, cfg txn.RecordConfig, isRemoteCall bool) (txn.DataItem, error) {
+func (r *Reader) Read(key string, ts time.Time, cfg txn.RecordConfig,
+	isRemoteCall bool) (txn.DataItem, txn.RemoteDataType, error) {
+	dataType := txn.Normal
+
 	item, err := r.conn.GetItem(key)
 	if err != nil {
-		return nil, err
+		return nil, dataType, err
 	}
 
-	resItem, err := r.basicVisibilityProcessor(item, ts)
+	resItem, dataType, err := r.basicVisibilityProcessor(item, ts, cfg)
 	if err != nil {
-		return nil, err
+		return nil, dataType, err
 	}
 	logicFunc := func(curItem txn.DataItem, isFound bool) (txn.DataItem, error) {
 		if !isFound {
@@ -52,36 +55,40 @@ func (r *Reader) Read(key string, ts time.Time, cfg txn.RecordConfig, isRemoteCa
 		}
 		return curItem, nil
 	}
-	return r.treatAsCommitted(resItem, ts, logicFunc, cfg)
+
+	item, err = r.treatAsCommitted(resItem, ts, logicFunc, cfg)
+	return item, dataType, err
+	// return r.treatAsCommitted(resItem, ts, logicFunc, cfg)
 }
 
 // basicVisibilityProcessor performs basic visibility processing on a DataItem.
 // It tries to bring the item to the COMMITTED state by performing rollback or rollforward operations.
-func (r *Reader) basicVisibilityProcessor(item txn.DataItem, startTime time.Time) (txn.DataItem, error) {
+func (r *Reader) basicVisibilityProcessor(item txn.DataItem,
+	startTime time.Time, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataType, error) {
 	// function to perform the rollback operation
-	rollbackFunc := func() (txn.DataItem, error) {
+	rollbackFunc := func() (txn.DataItem, txn.RemoteDataType, error) {
 		item, err := r.rollback(item)
 		if err != nil {
-			return nil, err
+			return nil, txn.Normal, err
 		}
 
 		if item.Empty() {
-			return nil, errors.New("key not found")
+			return nil, txn.Normal, errors.New("key not found")
 		}
-		return item, err
+		return item, txn.Normal, err
 	}
 
 	// function to perform the rollforward operation
-	rollforwardFunc := func() (txn.DataItem, error) {
+	rollforwardFunc := func() (txn.DataItem, txn.RemoteDataType, error) {
 		item, err := r.rollForward(item)
 		if err != nil {
-			return nil, err
+			return nil, txn.Normal, err
 		}
-		return item, nil
+		return item, txn.Normal, nil
 	}
 
 	if item.TxnState() == config.COMMITTED {
-		return item, nil
+		return item, txn.Normal, nil
 	}
 	if item.TxnState() == config.PREPARED {
 		state, err := r.readTSR(item.TxnId())
@@ -106,7 +113,7 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem, startTime time.Time
 			// TODO: we can retry here
 			err := r.writeTSR(item.TxnId(), config.ABORTED)
 			if err != nil {
-				return nil, err
+				return nil, txn.Normal, err
 			}
 			return rollbackFunc()
 		}
@@ -118,7 +125,7 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem, startTime time.Time
 
 			// Origin Cherry Garcia would do
 			if config.Debug.CherryGarciaMode {
-				return nil, errors.New(ReadFailed)
+				return nil, txn.Normal, errors.New(ReadFailed)
 			}
 
 			// a little trick here:
@@ -132,15 +139,31 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem, startTime time.Time
 
 			// if prev is empty
 			if item.Prev() == "" {
-				return nil, errors.New("key not found")
+				return nil, txn.Normal, errors.New("key not found")
 			}
-			return r.getPrevItem(item)
+			// get the previous record
+			preItem, err := r.getPrevItem(item)
+			return preItem, txn.Normal, err
+		}
+		if cfg.ReadStrategy == config.Pessimistic {
+			return nil, txn.Normal, errors.New(ReadFailed)
+		} else {
+			switch cfg.ReadStrategy {
+			case config.AssumeCommit:
+				// r.validationSet.Set(item.TxnId(), config.COMMITTED)
+				return item, txn.AssumeCommit, nil
+			case config.AssumeAbort:
+				// r.validationSet.Set(item.TxnId(), config.ABORTED)
+				if item.Prev() == "" {
+					return nil, txn.Normal, errors.New("key not found in AssumeAbort")
+				}
+				preItem, err := r.getPrevItem(item)
+				return preItem, txn.AssumeAbort, err
+			}
 		}
 
-		return nil, errors.New(ReadFailed)
-
 	}
-	return nil, errors.New("key not found")
+	return nil, txn.Normal, errors.New("key not found")
 }
 
 // rollback overwrites the record with the application data

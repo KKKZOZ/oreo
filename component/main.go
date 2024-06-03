@@ -71,7 +71,7 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log.Infow("Read request", "key", req.Key, "start_time", req.StartTime)
-	item, err := s.reader.Read(req.Key, req.StartTime, req.Config, true)
+	item, dataType, err := s.reader.Read(req.Key, req.StartTime, req.Config, true)
 
 	var response network.ReadResponse
 	if err != nil {
@@ -89,8 +89,9 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			response = network.ReadResponse{
-				Status: "OK",
-				Data:   redisItem,
+				Status:   "OK",
+				DataType: dataType,
+				Data:     redisItem,
 			}
 		}
 	}

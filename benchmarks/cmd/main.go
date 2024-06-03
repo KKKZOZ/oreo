@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cristalhq/aconfig"
+	"github.com/cristalhq/aconfig/aconfigyaml"
 	cfg "github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/network"
 )
@@ -41,32 +43,15 @@ var help = flag.Bool("help", false, "Show help")
 var dbType = ""
 var mode = "load"
 var workloadType = ""
+var workloadConfigPath = ""
 var threadNum = 1
 var traceFlag = false
 var isRemote = false
 var preset = ""
 
-// fmt.Println("Usage: main [DBType] [load|run] [ThreadNum] [TestTypeFlag]")
 func main() {
 
-	flag.StringVar(&dbType, "d", "", "DB type")
-	flag.StringVar(&mode, "m", "load", "Mode: load or run")
-	flag.StringVar(&workloadType, "wl", "", "Workload type")
-	flag.IntVar(&threadNum, "t", 1, "Thread number")
-	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
-	flag.BoolVar(&isRemote, "remote", false, "Run in remote mode (for Oreo series)")
-	flag.StringVar(&preset, "ps", "", "Preset configuration for evaluation")
-	flag.Parse()
-
-	if *help {
-		flag.Usage()
-		os.Exit(0)
-	}
-
-	if threadNum <= 0 {
-		fmt.Println("ThreadNum should be a positive integer")
-		return
-	}
+	parseAndValidateFlag()
 
 	if traceFlag {
 		f, err := os.Create("trace.out")
@@ -80,11 +65,10 @@ func main() {
 		defer trace.Stop()
 	}
 
-	// TODO: Read it from file
 	wp := &workload.WorkloadParameter{
 		RecordCount:               10000,
-		OperationCount:            20000,
-		TxnOperationGroup:         5,
+		OperationCount:            10000,
+		TxnOperationGroup:         2,
 		ReadProportion:            0,
 		UpdateProportion:          0,
 		InsertProportion:          0,
@@ -99,10 +83,28 @@ func main() {
 		RedisProportion: 0.5,
 		MongoProportion: 0.5,
 	}
+
+	loader := aconfig.LoaderFor(wp, aconfig.Config{
+		SkipDefaults: true,
+		SkipFiles:    false,
+		SkipEnv:      true,
+		SkipFlags:    true,
+		Files:        []string{workloadConfigPath},
+		FileDecoders: map[string]aconfig.FileDecoder{
+			".yaml": aconfigyaml.New(),
+		},
+	})
+
+	if err := loader.Load(); err != nil {
+		fmt.Printf("Error when loading workload configuration: %v\n", err)
+		return
+	}
+
 	wp.TotalAmount = wp.InitialAmountPerKey * wp.RecordCount
 
 	switch preset {
 	case "cg":
+		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.CherryGarciaMode = true
 		cfg.Debug.DebugMode = true
 		cfg.Debug.ConnAdditionalLatency = 0 * time.Millisecond
@@ -111,6 +113,7 @@ func main() {
 
 	default:
 		fmt.Printf("No preset configuration\n")
+		cfg.Config.ReadStrategy = cfg.AssumeAbort
 		cfg.Debug.DebugMode = false
 		cfg.Debug.HTTPAdditionalLatency = 0 * time.Millisecond
 		cfg.Debug.ConnAdditionalLatency = 0 * time.Millisecond
@@ -118,6 +121,7 @@ func main() {
 		cfg.Config.AsyncLevel = 2
 	}
 
+	cfg.Config.LeaseTime = 800 * time.Millisecond
 	cfg.Config.MaxOutstandingRequest = 5
 	cfg.Config.MaxRecordLength = 2
 
@@ -309,4 +313,30 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		panic("Unsupport db type")
 	}
 	return c
+}
+
+func parseAndValidateFlag() {
+
+	flag.StringVar(&dbType, "d", "", "DB type")
+	flag.StringVar(&mode, "m", "load", "Mode: load or run")
+	flag.StringVar(&workloadType, "wl", "", "Workload type")
+	flag.StringVar(&workloadConfigPath, "wc", "", "Workload configuration path")
+	flag.IntVar(&threadNum, "t", 1, "Thread number")
+	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
+	flag.BoolVar(&isRemote, "remote", false, "Run in remote mode (for Oreo series)")
+	flag.StringVar(&preset, "ps", "", "Preset configuration for evaluation")
+	flag.Parse()
+
+	if *help {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	if workloadConfigPath == "" {
+		panic("Workload configuration path should be specified")
+	}
+
+	if threadNum <= 0 {
+		panic("ThreadNum should be a positive integer")
+	}
 }

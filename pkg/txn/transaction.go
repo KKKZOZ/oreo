@@ -450,14 +450,21 @@ func (t *Transaction) Unlock(key string, id string) error {
 	return t.locker.Unlock(key, id)
 }
 
-func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, error) {
+func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDataType, error) {
 	// TODO: Handle dsName
 	if !t.isRemote {
-		return nil, errors.New("not a remote transaction")
+		return nil, Normal, errors.New("not a remote transaction")
 	}
 	return t.client.Read(key, t.TxnStartTime, RecordConfig{
 		MaxRecordLen: config.Config.MaxRecordLength,
+		ReadStrategy: config.Config.ReadStrategy,
 	})
+}
+
+func (t *Transaction) RemoteValidate(dsName string, key string, item DataItem) error {
+	// TODO: Handle dsName
+	panic("not implemented")
+	return nil
 }
 
 func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem) (map[string]string, error) {

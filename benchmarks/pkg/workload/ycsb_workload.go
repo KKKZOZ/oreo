@@ -1,11 +1,13 @@
 package workload
 
 import (
+	"benchmark/pkg/measurement"
 	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 )
 
 type YCSBWorkload struct {
@@ -54,7 +56,18 @@ func (wl *YCSBWorkload) Load(ctx context.Context, opCount int,
 }
 
 func (wl *YCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
+	var startTime time.Time
 	for i := 0; i <= opCount; i++ {
+		if i%wl.wp.TxnOperationGroup == 0 {
+			if i != 0 {
+				// txnDB.Commit()
+				measure(startTime, "TxnGroup", nil)
+			}
+			if i != opCount {
+				// txnDB.Start()
+				startTime = time.Now()
+			}
+		}
 		if txnDB, ok := db.(ycsb.TransactionDB); ok {
 			if i%wl.wp.TxnOperationGroup == 0 {
 				if i != 0 {
@@ -228,4 +241,15 @@ func (wl *YCSBWorkload) NextKeyName() string {
 	defer wl.mu.Unlock()
 	wl.recordMap[keyName]++
 	return keyName
+}
+
+func measure(start time.Time, op string, err error) {
+	lan := time.Since(start)
+	if err != nil {
+		measurement.Measure(fmt.Sprintf("%s_ERROR", op), start, lan)
+		return
+	}
+
+	measurement.Measure(op, start, lan)
+	measurement.Measure("TOTAL", start, lan)
 }
