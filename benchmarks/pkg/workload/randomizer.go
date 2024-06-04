@@ -15,6 +15,7 @@ type Randomizer struct {
 
 	r                *rand.Rand
 	operationChooser *generator.Discrete
+	datastoreChooser *generator.Discrete
 	keyChooser       ycsb.Generator
 	keySequence      ycsb.Generator
 
@@ -32,6 +33,7 @@ func NewRandomizer(wp *WorkloadParameter) *Randomizer {
 		mu:               sync.Mutex{},
 		r:                rand.New(rand.NewSource(time.Now().UnixNano())),
 		operationChooser: createOperationGenerator(wp),
+		datastoreChooser: createDatastoreGenerator(wp),
 		keySequence:      generator.NewCounter(insertStart),
 		keyChooser: generator.NewScrambledZipfian(
 			keyrangeLowerBound,
@@ -44,6 +46,32 @@ func (r *Randomizer) ResetKeySequence() {
 	r.mu.Lock()
 	r.keySequence = generator.NewCounter(0)
 	r.mu.Unlock()
+}
+
+func createDatastoreGenerator(wp *WorkloadParameter) *generator.Discrete {
+	redis1Proportion := wp.Redis1Proportion
+	mongo1Proportion := wp.Mongo1Proportion
+	mongo2Proportion := wp.Mongo2Proportion
+	couch1Proportion := wp.CouchDBProportion
+
+	datastoreChooser := generator.NewDiscrete()
+	if redis1Proportion > 0 {
+		datastoreChooser.Add(redis1Proportion, int64(redisDatastore1))
+	}
+
+	if mongo1Proportion > 0 {
+		datastoreChooser.Add(mongo1Proportion, int64(mongoDatastore1))
+	}
+
+	if mongo2Proportion > 0 {
+		datastoreChooser.Add(mongo2Proportion, int64(mongoDatastore2))
+	}
+
+	if couch1Proportion > 0 {
+		datastoreChooser.Add(couch1Proportion, int64(couchDatastore1))
+	}
+
+	return datastoreChooser
 }
 
 func createOperationGenerator(wp *WorkloadParameter) *generator.Discrete {
@@ -86,6 +114,12 @@ func (r *Randomizer) NextOperation() operationType {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return operationType(r.operationChooser.Next(r.r))
+}
+
+func (r *Randomizer) NextDatastore() datastoreType {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return datastoreType(r.datastoreChooser.Next(r.r))
 }
 
 func (r *Randomizer) NextKeyName() string {

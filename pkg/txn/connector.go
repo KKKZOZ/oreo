@@ -10,5 +10,5 @@ type Connector interface {
 	Get(name string) (string, error)
 	Put(name string, value any) error
 	Delete(name string) error
-	AtomicCreate(name string, value any) error
+	AtomicCreate(name string, value any) (string, error)
 }

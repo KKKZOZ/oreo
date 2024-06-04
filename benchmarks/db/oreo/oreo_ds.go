@@ -43,16 +43,22 @@ func (r *OreoDatastore) Start() error {
 
 	for dbName, conn := range r.connMap {
 		switch dbName {
-		case "redis":
-			rds := redis.NewRedisDatastore("redis", conn)
+		case "redis1":
+			rds := redis.NewRedisDatastore("redis1", conn)
 			txn.AddDatastore(rds)
-			if r.globalDatastoreName == "redis" {
+			if r.globalDatastoreName == "redis1" {
 				txn.SetGlobalDatastore(rds)
 			}
-		case "mongo":
-			mds := mongo.NewMongoDatastore("mongo", conn)
+		case "mongo1":
+			mds := mongo.NewMongoDatastore("mongo1", conn)
 			txn.AddDatastore(mds)
-			if r.globalDatastoreName == "mongo" {
+			if r.globalDatastoreName == "mongo1" {
+				txn.SetGlobalDatastore(mds)
+			}
+		case "mongo2":
+			mds := mongo.NewMongoDatastore("mongo2", conn)
+			txn.AddDatastore(mds)
+			if r.globalDatastoreName == "mongo2" {
 				txn.SetGlobalDatastore(mds)
 			}
 		default:
@@ -88,7 +94,9 @@ func (r *OreoDatastore) CleanupThread(ctx context.Context) {
 }
 
 func (r *OreoDatastore) Read(ctx context.Context, table string, key string) (string, error) {
-	keyName := getKeyName(table, key)
+	keyName := getKeyName("", key)
+	// fmt.Printf("Read key: %s Table: %s\n", keyName, table)
+
 	var value string
 	err := r.txn.Read(table, keyName, &value)
 	if err != nil {
@@ -98,16 +106,16 @@ func (r *OreoDatastore) Read(ctx context.Context, table string, key string) (str
 }
 
 func (r *OreoDatastore) Update(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName(table, key)
+	keyName := getKeyName("", key)
 	return r.txn.Write(table, keyName, value)
 }
 
 func (r *OreoDatastore) Insert(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName(table, key)
+	keyName := getKeyName("", key)
 	return r.txn.Write(table, keyName, value)
 }
 
 func (r *OreoDatastore) Delete(ctx context.Context, table string, key string) error {
-	keyName := getKeyName(table, key)
+	keyName := getKeyName("", key)
 	return r.txn.Delete(table, keyName)
 }

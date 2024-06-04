@@ -253,9 +253,9 @@ func (m *MongoConnection) ConditionalCommit(key string, version string) (string,
 	return newVer, nil
 }
 
-func (m *MongoConnection) AtomicCreate(key string, value any) error {
+func (m *MongoConnection) AtomicCreate(key string, value any) (string, error) {
 	if !m.hasConnected {
-		return errors.Errorf("not connected to MongoDB")
+		return "", errors.Errorf("not connected to MongoDB")
 	}
 
 	filter := bson.M{"_id": key}
@@ -271,13 +271,14 @@ func (m *MongoConnection) AtomicCreate(key string, value any) error {
 				{Key: "Value", Value: str},
 			})
 			if err != nil {
-				return err
+				return "", err
 			}
-			return nil
+			return "", nil
 		}
-		return err
+		return "", err
 	}
-	return errors.New(txn.KeyExists)
+	// the key already exists, return an error and the old state
+	return result.Value, errors.New(txn.KeyExists)
 }
 
 func (m *MongoConnection) atomicCreateMongoItem(key string, value txn.DataItem) (string, error) {

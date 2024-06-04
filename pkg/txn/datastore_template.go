@@ -234,12 +234,25 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		if item.TLease().Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
-			err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
+
+			curState, err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
 			if err != nil {
-				if err.Error() != "key exists" {
+				if err.Error() == "key exists" {
+					if curState == config.COMMITTED {
+						return nil, errors.New("rollback failed because the corresponding transaction has committed")
+					}
+					// if curState == config.ABORTED
+					// it means the transaction has been rolled back
+					// so we can safely rollback the record
+				} else {
 					return nil, err
 				}
 			}
+
+			// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+			// if err != nil {
+			// 	return nil, err
+			// }
 			return rollbackFunc()
 		}
 
@@ -537,10 +550,24 @@ func (r *Datastore) rollbackFromConn(key string, txnId string) error {
 	}
 
 	if item.TLease().Before(time.Now()) {
-		err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
+		curState, err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
 		if err != nil {
-			return err
+			if err.Error() == "key exists" {
+				if curState == config.COMMITTED {
+					return errors.New("rollback failed because the corresponding transaction has committed")
+				}
+				// if curState == config.ABORTED
+				// it means the transaction has been rolled back
+				// so we can safely rollback the record
+			} else {
+				return err
+			}
 		}
+
+		// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+		// if err != nil {
+		// 	return err
+		// }
 		_, err = r.rollback(item)
 		return err
 	}
@@ -852,13 +879,35 @@ func (r *Datastore) ReadTSR(txnId string) (config.State, error) {
 
 // WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the Redis datastore.
 // It returns an error if the write operation fails.
-func (r *Datastore) CreateTSR(txnId string, txnState config.State) error {
+func (r *Datastore) WriteTSR(txnId string, txnState config.State) error {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	return r.conn.AtomicCreate(txnId, util.ToString(txnState))
+	return r.conn.Put(txnId, util.ToString(txnState))
+}
+
+// CreateTSR creates a new transaction state record in the Datastore.
+// If the transaction ID already exists in the Datastore, it returns the old state and an error.
+// If an error occurs during the creation process, it returns -1 and the error.
+// Otherwise, it returns -1 and nil.
+func (r *Datastore) CreateTSR(txnId string, txnState config.State) (config.State, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
+	oldValue, err := r.conn.AtomicCreate(txnId, util.ToString(txnState))
+	if err != nil {
+		if err.Error() == "key exists" {
+			oldState := config.State(util.ToInt(oldValue))
+			return oldState, errors.New(KeyExists)
+		} else {
+			return -1, err
+		}
+	}
+	return -1, nil
 }
 
 // DeleteTSR deletes a transaction with the given transaction ID from the Redis datastore.

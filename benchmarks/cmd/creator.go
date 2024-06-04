@@ -4,8 +4,10 @@ import (
 	mongoDB "benchmark/db/mongo"
 	"benchmark/db/oreo"
 	"benchmark/db/redis"
+	"benchmark/pkg/workload"
 	"benchmark/ycsb"
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -18,9 +20,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func RedisCreator() (ycsb.DBCreator, error) {
+func RedisCreator(addr string) (ycsb.DBCreator, error) {
 	rdb1 := goredis.NewClient(&goredis.Options{
-		Addr:     RedisDBAddr,
+		Addr:     addr,
 		Password: "@ljy123456",
 	})
 
@@ -38,8 +40,8 @@ func RedisCreator() (ycsb.DBCreator, error) {
 	return &redis.RedisCreator{RdbList: []*goredis.Client{rdb1}}, nil
 }
 
-func MongoCreator() (ycsb.DBCreator, error) {
-	clientOptions := options.Client().ApplyURI(MongoDBAddr)
+func MongoCreator(addr string) (ycsb.DBCreator, error) {
+	clientOptions := options.Client().ApplyURI(addr)
 	clientOptions.SetAuth(options.Credential{
 		Username: "admin",
 		Password: "admin",
@@ -59,6 +61,44 @@ func MongoCreator() (ycsb.DBCreator, error) {
 	}
 
 	return &mongoDB.MongoCreator{Client: client}, nil
+}
+
+func NativeCreator(pattern string) (ycsb.DBCreator, error) {
+	if pattern == "mm" {
+		mongoCreator1, err1 := MongoCreator(MongoDBAddr1)
+		mongoCreator2, err2 := MongoCreator(MongoDBAddr2)
+		if err1 != nil || err2 != nil {
+			fmt.Printf("Error when creating client: %v %v\n", err1, err2)
+			return nil, nil
+		}
+		dbSetCreator := workload.DBSetCreator{
+			CreatorMap: map[string]ycsb.DBCreator{
+				"mongo1": mongoCreator1,
+				"mongo2": mongoCreator2,
+			},
+		}
+
+		return &dbSetCreator, nil
+	}
+
+	if pattern == "rm" {
+		redisCreator, err1 := RedisCreator(RedisDBAddr)
+		mongoCreator1, err2 := MongoCreator(MongoDBAddr1)
+		if err1 != nil || err2 != nil {
+			fmt.Printf("Error when creating client: %v %v\n", err1, err2)
+			return nil, nil
+		}
+		dbSetCreator := workload.DBSetCreator{
+			CreatorMap: map[string]ycsb.DBCreator{
+				"redis1": redisCreator,
+				"mongo1": mongoCreator1,
+			},
+		}
+
+		return &dbSetCreator, nil
+	}
+	fmt.Printf("Unknown pattern: %v\n", pattern)
+	return nil, nil
 }
 
 func OreoRedisCreator(isRemote bool) (ycsb.DBCreator, error) {
@@ -88,14 +128,14 @@ func OreoRedisCreator(isRemote bool) (ycsb.DBCreator, error) {
 
 func OreoMongoCreator() (ycsb.DBCreator, error) {
 	mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-		Address:        MongoDBAddr,
+		Address:        OreoMongoDBAddr1,
 		DBName:         "oreo",
 		CollectionName: "benchmark",
 		Username:       "admin",
 		Password:       "admin",
 	})
 	mongoConn2 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-		Address:        MongoDBAddr,
+		Address:        OreoMongoDBAddr1,
 		DBName:         "oreo",
 		CollectionName: "benchmark",
 		Username:       "admin",
@@ -146,37 +186,83 @@ func OreoCouchCreator() (ycsb.DBCreator, error) {
 
 }
 
-func OreoCreator() (ycsb.DBCreator, error) {
-	redisConn := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
-		Address: OreoRedisAddr,
-	})
-	mongoConn := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-		Address:        MongoDBAddr,
-		DBName:         "oreo",
-		CollectionName: "benchmark",
-		Username:       "admin",
-		Password:       "admin",
-	})
-	mongoConn.Connect()
+func OreoCreator(pattern string) (ycsb.DBCreator, error) {
 
-	// try to warm up the connection
-	var wg sync.WaitGroup
-	for i := 1; i <= 15; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			redisConn.Get("1")
-			mongoConn.Get("1")
-		}()
-	}
-	wg.Wait()
+	if pattern == "mm" {
+		mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
+			Address:        OreoMongoDBAddr1,
+			DBName:         "oreo",
+			CollectionName: "benchmark",
+			Username:       "admin",
+			Password:       "admin",
+		})
+		mongoConn2 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
+			Address:        OreoMongoDBAddr2,
+			DBName:         "oreo",
+			CollectionName: "benchmark",
+			Username:       "admin",
+			Password:       "admin",
+		})
+		mongoConn1.Connect()
+		mongoConn2.Connect()
 
-	connMap := map[string]txn.Connector{
-		"redis": redisConn,
-		"mongo": mongoConn,
+		// try to warm up the connection
+		var wg sync.WaitGroup
+		for i := 1; i <= 15; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				mongoConn1.Get("1")
+				mongoConn2.Get("1")
+			}()
+		}
+		wg.Wait()
+
+		connMap := map[string]txn.Connector{
+			"mongo1": mongoConn1,
+			"mongo2": mongoConn2,
+		}
+		return &oreo.OreoCreator{
+			ConnMap:             connMap,
+			GlobalDatastoreName: "mongo1",
+		}, nil
 	}
-	return &oreo.OreoCreator{
-		ConnMap:             connMap,
-		GlobalDatastoreName: "redis",
-	}, nil
+
+	if pattern == "rm" {
+		redisConn1 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
+			Address: OreoRedisAddr,
+		})
+
+		mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
+			Address:        OreoMongoDBAddr1,
+			DBName:         "oreo",
+			CollectionName: "benchmark",
+			Username:       "admin",
+			Password:       "admin",
+		})
+		mongoConn1.Connect()
+
+		// try to warm up the connection
+		var wg sync.WaitGroup
+		for i := 1; i <= 15; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				redisConn1.Get("1")
+				mongoConn1.Get("1")
+			}()
+		}
+		wg.Wait()
+
+		connMap := map[string]txn.Connector{
+			"redis1": redisConn1,
+			"mongo1": mongoConn1,
+		}
+		return &oreo.OreoCreator{
+			ConnMap:             connMap,
+			GlobalDatastoreName: "redis1",
+		}, nil
+	}
+
+	return nil, nil
 }

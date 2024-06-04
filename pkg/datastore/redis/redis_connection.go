@@ -305,7 +305,7 @@ func (r *RedisConnection) ConditionalCommit(key string, version string) (string,
 
 }
 
-func (r *RedisConnection) AtomicCreate(name string, value any) error {
+func (r *RedisConnection) AtomicCreate(name string, value any) (string, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -314,11 +314,15 @@ func (r *RedisConnection) AtomicCreate(name string, value any) error {
 	_, err := r.rdb.EvalSha(ctx, r.atomicCreateSHA, []string{name}, name, value).Result()
 	if err != nil {
 		if err.Error() == "already exists" {
-			return errors.New(txn.KeyExists)
+			old, err := r.Get(name)
+			if err != nil {
+				return "", errors.New("get old state failed")
+			}
+			return old, errors.New(txn.KeyExists)
 		}
-		return err
+		return "", err
 	}
-	return nil
+	return "", nil
 }
 
 // Get retrieves the value associated with the given key from the Redis database.

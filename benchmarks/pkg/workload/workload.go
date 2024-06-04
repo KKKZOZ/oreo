@@ -19,8 +19,10 @@ const (
 type datastoreType int64
 
 const (
-	redisDatastore datastoreType = iota + 1
-	mongoDatastore
+	redisDatastore1 datastoreType = iota + 1
+	mongoDatastore1
+	mongoDatastore2
+	couchDatastore1
 )
 
 const (
