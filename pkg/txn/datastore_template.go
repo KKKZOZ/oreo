@@ -234,9 +234,11 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		if item.TLease().Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
-			err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+			err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
 			if err != nil {
-				return nil, err
+				if err.Error() != "key exists" {
+					return nil, err
+				}
 			}
 			return rollbackFunc()
 		}
@@ -535,7 +537,7 @@ func (r *Datastore) rollbackFromConn(key string, txnId string) error {
 	}
 
 	if item.TLease().Before(time.Now()) {
-		err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+		err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
 		if err != nil {
 			return err
 		}
@@ -556,12 +558,16 @@ func (r *Datastore) validate() error {
 	for tId, predicate := range set {
 		txnId := tId
 		pred := predicate
+		if pred.Item == nil {
+			continue
+		}
 		eg.Go(func() error {
 			curState, err := r.Txn.tsrMaintainer.ReadTSR(txnId)
 			if err != nil {
 				if config.Config.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
-						err := r.rollbackFromConn(pred.Item.Key(), txnId)
+						key := pred.Item.Key()
+						err := r.rollbackFromConn(key, txnId)
 						if err != nil {
 							return errors.Join(errors.New("validation failed in AA mode"), err)
 						} else {
@@ -846,13 +852,13 @@ func (r *Datastore) ReadTSR(txnId string) (config.State, error) {
 
 // WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the Redis datastore.
 // It returns an error if the write operation fails.
-func (r *Datastore) WriteTSR(txnId string, txnState config.State) error {
+func (r *Datastore) CreateTSR(txnId string, txnState config.State) error {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	return r.conn.Put(txnId, util.ToString(txnState))
+	return r.conn.AtomicCreate(txnId, util.ToString(txnState))
 }
 
 // DeleteTSR deletes a transaction with the given transaction ID from the Redis datastore.

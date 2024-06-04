@@ -22,6 +22,8 @@ func NewDefaultConnection() *MongoConnection {
 		Address:        "mongodb://localhost:27017",
 		DBName:         "oreo",
 		CollectionName: "records",
+		Username:       "admin",
+		Password:       "admin",
 	})
 	err := conn.Connect()
 	if err != nil {
@@ -39,6 +41,8 @@ func NewTransactionWithSetup() *trxn.Transaction {
 		Address:        "mongodb://localhost:27017",
 		DBName:         "oreo",
 		CollectionName: "records",
+		Username:       "admin",
+		Password:       "admin",
 	})
 	txn := trxn.NewTransaction()
 	rds := NewMongoDatastore("mongo", conn)

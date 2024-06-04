@@ -161,6 +161,22 @@ func (r *CouchDBConnection) ConditionalCommit(key string, version string) (strin
 	return newVer, nil
 }
 
+func (r *CouchDBConnection) AtomicCreate(name string, value any) error {
+	if !r.hasConnected {
+		return fmt.Errorf("not connected to CouchDB")
+	}
+
+	value = map[string]interface{}{
+		"value": util.ToString(value),
+	}
+
+	_, err := r.db.Put(context.Background(), name, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Retrieve the value associated with the given key
 func (r *CouchDBConnection) Get(name string) (string, error) {
 	if !r.hasConnected {

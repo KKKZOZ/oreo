@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
+	"os"
+	"runtime/trace"
 	"time"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -40,37 +41,46 @@ func NewServer(port int, conn txn.Connector, factory txn.DataItemFactory) *Serve
 }
 
 func (s *Server) Run() {
-	http.HandleFunc("/ping", s.pingHandler)
-	http.HandleFunc("/read", s.readHandler)
-	http.HandleFunc("/prepare", s.prepareHandler)
-	http.HandleFunc("/commit", s.commitHandler)
-	http.HandleFunc("/abort", s.abortHandler)
+	router := func(ctx *fasthttp.RequestCtx) {
+		switch string(ctx.Path()) {
+		case "/ping":
+			s.pingHandler(ctx)
+		case "/read":
+			s.readHandler(ctx)
+		case "/prepare":
+			s.prepareHandler(ctx)
+		case "/commit":
+			s.commitHandler(ctx)
+		case "/abort":
+			s.abortHandler(ctx)
+		default:
+			ctx.Error("Unsupported path", fasthttp.StatusNotFound)
+		}
+	}
+
 	address := fmt.Sprintf(":%d", s.port)
 	fmt.Println(banner)
 	Log.Infow("Server running", "address", address)
-	log.Fatalf("Server failed: %v", http.ListenAndServe(address, nil))
+	log.Fatalf("Server failed: %v", fasthttp.ListenAndServe(address, router))
 }
 
-func (s *Server) pingHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("pong"))
+func (s *Server) pingHandler(ctx *fasthttp.RequestCtx) {
+	ctx.WriteString("pong")
 }
 
-func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
 		Log.Infow("Read request", "latency", time.Since(startTime))
 	}()
 
-	requestBody, _ := io.ReadAll(r.Body)
 	var req network.ReadRequest
-	err := json.Unmarshal(requestBody, &req)
-	if err != nil {
+	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
 		errMsg := fmt.Sprintf("Invalid timestamp parameter: %s", err.Error())
-		http.Error(w, errMsg, http.StatusBadRequest)
+		ctx.Error(errMsg, fasthttp.StatusBadRequest)
 		return
 	}
 
-	// Log.Infow("Read request", "key", req.Key, "start_time", req.StartTime)
 	item, dataType, err := s.reader.Read(req.Key, req.StartTime, req.Config, true)
 
 	var response network.ReadResponse
@@ -82,7 +92,6 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		redisItem, ok := item.(*redis.RedisItem)
 		if !ok {
-			// Handle the case where the type assertion fails
 			response = network.ReadResponse{
 				Status: "Error",
 				ErrMsg: "unexpected data type",
@@ -96,20 +105,19 @@ func (s *Server) readHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respBytes, _ := json.Marshal(response)
-	w.Write(respBytes)
+	ctx.Write(respBytes)
 }
 
-func (s *Server) prepareHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
 		Log.Infow("Prepare request", "latency", time.Since(startTime))
 	}()
 
-	body, _ := io.ReadAll(r.Body)
 	var req network.PrepareRequest
-	err := json.Unmarshal(body, &req)
-	if err != nil {
-		http.Error(w, "Invalid request body.", http.StatusBadRequest)
+	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
+		ctx.Error("Invalid request body.", fasthttp.StatusBadRequest)
+		return
 	}
 
 	var itemList []txn.DataItem
@@ -118,11 +126,7 @@ func (s *Server) prepareHandler(w http.ResponseWriter, r *http.Request) {
 		itemList = append(itemList, &i)
 	}
 
-	// Log.Infow("Prepare request", "item_list", itemList, "start_time",
-	// 	req.StartTime, "commit_time", req.CommitTime)
-
-	verMap, err := s.committer.Prepare(itemList, req.StartTime,
-		req.CommitTime, req.Config)
+	verMap, err := s.committer.Prepare(itemList, req.StartTime, req.CommitTime, req.Config)
 	var resp network.Response[map[string]string]
 	if err != nil {
 		resp = network.Response[map[string]string]{
@@ -136,23 +140,22 @@ func (s *Server) prepareHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respBytes, _ := json.Marshal(resp)
-	w.Write(respBytes)
+	ctx.Write(respBytes)
 }
 
-func (s *Server) commitHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
 		Log.Infow("Commit request", "latency", time.Since(startTime))
 	}()
 
-	body, _ := io.ReadAll(r.Body)
 	var req network.CommitRequest
-	err := json.Unmarshal(body, &req)
-	if err != nil {
-		http.Error(w, "Invalid request body.", http.StatusBadRequest)
+	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
+		ctx.Error("Invalid request body.", fasthttp.StatusBadRequest)
+		return
 	}
 
-	err = s.committer.Commit(req.List)
+	err := s.committer.Commit(req.List)
 	var resp network.Response[string]
 	if err != nil {
 		resp = network.Response[string]{
@@ -165,23 +168,22 @@ func (s *Server) commitHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respBytes, _ := json.Marshal(resp)
-	w.Write(respBytes)
+	ctx.Write(respBytes)
 }
 
-func (s *Server) abortHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
 		Log.Infow("Abort request", "latency", time.Since(startTime))
 	}()
 
-	body, _ := io.ReadAll(r.Body)
 	var req network.AbortRequest
-	err := json.Unmarshal(body, &req)
-	if err != nil {
-		http.Error(w, "Invalid request body.", http.StatusBadRequest)
+	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
+		ctx.Error("Invalid request body.", fasthttp.StatusBadRequest)
+		return
 	}
 
-	err = s.committer.Abort(req.KeyList, req.TxnId)
+	err := s.committer.Abort(req.KeyList, req.TxnId)
 	var resp network.Response[string]
 	if err != nil {
 		resp = network.Response[string]{
@@ -194,20 +196,33 @@ func (s *Server) abortHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	respBytes, _ := json.Marshal(resp)
-	w.Write(respBytes)
+	ctx.Write(respBytes)
 }
 
 var port = 8000
 var poolSize = 60
+var traceFlag = false
 
 var Log *zap.SugaredLogger
 
 func main() {
-
 	flag.IntVar(&port, "p", 8000, "Server Port")
 	flag.IntVar(&poolSize, "s", 60, "Pool Size")
+	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
 	flag.Parse()
 	newLogger()
+
+	if traceFlag {
+		f, err := os.Create("trace.out")
+		if err != nil {
+			panic(err)
+		}
+		err = trace.Start(f)
+		if err != nil {
+			panic(err)
+		}
+		defer trace.Stop()
+	}
 
 	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address:  "localhost:6380",
@@ -220,7 +235,7 @@ func main() {
 
 func newLogger() {
 	conf := zap.NewDevelopmentConfig()
-	conf.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	conf.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
 	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	conf.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	conf.EncoderConfig.MessageKey = "msg"

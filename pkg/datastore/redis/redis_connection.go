@@ -23,6 +23,7 @@ type RedisConnection struct {
 	se                   serializer.Serializer
 	connected            bool
 	atomicCreateSHA      string
+	atomicCreateItemSHA  string
 	conditionalUpdateSHA string
 	conditionalCommitSHA string
 }
@@ -35,6 +36,14 @@ type ConnectionOptions struct {
 }
 
 const AtomicCreateScript = `
+if redis.call('EXISTS', KEYS[1]) == 0 then
+	return redis.call('SET',ARGV[1] , ARGV[2])
+else
+	return redis.error_reply('already exists')
+end
+`
+
+const AtomicCreateItemScript = `
 if redis.call('EXISTS', KEYS[1]) == 0 then
 	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
 	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
@@ -145,6 +154,15 @@ func (r *RedisConnection) Connect() error {
 	})
 
 	eg.Go(func() error {
+		sha, err := r.rdb.ScriptLoad(ctx, AtomicCreateItemScript).Result()
+		if err != nil {
+			return err
+		}
+		r.atomicCreateItemSHA = sha
+		return nil
+	})
+
+	eg.Go(func() error {
 		sha, err := r.rdb.ScriptLoad(ctx, ConditionalUpdateScript).Result()
 		if err != nil {
 			return err
@@ -232,7 +250,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		ctx := context.Background()
 		newVer := util.AddToString(value.Version(), 1)
 
-		_, err := r.rdb.EvalSha(ctx, r.atomicCreateSHA, []string{value.Key()}, value.Version(), value.Key(),
+		_, err := r.rdb.EvalSha(ctx, r.atomicCreateItemSHA, []string{value.Key()}, value.Version(), value.Key(),
 			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
 			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
@@ -285,6 +303,22 @@ func (r *RedisConnection) ConditionalCommit(key string, version string) (string,
 	}
 	return newVer, nil
 
+}
+
+func (r *RedisConnection) AtomicCreate(name string, value any) error {
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	ctx := context.Background()
+	_, err := r.rdb.EvalSha(ctx, r.atomicCreateSHA, []string{name}, name, value).Result()
+	if err != nil {
+		if err.Error() == "already exists" {
+			return errors.New(txn.KeyExists)
+		}
+		return err
+	}
+	return nil
 }
 
 // Get retrieves the value associated with the given key from the Redis database.

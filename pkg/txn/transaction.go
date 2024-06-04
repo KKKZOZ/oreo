@@ -26,6 +26,7 @@ var (
 	DirtyRead        = errors.Errorf("dirty read")
 	DeserializeError = errors.Errorf("deserialize error")
 	VersionMismatch  = errors.Errorf("version mismatch")
+	KeyExists        = errors.Errorf("key exists")
 	ReadFailed       = errors.Errorf("read failed due to unknown txn status")
 )
 
@@ -287,19 +288,20 @@ func (t *Transaction) Commit() error {
 
 	// ------------------- Commit phase ----------------------------
 	// The sync point
-	// fmt.Printf("Before getting TSR latency: %v\n", time.Since(startTime))
-	txnState, err := t.GetTSRState(t.TxnId)
-	if err == nil && txnState == config.ABORTED {
-		Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
+	// txnState, err := t.GetTSRState(t.TxnId)
+	// if err == nil && txnState == config.ABORTED {
+	// 	Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
+	// 	go t.Abort()
+	// 	return errors.New("transaction is aborted by other transaction")
+	// }
+	Log.Infow("Writing TSR", "txnId", t.TxnId)
+	err = t.CreateTSR(t.TxnId, config.COMMITTED)
+	// if there is already a TSR,
+	// it means the transaction is aborted by other transaction
+	if err != nil {
+		// fmt.Printf("Error: %v\n", err.Error())
 		go t.Abort()
 		return errors.New("transaction is aborted by other transaction")
-	}
-	// fmt.Printf("Before writing TSR latency: %v\n", time.Since(startTime))
-	Log.Infow("Writing TSR", "txnId", t.TxnId)
-	err = t.WriteTSR(t.TxnId, config.COMMITTED)
-	if err != nil {
-		go t.Abort()
-		return err
 	}
 
 	if config.Config.AsyncLevel == config.AsyncLevelTwo {
@@ -321,7 +323,6 @@ func (t *Transaction) Commit() error {
 		}()
 		return nil
 	}
-	// fmt.Printf("Before commit ds latency: %v\n", time.Since(startTime))
 	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
@@ -333,7 +334,6 @@ func (t *Transaction) Commit() error {
 		}(ds)
 	}
 	wg.Wait()
-	// fmt.Printf("After commit ds latency: %v\n", time.Since(startTime))
 
 	if config.Config.AsyncLevel == config.AsyncLevelOne {
 		go func() {
@@ -365,7 +365,7 @@ func (t *Transaction) Abort() error {
 		hasCommitted = true
 	}
 	Log.Infow("aborting transaction", "txnId", t.TxnId, "hasCommitted", hasCommitted)
-	t.WriteTSR(t.TxnId, config.ABORTED)
+	t.CreateTSR(t.TxnId, config.ABORTED)
 	for _, ds := range t.dataStoreMap {
 		err := ds.Abort(hasCommitted)
 		if err != nil {
@@ -375,13 +375,13 @@ func (t *Transaction) Abort() error {
 	return nil
 }
 
-// WriteTSR writes the Transaction State Record (TSR) for the given transaction ID and state.
+// SetTSR writes the Transaction State Record (TSR) for the given transaction ID and state.
 // It uses the global data store to persist the TSR.
 // The txnId parameter specifies the ID of the transaction.
 // The txnState parameter specifies the state of the transaction.
 // Returns an error if there was a problem writing the TSR.
-func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
-	return t.tsrMaintainer.WriteTSR(txnId, txnState)
+func (t *Transaction) CreateTSR(txnId string, txnState config.State) error {
+	return t.tsrMaintainer.CreateTSR(txnId, txnState)
 }
 
 // DeleteTSR deletes the Transaction Status Record (TSR) associated with the Transaction.
