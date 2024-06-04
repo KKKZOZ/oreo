@@ -23,12 +23,12 @@ import (
 const (
 	RedisDBAddr = "43.139.62.221:6371"
 	// MongoDBAddr      = "mongodb://43.139.62.221:27017"
-	MongoDBAddr      = "mongodb://localhost:27017"
-	MongoDBAddr2     = "mongodb://43.139.62.221:27021"
-	MongoDBGroupAddr = "mongodb://43.139.62.221:27021,43.139.62.221:27022,43.139.62.221:27023/?replicaSet=dbrs"
-	OreoRedisAddr    = "43.139.62.221:6380"
+	MongoDBAddr = "mongodb://localhost:27017"
+	// MongoDBAddr2     = "mongodb://43.139.62.221:27021"
+	// MongoDBGroupAddr = "mongodb://43.139.62.221:27021,43.139.62.221:27022,43.139.62.221:27023/?replicaSet=dbrs"
+	// OreoRedisAddr    = "43.139.62.221:6380"
 	// OreoRedisAddr    = "43.139.62.221:6379"
-	// OreoRedisAddr = "localhost:6380"
+	OreoRedisAddr = "localhost:6380"
 
 	OreoCouchDBAddr = "http://admin:password@43.139.62.221:5984"
 )
@@ -114,9 +114,9 @@ func main() {
 	default:
 		fmt.Printf("No preset configuration\n")
 		cfg.Config.ReadStrategy = cfg.AssumeAbort
-		cfg.Debug.DebugMode = false
+		cfg.Debug.DebugMode = true
 		cfg.Debug.HTTPAdditionalLatency = 0 * time.Millisecond
-		cfg.Debug.ConnAdditionalLatency = 0 * time.Millisecond
+		cfg.Debug.ConnAdditionalLatency = 1 * time.Millisecond
 		cfg.Config.ConcurrentOptimizationLevel = 1
 		cfg.Config.AsyncLevel = 2
 	}

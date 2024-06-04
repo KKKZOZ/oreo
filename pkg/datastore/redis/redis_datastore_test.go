@@ -1537,12 +1537,13 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		RTxnId:    "TestDirectWriteOnPreparingRecord",
 		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(2 * time.Second),
-		RTLease:   time.Now().Add(1 * time.Second),
+		RTValid:   time.Now().Add(20 * time.Second),
+		RTLease:   time.Now().Add(10 * time.Second),
 		RVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
+	conn.Delete("TestDirectWriteOnPreparingRecord")
 
 	txn := NewTransactionWithSetup()
 	txn.Start()

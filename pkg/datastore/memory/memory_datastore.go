@@ -93,7 +93,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		// because the transaction that modified the record has been aborted
 		if item.TLease.Before(m.Txn.TxnStartTime) {
 			// the corresponding transaction is considered ABORTED
-			m.Txn.WriteTSR(item.TxnId, config.ABORTED)
+			m.Txn.CreateTSR(item.TxnId, config.ABORTED)
 			item, err := m.rollback(item)
 			if err != nil {
 				return err

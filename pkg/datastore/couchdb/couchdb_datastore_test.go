@@ -1887,7 +1887,7 @@ func TestTSROperations(t *testing.T) {
 		ds := cds.(trxn.TSRMaintainer)
 		conn.Delete("txn-1")
 
-		err := ds.WriteTSR("txn-1", config.COMMITTED)
+		err := ds.CreateTSR("txn-1", config.COMMITTED)
 		assert.NoError(t, err)
 	})
 
@@ -1907,7 +1907,7 @@ func TestTSROperations(t *testing.T) {
 
 		ds.DeleteTSR("txn-1")
 
-		err := ds.WriteTSR("txn-1", config.COMMITTED)
+		err := ds.CreateTSR("txn-1", config.COMMITTED)
 		assert.NoError(t, err)
 
 		state, err := ds.ReadTSR("txn-1")
