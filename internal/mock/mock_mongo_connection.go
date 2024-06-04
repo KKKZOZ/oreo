@@ -23,10 +23,12 @@ type MockMongoConnection struct {
 	GetTimes     int
 }
 
-func NewMockMongoConnection(address string, port int, limit int,
+func NewMockMongoConnection(address string, port int, username string, password string, limit int,
 	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockMongoConnection {
 	conn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 		Address:        fmt.Sprintf("mongodb://%s:%d", address, port),
+		Username:       username,
+		Password:       password,
 		DBName:         "oreo",
 		CollectionName: "records",
 	})

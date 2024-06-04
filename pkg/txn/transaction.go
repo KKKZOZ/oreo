@@ -288,14 +288,19 @@ func (t *Transaction) Commit() error {
 
 	// ------------------- Commit phase ----------------------------
 	// The sync point
+
 	// txnState, err := t.GetTSRState(t.TxnId)
 	// if err == nil && txnState == config.ABORTED {
 	// 	Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
 	// 	go t.Abort()
 	// 	return errors.New("transaction is aborted by other transaction")
 	// }
-	Log.Infow("Writing TSR", "txnId", t.TxnId)
-	err = t.CreateTSR(t.TxnId, config.COMMITTED)
+	// err = t.WriteTSR(t.TxnId, config.COMMITTED)
+	// if err != nil {
+	// 	go t.Abort()
+	// 	return err
+	// }
+	_, err = t.CreateTSR(t.TxnId, config.COMMITTED)
 	// if there is already a TSR,
 	// it means the transaction is aborted by other transaction
 	if err != nil {
@@ -365,7 +370,7 @@ func (t *Transaction) Abort() error {
 		hasCommitted = true
 	}
 	Log.Infow("aborting transaction", "txnId", t.TxnId, "hasCommitted", hasCommitted)
-	t.CreateTSR(t.TxnId, config.ABORTED)
+	t.WriteTSR(t.TxnId, config.ABORTED)
 	for _, ds := range t.dataStoreMap {
 		err := ds.Abort(hasCommitted)
 		if err != nil {
@@ -375,12 +380,16 @@ func (t *Transaction) Abort() error {
 	return nil
 }
 
+func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
+	return t.tsrMaintainer.WriteTSR(txnId, txnState)
+}
+
 // SetTSR writes the Transaction State Record (TSR) for the given transaction ID and state.
 // It uses the global data store to persist the TSR.
 // The txnId parameter specifies the ID of the transaction.
 // The txnState parameter specifies the state of the transaction.
 // Returns an error if there was a problem writing the TSR.
-func (t *Transaction) CreateTSR(txnId string, txnState config.State) error {
+func (t *Transaction) CreateTSR(txnId string, txnState config.State) (config.State, error) {
 	return t.tsrMaintainer.CreateTSR(txnId, txnState)
 }
 

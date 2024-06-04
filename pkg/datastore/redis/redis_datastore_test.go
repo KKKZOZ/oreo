@@ -3,6 +3,7 @@ package redis
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -40,6 +41,7 @@ func NewTransactionWithSetup() *trxn.Transaction {
 }
 
 func TestSimpleReadWhenCommitted(t *testing.T) {
+	startTime := time.Now()
 
 	txn := trxn.NewTransaction()
 	conn := NewRedisConnection(&ConnectionOptions{
@@ -48,6 +50,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 	rds := NewRedisDatastore("redis", conn)
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
+	fmt.Printf("Time to create transaction: %v\n", time.Since(startTime))
 
 	// initialize the redis database
 	expected := testutil.Person{
@@ -66,12 +69,14 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 
 	key := "John"
 	conn.PutItem(key, expectedRedisItem)
+	fmt.Printf("Time to put item: %v\n", time.Since(startTime))
 
 	// Start the transaction
 	err := txn.Start()
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
+	fmt.Printf("Time to start transaction: %v\n", time.Since(startTime))
 
 	// Read the value
 	var result testutil.Person

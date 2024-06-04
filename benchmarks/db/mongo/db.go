@@ -52,8 +52,7 @@ func (r *Mongo) CleanupThread(ctx context.Context) {
 }
 
 func (r *Mongo) Read(ctx context.Context, table string, key string) (string, error) {
-	keyName := getKeyName(table, key)
-
+	keyName := getKeyName("", key)
 	var doc MyDocument
 	err := r.coll.FindOne(ctx, bson.M{"_id": keyName}).Decode(&doc)
 	if err != nil {
@@ -64,7 +63,7 @@ func (r *Mongo) Read(ctx context.Context, table string, key string) (string, err
 }
 
 func (r *Mongo) Update(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName(table, key)
+	keyName := getKeyName("", key)
 
 	_, err := r.coll.UpdateOne(
 		context.Background(),
@@ -80,7 +79,7 @@ func (r *Mongo) Update(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Insert(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName(table, key)
+	keyName := getKeyName("", key)
 
 	_, err := r.coll.UpdateOne(
 		context.Background(),
@@ -96,7 +95,7 @@ func (r *Mongo) Insert(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Delete(ctx context.Context, table string, key string) error {
-	keyName := getKeyName(table, key)
+	keyName := getKeyName("", key)
 
 	_, err := r.coll.DeleteOne(ctx, bson.M{"_id": keyName})
 	return err

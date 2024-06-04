@@ -14,21 +14,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cristalhq/aconfig"
-	"github.com/cristalhq/aconfig/aconfigyaml"
 	cfg "github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/network"
 )
 
 const (
-	RedisDBAddr = "43.139.62.221:6371"
-	// MongoDBAddr      = "mongodb://43.139.62.221:27017"
-	MongoDBAddr = "mongodb://localhost:27017"
-	// MongoDBAddr2     = "mongodb://43.139.62.221:27021"
-	// MongoDBGroupAddr = "mongodb://43.139.62.221:27021,43.139.62.221:27022,43.139.62.221:27023/?replicaSet=dbrs"
-	// OreoRedisAddr    = "43.139.62.221:6380"
-	// OreoRedisAddr    = "43.139.62.221:6379"
-	OreoRedisAddr = "localhost:6380"
+	RedisDBAddr   = "localhost:6379"
+	OreoRedisAddr = "43.139.62.221:6380"
+
+	MongoDBAddr1     = "mongodb://localhost:27017"
+	MongoDBAddr2     = "mongodb://localhost:27017"
+	OreoMongoDBAddr1 = "mongodb://localhost:27018"
+	OreoMongoDBAddr2 = "mongodb://localhost:27018"
 
 	OreoCouchDBAddr = "http://admin:password@43.139.62.221:5984"
 )
@@ -80,25 +77,26 @@ func main() {
 		TransferAmountPerTxn:  5,
 		PostCheckWorkerThread: 50,
 
-		RedisProportion: 0.5,
-		MongoProportion: 0.5,
+		Redis1Proportion: 0,
+		Mongo1Proportion: 0,
+		Mongo2Proportion: 0,
 	}
 
-	loader := aconfig.LoaderFor(wp, aconfig.Config{
-		SkipDefaults: true,
-		SkipFiles:    false,
-		SkipEnv:      true,
-		SkipFlags:    true,
-		Files:        []string{workloadConfigPath},
-		FileDecoders: map[string]aconfig.FileDecoder{
-			".yaml": aconfigyaml.New(),
-		},
-	})
+	// loader := aconfig.LoaderFor(wp, aconfig.Config{
+	// 	SkipDefaults: true,
+	// 	SkipFiles:    false,
+	// 	SkipEnv:      true,
+	// 	SkipFlags:    true,
+	// 	Files:        []string{workloadConfigPath},
+	// 	FileDecoders: map[string]aconfig.FileDecoder{
+	// 		".yaml": aconfigyaml.New(),
+	// 	},
+	// })
 
-	if err := loader.Load(); err != nil {
-		fmt.Printf("Error when loading workload configuration: %v\n", err)
-		return
-	}
+	// if err := loader.Load(); err != nil {
+	// 	fmt.Printf("Error when loading workload configuration: %v\n", err)
+	// 	return
+	// }
 
 	wp.TotalAmount = wp.InitialAmountPerKey * wp.RecordCount
 
@@ -114,7 +112,7 @@ func main() {
 	default:
 		fmt.Printf("No preset configuration\n")
 		cfg.Config.ReadStrategy = cfg.AssumeAbort
-		cfg.Debug.DebugMode = true
+		cfg.Debug.DebugMode = false
 		cfg.Debug.HTTPAdditionalLatency = 0 * time.Millisecond
 		cfg.Debug.ConnAdditionalLatency = 1 * time.Millisecond
 		cfg.Config.ConcurrentOptimizationLevel = 1
@@ -129,6 +127,7 @@ func main() {
 	measurement.EnableWarmUp(true)
 
 	wp.ThreadCount = threadNum
+	setupDistribution(wp, dbType)
 	wl := createWorkload(wp)
 	client := generateClient(&wl, wp, dbType)
 
@@ -153,21 +152,6 @@ func main() {
 	default:
 		panic("Invalid mode")
 	}
-}
-
-func displayBenchmarkInfo() {
-	fmt.Printf("-----------------\n")
-	fmt.Printf("DBType: %s\n", dbType)
-	fmt.Printf("Mode: %s\n", mode)
-	fmt.Printf("WorkloadType: %s\n", workloadType)
-	fmt.Printf("ThreadNum: %d\n", threadNum)
-	fmt.Printf("Remote Mode: %v\n", isRemote)
-	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
-		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
-		cfg.Config.MaxOutstandingRequest, cfg.Config.MaxRecordLength)
-	fmt.Printf("HTTPAdditionalLatency: %v ConnAdditionalLatency: %v\n",
-		cfg.Debug.HTTPAdditionalLatency, cfg.Debug.ConnAdditionalLatency)
-	fmt.Printf("-----------------\n")
 }
 
 func warmUpHttpClient() {
@@ -200,6 +184,10 @@ func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
 			fmt.Println("This is a YCSB benchmark")
 			wp.WorkloadName = "ycsb"
 			return workload.NewYCSBWorkload(wp)
+		case "multi-ycsb":
+			fmt.Println("This is a multi-ycsb benchmark")
+			wp.WorkloadName = "multi-ycsb"
+			return workload.NewMultiYCSBWorkload(wp)
 		case "dc":
 			fmt.Println("This is a data consistency test")
 			return workload.NewDataConsistencyWorkload(wp)
@@ -226,7 +214,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 	switch dbName {
 	case "redis":
 		wp.DBName = "redis"
-		creator, err := RedisCreator()
+		creator, err := RedisCreator(RedisDBAddr)
 		if err != nil {
 			fmt.Printf("Error when creating redis client: %v\n", err)
 			return nil
@@ -237,7 +225,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "mongo":
 		wp.DBName = "mongo"
-		creator, err := MongoCreator()
+		creator, err := MongoCreator(MongoDBAddr1)
 		if err != nil {
 			fmt.Printf("Error when creating mongo client: %v\n", err)
 			return nil
@@ -246,23 +234,26 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 			dbName: creator,
 		}
 		c = client.NewClient(wl, wp, creatorMap)
-	case "redis-mongo":
-		wp.DBName = "redis-mongo"
-		redisCreator, err1 := RedisCreator()
-		mongoCreator, err2 := MongoCreator()
-		if err1 != nil || err2 != nil {
-			fmt.Printf("Error when creating client: %v %v\n", err1, err2)
+	case "native-mm":
+		wp.DBName = "native-mm"
+		dbSetCreator, err := NativeCreator("mm")
+		if err != nil {
+			fmt.Printf("Error when creating native-mm client: %v\n", err)
 			return nil
 		}
-		dbSetCreator := workload.DBSetCreator{
-			CreatorMap: map[string]ycsb.DBCreator{
-				"redis": redisCreator,
-				"mongo": mongoCreator,
-			},
-		}
-
 		creatorMap := map[string]ycsb.DBCreator{
-			"redis-mongo": &dbSetCreator,
+			"native-mm": dbSetCreator,
+		}
+		c = client.NewClient(wl, wp, creatorMap)
+	case "native-rm":
+		wp.DBName = "native-rm"
+		dbSetCreator, err := NativeCreator("mm")
+		if err != nil {
+			fmt.Printf("Error when creating native-rm client: %v\n", err)
+			return nil
+		}
+		creatorMap := map[string]ycsb.DBCreator{
+			"native-rm": dbSetCreator,
 		}
 		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo-redis":
@@ -298,11 +289,22 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 			dbName: creator,
 		}
 		c = client.NewClient(wl, wp, creatorMap)
-	case "oreo":
-		wp.DBName = "oreo"
-		creator, err := OreoCreator()
+	case "oreo-mm":
+		wp.DBName = "oreo-mm"
+		creator, err := OreoCreator("mm")
 		if err != nil {
-			fmt.Printf("Error when creating oreo-redis client: %v\n", err)
+			fmt.Printf("Error when creating oreo-mm client: %v\n", err)
+			return nil
+		}
+		creatorMap := map[string]ycsb.DBCreator{
+			dbName: creator,
+		}
+		c = client.NewClient(wl, wp, creatorMap)
+	case "oreo-rm":
+		wp.DBName = "oreo-rm"
+		creator, err := OreoCreator("rm")
+		if err != nil {
+			fmt.Printf("Error when creating oreo-rm client: %v\n", err)
 			return nil
 		}
 		creatorMap := map[string]ycsb.DBCreator{
@@ -339,4 +341,42 @@ func parseAndValidateFlag() {
 	if threadNum <= 0 {
 		panic("ThreadNum should be a positive integer")
 	}
+}
+
+func setupDistribution(wp *workload.WorkloadParameter, dbType string) {
+	switch dbType {
+	case "native-mm":
+		wp.Redis1Proportion = 0
+		wp.Mongo1Proportion = 0.5
+		wp.Mongo2Proportion = 0.5
+	case "native-rm":
+		wp.Redis1Proportion = 0.5
+		wp.Mongo1Proportion = 0.5
+		wp.Mongo2Proportion = 0
+	case "oreo-mm":
+		wp.Redis1Proportion = 0
+		wp.Mongo1Proportion = 0.5
+		wp.Mongo2Proportion = 0.5
+	case "oreo-rm":
+		wp.Redis1Proportion = 0.5
+		wp.Mongo1Proportion = 0.5
+		wp.Mongo2Proportion = 0
+	default:
+		wp.Redis1Proportion = 1.0
+	}
+}
+
+func displayBenchmarkInfo() {
+	fmt.Printf("-----------------\n")
+	fmt.Printf("DBType: %s\n", dbType)
+	fmt.Printf("Mode: %s\n", mode)
+	fmt.Printf("WorkloadType: %s\n", workloadType)
+	fmt.Printf("ThreadNum: %d\n", threadNum)
+	fmt.Printf("Remote Mode: %v\n", isRemote)
+	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
+		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
+		cfg.Config.MaxOutstandingRequest, cfg.Config.MaxRecordLength)
+	fmt.Printf("HTTPAdditionalLatency: %v ConnAdditionalLatency: %v\n",
+		cfg.Debug.HTTPAdditionalLatency, cfg.Debug.ConnAdditionalLatency)
+	fmt.Printf("-----------------\n")
 }

@@ -31,8 +31,8 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 	if dsType == "mongo" {
 		conn = mongo.NewMongoConnection(&mongo.ConnectionOptions{
 			Address:        "mongodb://localhost:27017",
-			Username:       "",
-			Password:       "",
+			Username:       "admin",
+			Password:       "admin",
 			DBName:         "oreo",
 			CollectionName: "records",
 		})
@@ -72,8 +72,8 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 	if dsType == "mongo" {
 		conn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 			Address:        "mongodb://localhost:27017",
-			Username:       "",
-			Password:       "",
+			Username:       "admin",
+			Password:       "admin",
 			DBName:         "oreo",
 			CollectionName: "records",
 		})
@@ -117,7 +117,7 @@ func NewTransactionWithMockConn(dsType string, limit int,
 
 	if dsType == "mongo" {
 		mockConn := mock.NewMockMongoConnection(
-			"localhost", 27017, limit, isReturned, networkDelay, debugFunc)
+			"localhost", 27017, "admin", "admin", limit, isReturned, networkDelay, debugFunc)
 		mds := mongo.NewMongoDatastore("mongo", mockConn)
 		txn.AddDatastore(mds)
 		txn.SetGlobalDatastore(mds)
