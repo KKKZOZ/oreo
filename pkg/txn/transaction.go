@@ -459,12 +459,11 @@ func (t *Transaction) Unlock(key string, id string) error {
 	return t.locker.Unlock(key, id)
 }
 
-func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDataType, error) {
-	// TODO: Handle dsName
+func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDataStrategy, error) {
 	if !t.isRemote {
 		return nil, Normal, errors.New("not a remote transaction")
 	}
-	return t.client.Read(key, t.TxnStartTime, RecordConfig{
+	return t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
 		MaxRecordLen: config.Config.MaxRecordLength,
 		ReadStrategy: config.Config.ReadStrategy,
 	})
@@ -476,30 +475,31 @@ func (t *Transaction) RemoteValidate(dsName string, key string, item DataItem) e
 	return nil
 }
 
-func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem) (map[string]string, error) {
-	// TODO: Handle dsName
+func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem, validationMap map[string]PredicateInfo) (map[string]string, error) {
 	if !t.isRemote {
 		return nil, errors.New("not a remote transaction")
 	}
-	return t.client.Prepare(itemList, t.TxnStartTime, t.TxnCommitTime, RecordConfig{
+
+	cfg := RecordConfig{
 		MaxRecordLen: config.Config.MaxRecordLength,
-	})
+		ReadStrategy: config.Config.ReadStrategy,
+	}
+	return t.client.Prepare(dsName, itemList, t.TxnStartTime, t.TxnCommitTime,
+		cfg, validationMap)
 }
 
 func (t *Transaction) RemoteCommit(dsName string, infoList []CommitInfo) error {
-	// TODO: Handle dsName
 	if !t.isRemote {
 		return errors.New("not a remote transaction")
 	}
-	return t.client.Commit(infoList)
+	return t.client.Commit(dsName, infoList)
 }
 
 func (t *Transaction) RemoteAbort(dsName string, keyList []string) error {
-	// TODO: Handle dsName
 	if !t.isRemote {
 		return errors.New("not a remote transaction")
 	}
-	return t.client.Abort(keyList, t.TxnId)
+	return t.client.Abort(dsName, keyList, t.TxnId)
 }
 
 func (t *Transaction) debug(topic testutil.TxnTopic, format string, a ...interface{}) {

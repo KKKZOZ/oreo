@@ -13,24 +13,71 @@ import (
 )
 
 type Committer struct {
-	conn        txn.Connector
+	connMap     map[string]txn.Connector
 	reader      Reader
 	se          serializer.Serializer
 	itemFactory txn.DataItemFactory
 }
 
-func NewCommitter(conn txn.Connector, se serializer.Serializer, itemFactory txn.DataItemFactory) *Committer {
-	conn.Connect()
+func NewCommitter(connMap map[string]txn.Connector, se serializer.Serializer, itemFactory txn.DataItemFactory) *Committer {
+	// conn.Connect()
 	return &Committer{
-		conn:        conn,
-		reader:      *NewReader(conn, itemFactory, se),
+		connMap:     connMap,
+		reader:      *NewReader(connMap, itemFactory, se),
 		se:          se,
 		itemFactory: itemFactory,
 	}
 }
 
-func (c *Committer) Prepare(itemList []txn.DataItem,
-	startTime time.Time, commitTime time.Time, cfg txn.RecordConfig) (map[string]string, error) {
+func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
+	validationMap map[string]txn.PredicateInfo) error {
+	if cfg.ReadStrategy == config.Pessimistic {
+		return nil
+	}
+
+	var eg errgroup.Group
+	for tId, predicate := range validationMap {
+		txnId := tId
+		pred := predicate
+		if pred.ItemKey == "" {
+			return errors.New("validation failed due to predicate item's empty key")
+		}
+		eg.Go(func() error {
+			curState, err := c.reader.readTSR(dsName, txnId)
+			if err != nil {
+				if config.Config.ReadStrategy == config.AssumeAbort {
+					if pred.LeaseTime.Before(time.Now()) {
+						key := pred.ItemKey
+						err := c.rollbackFromConn(dsName, key, txnId)
+						if err != nil {
+							return errors.Join(errors.New("validation failed in AA mode"), err)
+						} else {
+							return nil
+						}
+					}
+				}
+				return errors.New("validation failed due to unknown status")
+			}
+			if curState != pred.State {
+				return errors.New("validation failed due to false assumption")
+			} else {
+				return nil
+			}
+		})
+	}
+
+	return eg.Wait()
+
+}
+
+func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
+	startTime time.Time, commitTime time.Time,
+	cfg txn.RecordConfig, validateMap map[string]txn.PredicateInfo) (map[string]string, error) {
+
+	err := c.validate(dsName, cfg, validateMap)
+	if err != nil {
+		return nil, err
+	}
 
 	var mu sync.Mutex
 	var eg errgroup.Group
@@ -45,7 +92,7 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 				doCreate = false
 			} else {
 				// else we do a txn Read to determine its version
-				dbItem, _, err := c.reader.Read(item.Key(), startTime, cfg, false)
+				dbItem, _, err := c.reader.Read(dsName, item.Key(), startTime, cfg, false)
 				if err != nil && err.Error() != "key not found" {
 					return err
 				}
@@ -56,28 +103,33 @@ func (c *Committer) Prepare(itemList []txn.DataItem,
 				}
 				item, _ = c.updateMetadata(item, dbItem, commitTime, cfg)
 			}
-			ver, err := c.conn.ConditionalUpdate(item.Key(), item, doCreate)
+			ver, err := c.connMap[dsName].ConditionalUpdate(item.Key(), item, doCreate)
+			// if err != nil {
+			// 	fmt.Printf("ConditionalUpdate error: %v in %v, item: %v\n", err, dsName, item)
+			// }
+
 			mu.Lock()
 			defer mu.Unlock()
 			versionMap[item.Key()] = ver
 			return err
 		})
 	}
-	err := eg.Wait()
+	err = eg.Wait()
+
 	return versionMap, err
 }
 
-func (c *Committer) Abort(keyList []string, txnId string) error {
+func (c *Committer) Abort(dsName string, keyList []string, txnId string) error {
 	var eg errgroup.Group
 	for _, k := range keyList {
 		key := k
 		eg.Go(func() error {
-			item, err := c.conn.GetItem(key)
+			item, err := c.connMap[dsName].GetItem(key)
 			if err != nil {
 				return err
 			}
 			if item.TxnId() == txnId {
-				_, err = c.rollback(item)
+				_, err = c.rollback(dsName, item)
 				return err
 			} else {
 				return nil
@@ -87,12 +139,12 @@ func (c *Committer) Abort(keyList []string, txnId string) error {
 	return eg.Wait()
 }
 
-func (c *Committer) Commit(infoList []txn.CommitInfo) error {
+func (c *Committer) Commit(dsName string, infoList []txn.CommitInfo) error {
 	var eg errgroup.Group
 	for _, info := range infoList {
 		item := info
 		eg.Go(func() error {
-			_, err := c.conn.ConditionalCommit(item.Key, item.Version)
+			_, err := c.connMap[dsName].ConditionalCommit(item.Key, item.Version)
 			return err
 		})
 	}
@@ -196,12 +248,12 @@ func (c *Committer) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 // rollback overwrites the record with the application data
 // and metadata that found in field Prev.
 // if the `Prev` is empty, it simply deletes the record
-func (c *Committer) rollback(item txn.DataItem) (txn.DataItem, error) {
+func (c *Committer) rollback(dsName string, item txn.DataItem) (txn.DataItem, error) {
 
 	if item.Prev() == "" {
 		item.SetIsDeleted(true)
 		item.SetTxnState(config.COMMITTED)
-		newVer, err := c.conn.ConditionalUpdate(item.Key(), item, false)
+		newVer, err := c.connMap[dsName].ConditionalUpdate(item.Key(), item, false)
 		if err != nil {
 			return nil, errors.Join(errors.New("rollback failed"), err)
 		}
@@ -215,7 +267,7 @@ func (c *Committer) rollback(item txn.DataItem) (txn.DataItem, error) {
 	}
 	// try to rollback through ConditionalUpdate
 	newItem.SetVersion(item.Version())
-	newVer, err := c.conn.ConditionalUpdate(item.Key(), newItem, false)
+	newVer, err := c.connMap[dsName].ConditionalUpdate(item.Key(), newItem, false)
 	// err = r.conn.PutItem(item.Key, newItem)
 	if err != nil {
 		return nil, errors.Join(errors.New("rollback failed"), err)
@@ -224,4 +276,43 @@ func (c *Committer) rollback(item txn.DataItem) (txn.DataItem, error) {
 	newItem.SetVersion(newVer)
 
 	return newItem, err
+}
+
+func (c *Committer) rollbackFromConn(dsName string, key string, txnId string) error {
+
+	item, err := c.connMap[dsName].GetItem(key)
+	if err != nil {
+		return err
+	}
+
+	if item.TxnState() != config.PREPARED {
+		return errors.New("rollback failed due to wrong state")
+	}
+	if item.TxnId() != txnId {
+		return errors.New("rollback failed due to wrong txnId")
+	}
+
+	if item.TLease().Before(time.Now()) {
+		curState, err := c.reader.createTSR(dsName, item.TxnId(), config.ABORTED)
+		if err != nil {
+			if err.Error() == "key exists" {
+				if curState == config.COMMITTED {
+					return errors.New("rollback failed because the corresponding transaction has committed")
+				}
+				// if curState == config.ABORTED
+				// it means the transaction has been rolled back
+				// so we can safely rollback the record
+			} else {
+				return err
+			}
+		}
+
+		// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+		// if err != nil {
+		// 	return err
+		// }
+		_, err = c.rollback(dsName, item)
+		return err
+	}
+	return nil
 }

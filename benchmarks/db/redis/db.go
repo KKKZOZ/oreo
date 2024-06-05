@@ -71,5 +71,5 @@ func (r *Redis) Delete(ctx context.Context, table string, key string) error {
 }
 
 func getKeyName(table string, key string) string {
-	return table + "/" + key
+	return "" + "/" + key
 }

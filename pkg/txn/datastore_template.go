@@ -3,6 +3,7 @@ package txn
 
 import (
 	"cmp"
+	"log"
 	"slices"
 	"sync"
 	"time"
@@ -25,7 +26,7 @@ const (
 
 type PredicateInfo struct {
 	State     config.State
-	Item      DataItem
+	ItemKey   string
 	LeaseTime time.Time
 }
 
@@ -111,11 +112,13 @@ func (r *Datastore) Read(key string, value any) error {
 		switch dataType {
 		case AssumeCommit:
 			r.validationSet.Set(item.TxnId(), PredicateInfo{
-				State: config.COMMITTED,
+				ItemKey: item.Key(),
+				State:   config.COMMITTED,
 			})
 		case AssumeAbort:
 			r.validationSet.Set(item.TxnId(), PredicateInfo{
-				State: config.ABORTED,
+				ItemKey: item.Key(),
+				State:   config.ABORTED,
 			})
 		}
 
@@ -286,13 +289,14 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 			switch config.Config.ReadStrategy {
 			case config.AssumeCommit:
 				r.validationSet.Set(item.TxnId(), PredicateInfo{
-					State: config.COMMITTED,
+					ItemKey: item.Key(),
+					State:   config.COMMITTED,
 				})
 				return item, nil
 			case config.AssumeAbort:
 				r.validationSet.Set(item.TxnId(), PredicateInfo{
 					State:     config.ABORTED,
-					Item:      item,
+					ItemKey:   item.Key(),
 					LeaseTime: item.TLease(),
 				})
 				if item.Prev() == "" {
@@ -585,7 +589,8 @@ func (r *Datastore) validate() error {
 	for tId, predicate := range set {
 		txnId := tId
 		pred := predicate
-		if pred.Item == nil {
+		if pred.ItemKey == "" {
+			log.Fatalf("item's key is empty")
 			continue
 		}
 		eg.Go(func() error {
@@ -593,7 +598,7 @@ func (r *Datastore) validate() error {
 			if err != nil {
 				if config.Config.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
-						key := pred.Item.Key()
+						key := pred.ItemKey
 						err := r.rollbackFromConn(key, txnId)
 						if err != nil {
 							return errors.Join(errors.New("validation failed in AA mode"), err)
@@ -618,11 +623,6 @@ func (r *Datastore) validate() error {
 // Prepare prepares the Datastore for commit.
 func (r *Datastore) Prepare() error {
 
-	err := r.validate()
-	if err != nil {
-		return err
-	}
-
 	items := make([]DataItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
 		items = append(items, v)
@@ -641,7 +641,8 @@ func (r *Datastore) Prepare() error {
 			}
 		}
 
-		verMap, err := r.Txn.RemotePrepare(r.Name, items)
+		validationMap := r.validationSet.Items()
+		verMap, err := r.Txn.RemotePrepare(r.Name, items, validationMap)
 		logger.Log.Infow("Remote prepare Result",
 			"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err)
 		if err != nil {
@@ -651,6 +652,11 @@ func (r *Datastore) Prepare() error {
 			r.writeCache[k].SetVersion(v)
 		}
 		return nil
+	}
+
+	err := r.validate()
+	if err != nil {
+		return err
 	}
 
 	if config.Config.ConcurrentOptimizationLevel < config.PARALLELIZE_ON_UPDATE {

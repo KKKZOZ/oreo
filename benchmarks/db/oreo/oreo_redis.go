@@ -52,7 +52,7 @@ func NewRedisDatastore(conn *redis.RedisConnection, isRemote bool) *RedisDatasto
 func (r *RedisDatastore) Start() error {
 	var txn1 *txn.Transaction
 	if r.isRemote {
-		client := network.NewClient(config.RemoteAddress)
+		client := network.NewClient(config.RemoteAddressList)
 		txn1 = txn.NewTransactionWithRemote(client)
 	} else {
 		txn1 = txn.NewTransaction()

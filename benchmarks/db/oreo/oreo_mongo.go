@@ -1,11 +1,13 @@
 package oreo
 
 import (
+	"benchmark/pkg/config"
 	"benchmark/ycsb"
 	"context"
 	"sync"
 
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
+	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
@@ -15,6 +17,7 @@ type OreoMongoCreator struct {
 	mu       sync.Mutex
 	ConnList []*mongo.MongoConnection
 	next     int
+	IsRemote bool
 }
 
 func (rc *OreoMongoCreator) Create() (ycsb.DB, error) {
@@ -25,7 +28,7 @@ func (rc *OreoMongoCreator) Create() (ycsb.DB, error) {
 	if rc.next >= len(rc.ConnList) {
 		rc.next = 0
 	}
-	return NewMongoDatastore(conn), nil
+	return NewMongoDatastore(conn, rc.IsRemote), nil
 }
 
 var _ ycsb.DB = (*MongoDatastore)(nil)
@@ -33,23 +36,31 @@ var _ ycsb.DB = (*MongoDatastore)(nil)
 var _ ycsb.TransactionDB = (*MongoDatastore)(nil)
 
 type MongoDatastore struct {
-	conn *mongo.MongoConnection
-	txn  *txn.Transaction
+	conn     *mongo.MongoConnection
+	txn      *txn.Transaction
+	isRemote bool
 }
 
-func NewMongoDatastore(conn *mongo.MongoConnection) *MongoDatastore {
+func NewMongoDatastore(conn *mongo.MongoConnection, isRemote bool) *MongoDatastore {
 
 	return &MongoDatastore{
-		conn: conn,
+		isRemote: isRemote,
+		conn:     conn,
 	}
 }
 
 func (r *MongoDatastore) Start() error {
-	txn := txn.NewTransaction()
+	var txn1 *txn.Transaction
+	if r.isRemote {
+		client := network.NewClient(config.RemoteAddressList)
+		txn1 = txn.NewTransactionWithRemote(client)
+	} else {
+		txn1 = txn.NewTransaction()
+	}
 	rds := mongo.NewMongoDatastore("mongo", r.conn)
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
-	r.txn = txn
+	txn1.AddDatastore(rds)
+	txn1.SetGlobalDatastore(rds)
+	r.txn = txn1
 	return r.txn.Start()
 }
 
@@ -62,7 +73,7 @@ func (r *MongoDatastore) Abort() error {
 }
 
 func (r *MongoDatastore) NewTransaction() ycsb.TransactionDB {
-	rds := NewMongoDatastore(r.conn)
+	rds := NewMongoDatastore(r.conn, r.isRemote)
 	return rds
 }
 

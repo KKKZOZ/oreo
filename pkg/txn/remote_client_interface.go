@@ -6,12 +6,20 @@ import (
 	"github.com/kkkzoz/oreo/pkg/config"
 )
 
-type RemoteDataType string
+type RemoteDataStrategy string
 
 const (
-	Normal       RemoteDataType = "Normal"
-	AssumeAbort  RemoteDataType = "AssumeAbort"
-	AssumeCommit RemoteDataType = "AssumeCommit"
+	Normal       RemoteDataStrategy = "Normal"
+	AssumeAbort  RemoteDataStrategy = "AssumeAbort"
+	AssumeCommit RemoteDataStrategy = "AssumeCommit"
+)
+
+type ItemType string
+
+const (
+	NoneItem  ItemType = ""
+	RedisItem ItemType = "redis"
+	MongoItem ItemType = "mongo"
 )
 
 type NetworkItem struct {
@@ -30,8 +38,10 @@ type RecordConfig struct {
 }
 
 type RemoteClient interface {
-	Read(key string, ts time.Time, config RecordConfig) (DataItem, RemoteDataType, error)
-	Prepare(itemList []DataItem, startTime time.Time, commitTime time.Time, config RecordConfig) (map[string]string, error)
-	Commit(infoList []CommitInfo) error
-	Abort(keyList []string, txnId string) error
+	Read(dsName string, key string, ts time.Time, config RecordConfig) (DataItem, RemoteDataStrategy, error)
+	Prepare(dsName string, itemList []DataItem,
+		startTime time.Time, commitTime time.Time,
+		config RecordConfig, validationMap map[string]PredicateInfo) (map[string]string, error)
+	Commit(dsName string, infoList []CommitInfo) error
+	Abort(dsName string, keyList []string, txnId string) error
 }
