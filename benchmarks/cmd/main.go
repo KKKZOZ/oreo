@@ -19,22 +19,16 @@ import (
 )
 
 const (
-	RedisDBAddr   = "localhost:6379"
+	RedisDBAddr   = "43.139.62.221:6379"
 	OreoRedisAddr = "43.139.62.221:6380"
 
-	MongoDBAddr1     = "mongodb://localhost:27017"
+	MongoDBAddr1     = "mongodb://43.139.62.221:27017"
 	MongoDBAddr2     = "mongodb://localhost:27017"
-	OreoMongoDBAddr1 = "mongodb://localhost:27018"
+	OreoMongoDBAddr1 = "mongodb://43.139.62.221:27018"
 	OreoMongoDBAddr2 = "mongodb://localhost:27018"
 
 	OreoCouchDBAddr = "http://admin:password@43.139.62.221:5984"
 )
-
-// const (
-// 	RedisDBAddr   = "localhost:6379"
-// 	MongoDBAddr   = "mongodb://43.139.62.221:27017"
-// 	OreoRedisAddr = "localhost:6380"
-// )
 
 var help = flag.Bool("help", false, "Show help")
 var dbType = ""
@@ -65,7 +59,7 @@ func main() {
 	wp := &workload.WorkloadParameter{
 		RecordCount:               10000,
 		OperationCount:            10000,
-		TxnOperationGroup:         2,
+		TxnOperationGroup:         6,
 		ReadProportion:            0,
 		UpdateProportion:          0,
 		InsertProportion:          0,
@@ -111,11 +105,11 @@ func main() {
 
 	default:
 		fmt.Printf("No preset configuration\n")
-		cfg.Config.ReadStrategy = cfg.AssumeAbort
+		cfg.Config.ReadStrategy = cfg.AssumeCommit
 		cfg.Debug.DebugMode = false
 		cfg.Debug.HTTPAdditionalLatency = 0 * time.Millisecond
 		cfg.Debug.ConnAdditionalLatency = 1 * time.Millisecond
-		cfg.Config.ConcurrentOptimizationLevel = 1
+		cfg.Config.ConcurrentOptimizationLevel = 2
 		cfg.Config.AsyncLevel = 2
 	}
 
@@ -155,26 +149,28 @@ func main() {
 }
 
 func warmUpHttpClient() {
-	url := fmt.Sprintf("http://%s/ping", config.RemoteAddress)
-	num := min(800, threadNum+300)
+	for _, addr := range config.RemoteAddressList {
+		url := fmt.Sprintf("http://%s/ping", addr)
+		num := min(800, threadNum+200)
+		var wg sync.WaitGroup
+		wg.Add(num)
 
-	var wg sync.WaitGroup
-	wg.Add(num)
-
-	for i := 0; i < num; i++ {
-		go func() {
-			defer wg.Done()
-			resp, err := network.HttpClient.Get(url)
-			if err != nil {
-				fmt.Printf("Error when warming up http client: %v\n", err)
-			}
-			defer func() {
-				_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
-				_ = resp.Body.Close()
+		for i := 0; i < num; i++ {
+			go func() {
+				defer wg.Done()
+				resp, err := network.HttpClient.Get(url)
+				if err != nil {
+					fmt.Printf("Error when warming up http client: %v\n", err)
+				}
+				defer func() {
+					_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
+					_ = resp.Body.Close()
+				}()
 			}()
-		}()
+		}
+		wg.Wait()
 	}
-	wg.Wait()
+
 }
 
 func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
@@ -247,7 +243,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "native-rm":
 		wp.DBName = "native-rm"
-		dbSetCreator, err := NativeCreator("mm")
+		dbSetCreator, err := NativeCreator("rm")
 		if err != nil {
 			fmt.Printf("Error when creating native-rm client: %v\n", err)
 			return nil
@@ -269,7 +265,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo-mongo":
 		wp.DBName = "oreo-mongo"
-		creator, err := OreoMongoCreator()
+		creator, err := OreoMongoCreator(isRemote)
 		if err != nil {
 			fmt.Printf("Error when creating oreo-mongo client: %v\n", err)
 			return nil
@@ -280,7 +276,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo-couch":
 		wp.DBName = "oreo-couch"
-		creator, err := OreoCouchCreator()
+		creator, err := OreoCouchCreator(isRemote)
 		if err != nil {
 			fmt.Printf("Error when creating oreo-couch client: %v\n", err)
 			return nil
@@ -291,7 +287,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo-mm":
 		wp.DBName = "oreo-mm"
-		creator, err := OreoCreator("mm")
+		creator, err := OreoCreator("mm", isRemote)
 		if err != nil {
 			fmt.Printf("Error when creating oreo-mm client: %v\n", err)
 			return nil
@@ -302,7 +298,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "oreo-rm":
 		wp.DBName = "oreo-rm"
-		creator, err := OreoCreator("rm")
+		creator, err := OreoCreator("rm", isRemote)
 		if err != nil {
 			fmt.Printf("Error when creating oreo-rm client: %v\n", err)
 			return nil

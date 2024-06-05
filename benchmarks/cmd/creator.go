@@ -8,6 +8,7 @@ import (
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -64,11 +65,12 @@ func MongoCreator(addr string) (ycsb.DBCreator, error) {
 }
 
 func NativeCreator(pattern string) (ycsb.DBCreator, error) {
+	fmt.Printf("Creating native workload with pattern: %v\n", pattern)
 	if pattern == "mm" {
 		mongoCreator1, err1 := MongoCreator(MongoDBAddr1)
 		mongoCreator2, err2 := MongoCreator(MongoDBAddr2)
 		if err1 != nil || err2 != nil {
-			fmt.Printf("Error when creating client: %v %v\n", err1, err2)
+			log.Fatalf("Error when creating client: %v %v\n", err1, err2)
 			return nil, nil
 		}
 		dbSetCreator := workload.DBSetCreator{
@@ -85,7 +87,7 @@ func NativeCreator(pattern string) (ycsb.DBCreator, error) {
 		redisCreator, err1 := RedisCreator(RedisDBAddr)
 		mongoCreator1, err2 := MongoCreator(MongoDBAddr1)
 		if err1 != nil || err2 != nil {
-			fmt.Printf("Error when creating client: %v %v\n", err1, err2)
+			log.Fatalf("Error when creating client: %v %v\n", err1, err2)
 			return nil, nil
 		}
 		dbSetCreator := workload.DBSetCreator{
@@ -120,13 +122,13 @@ func OreoRedisCreator(isRemote bool) (ycsb.DBCreator, error) {
 	}
 	wg.Wait()
 	return &oreo.OreoRedisCreator{
+		IsRemote: isRemote,
 		ConnList: []*redisCo.RedisConnection{
 			redisConn1},
-		IsRemote: isRemote,
 	}, nil
 }
 
-func OreoMongoCreator() (ycsb.DBCreator, error) {
+func OreoMongoCreator(isRemote bool) (ycsb.DBCreator, error) {
 	mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
 		Address:        OreoMongoDBAddr1,
 		DBName:         "oreo",
@@ -156,11 +158,13 @@ func OreoMongoCreator() (ycsb.DBCreator, error) {
 	}
 	wg.Wait()
 	return &oreo.OreoMongoCreator{
+		IsRemote: isRemote,
 		ConnList: []*mongoCo.MongoConnection{
 			mongoConn1, mongoConn2}}, nil
 }
 
-func OreoCouchCreator() (ycsb.DBCreator, error) {
+// TODO: Add isRemote logic
+func OreoCouchCreator(isRemote bool) (ycsb.DBCreator, error) {
 	couchConn1 := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
 		Address:  OreoCouchDBAddr,
 		DBName:   "oreo",
@@ -186,7 +190,7 @@ func OreoCouchCreator() (ycsb.DBCreator, error) {
 
 }
 
-func OreoCreator(pattern string) (ycsb.DBCreator, error) {
+func OreoCreator(pattern string, isRemote bool) (ycsb.DBCreator, error) {
 
 	if pattern == "mm" {
 		mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
@@ -223,6 +227,7 @@ func OreoCreator(pattern string) (ycsb.DBCreator, error) {
 			"mongo2": mongoConn2,
 		}
 		return &oreo.OreoCreator{
+			IsRemote:            isRemote,
 			ConnMap:             connMap,
 			GlobalDatastoreName: "mongo1",
 		}, nil
@@ -230,7 +235,8 @@ func OreoCreator(pattern string) (ycsb.DBCreator, error) {
 
 	if pattern == "rm" {
 		redisConn1 := redisCo.NewRedisConnection(&redisCo.ConnectionOptions{
-			Address: OreoRedisAddr,
+			Address:  OreoRedisAddr,
+			Password: "@ljy123456",
 		})
 
 		mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
@@ -240,6 +246,7 @@ func OreoCreator(pattern string) (ycsb.DBCreator, error) {
 			Username:       "admin",
 			Password:       "admin",
 		})
+		redisConn1.Connect()
 		mongoConn1.Connect()
 
 		// try to warm up the connection
@@ -259,6 +266,7 @@ func OreoCreator(pattern string) (ycsb.DBCreator, error) {
 			"mongo1": mongoConn1,
 		}
 		return &oreo.OreoCreator{
+			IsRemote:            isRemote,
 			ConnMap:             connMap,
 			GlobalDatastoreName: "redis1",
 		}, nil

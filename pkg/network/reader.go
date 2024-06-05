@@ -15,15 +15,15 @@ const (
 )
 
 type Reader struct {
-	conn        txn.Connector
+	connMap     map[string]txn.Connector
 	itemFactory txn.DataItemFactory
 	se          serializer.Serializer
 }
 
-func NewReader(conn txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer) *Reader {
-	conn.Connect()
+func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer) *Reader {
+	// conn.Connect()
 	return &Reader{
-		conn:        conn,
+		connMap:     connMap,
 		itemFactory: itemFactory,
 		se:          se,
 	}
@@ -32,16 +32,16 @@ func NewReader(conn txn.Connector, itemFactory txn.DataItemFactory, se serialize
 // If the record is marked as IsDeleted, this function will return it.
 //
 // Let the upper layer decide what to do with it
-func (r *Reader) Read(key string, ts time.Time, cfg txn.RecordConfig,
-	isRemoteCall bool) (txn.DataItem, txn.RemoteDataType, error) {
+func (r *Reader) Read(dsName string, key string, ts time.Time, cfg txn.RecordConfig,
+	isRemoteCall bool) (txn.DataItem, txn.RemoteDataStrategy, error) {
 	dataType := txn.Normal
 
-	item, err := r.conn.GetItem(key)
+	item, err := r.connMap[dsName].GetItem(key)
 	if err != nil {
 		return nil, dataType, err
 	}
 
-	resItem, dataType, err := r.basicVisibilityProcessor(item, ts, cfg)
+	resItem, dataType, err := r.basicVisibilityProcessor(dsName, item, ts, cfg)
 	if err != nil {
 		return nil, dataType, err
 	}
@@ -63,11 +63,11 @@ func (r *Reader) Read(key string, ts time.Time, cfg txn.RecordConfig,
 
 // basicVisibilityProcessor performs basic visibility processing on a DataItem.
 // It tries to bring the item to the COMMITTED state by performing rollback or rollforward operations.
-func (r *Reader) basicVisibilityProcessor(item txn.DataItem,
-	startTime time.Time, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataType, error) {
+func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
+	startTime time.Time, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataStrategy, error) {
 	// function to perform the rollback operation
-	rollbackFunc := func() (txn.DataItem, txn.RemoteDataType, error) {
-		item, err := r.rollback(item)
+	rollbackFunc := func() (txn.DataItem, txn.RemoteDataStrategy, error) {
+		item, err := r.rollback(dsName, item)
 		if err != nil {
 			return nil, txn.Normal, err
 		}
@@ -79,8 +79,8 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem,
 	}
 
 	// function to perform the rollforward operation
-	rollforwardFunc := func() (txn.DataItem, txn.RemoteDataType, error) {
-		item, err := r.rollForward(item)
+	rollforwardFunc := func() (txn.DataItem, txn.RemoteDataStrategy, error) {
+		item, err := r.rollForward(dsName, item)
 		if err != nil {
 			return nil, txn.Normal, err
 		}
@@ -91,7 +91,7 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem,
 		return item, txn.Normal, nil
 	}
 	if item.TxnState() == config.PREPARED {
-		state, err := r.readTSR(item.TxnId())
+		state, err := r.readTSR(dsName, item.TxnId())
 		if err == nil {
 			switch state {
 			// if TSR exists and the TSR is in COMMITTED state
@@ -111,7 +111,7 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem,
 		if item.TLease().Before(startTime) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
-			err := r.writeTSR(item.TxnId(), config.ABORTED)
+			err := r.writeTSR(dsName, item.TxnId(), config.ABORTED)
 			if err != nil {
 				return nil, txn.Normal, err
 			}
@@ -169,12 +169,12 @@ func (r *Reader) basicVisibilityProcessor(item txn.DataItem,
 // rollback overwrites the record with the application data
 // and metadata that found in field Prev.
 // if the `Prev` is empty, it simply deletes the record
-func (r *Reader) rollback(item txn.DataItem) (txn.DataItem, error) {
+func (r *Reader) rollback(dsName string, item txn.DataItem) (txn.DataItem, error) {
 
 	if item.Prev() == "" {
 		item.SetIsDeleted(true)
 		item.SetTxnState(config.COMMITTED)
-		newVer, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+		newVer, err := r.connMap[dsName].ConditionalUpdate(item.Key(), item, false)
 		if err != nil {
 			return nil, errors.Join(errors.New("rollback failed"), err)
 		}
@@ -188,7 +188,7 @@ func (r *Reader) rollback(item txn.DataItem) (txn.DataItem, error) {
 	}
 	// try to rollback through ConditionalUpdate
 	newItem.SetVersion(item.Version())
-	newVer, err := r.conn.ConditionalUpdate(item.Key(), newItem, false)
+	newVer, err := r.connMap[dsName].ConditionalUpdate(item.Key(), newItem, false)
 	// err = r.conn.PutItem(item.Key, newItem)
 	if err != nil {
 		return nil, errors.Join(errors.New("rollback failed"), err)
@@ -200,10 +200,10 @@ func (r *Reader) rollback(item txn.DataItem) (txn.DataItem, error) {
 }
 
 // rollForward makes the record metadata with COMMITTED state
-func (r *Reader) rollForward(item txn.DataItem) (txn.DataItem, error) {
+func (r *Reader) rollForward(dsName string, item txn.DataItem) (txn.DataItem, error) {
 
 	item.SetTxnState(config.COMMITTED)
-	newVer, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+	newVer, err := r.connMap[dsName].ConditionalUpdate(item.Key(), item, false)
 	if err != nil {
 		return nil, errors.Join(errors.New("rollForward failed"), err)
 	}
@@ -220,9 +220,9 @@ func (r *Reader) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 	return preItem, nil
 }
 
-func (r *Reader) readTSR(txnId string) (config.State, error) {
+func (r *Reader) readTSR(dsName string, txnId string) (config.State, error) {
 	var txnState config.State
-	state, err := r.conn.Get(txnId)
+	state, err := r.connMap[dsName].Get(txnId)
 	if err != nil {
 		return txnState, err
 	}
@@ -230,8 +230,21 @@ func (r *Reader) readTSR(txnId string) (config.State, error) {
 	return txnState, nil
 }
 
-func (r *Reader) writeTSR(txnId string, txnState config.State) error {
-	return r.conn.Put(txnId, util.ToString(txnState))
+func (r *Reader) writeTSR(dsName string, txnId string, txnState config.State) error {
+	return r.connMap[dsName].Put(txnId, util.ToString(txnState))
+}
+
+func (r *Reader) createTSR(dsName string, txnId string, txnState config.State) (config.State, error) {
+	oldValue, err := r.connMap[dsName].AtomicCreate(txnId, util.ToString(txnState))
+	if err != nil {
+		if err.Error() == "key exists" {
+			oldState := config.State(util.ToInt(oldValue))
+			return oldState, errors.New("key exists")
+		} else {
+			return -1, err
+		}
+	}
+	return -1, nil
 }
 
 // treatAsCommitted treats a DataItem as committed, finds a corresponding version

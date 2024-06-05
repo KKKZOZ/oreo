@@ -9,6 +9,7 @@ import (
 	"runtime/trace"
 	"time"
 
+	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/serializer"
@@ -32,11 +33,11 @@ type Server struct {
 	committer network.Committer
 }
 
-func NewServer(port int, conn txn.Connector, factory txn.DataItemFactory) *Server {
+func NewServer(port int, connMap map[string]txn.Connector, factory txn.DataItemFactory) *Server {
 	return &Server{
 		port:      port,
-		reader:    *network.NewReader(conn, factory, serializer.NewJSONSerializer()),
-		committer: *network.NewCommitter(conn, serializer.NewJSONSerializer(), factory),
+		reader:    *network.NewReader(connMap, factory, serializer.NewJSONSerializer()),
+		committer: *network.NewCommitter(connMap, serializer.NewJSONSerializer(), factory),
 	}
 }
 
@@ -64,6 +65,17 @@ func (s *Server) Run() {
 	log.Fatalf("Server failed: %v", fasthttp.ListenAndServe(address, router))
 }
 
+func (s *Server) getItemType(dsName string) txn.ItemType {
+	switch dsName {
+	case "redis1":
+		return txn.RedisItem
+	case "mongo1", "mongo2":
+		return txn.MongoItem
+	default:
+		return ""
+	}
+}
+
 func (s *Server) pingHandler(ctx *fasthttp.RequestCtx) {
 	ctx.WriteString("pong")
 }
@@ -81,7 +93,7 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	item, dataType, err := s.reader.Read(req.Key, req.StartTime, req.Config, true)
+	item, dataType, err := s.reader.Read(req.DsName, req.Key, req.StartTime, req.Config, true)
 
 	var response network.ReadResponse
 	if err != nil {
@@ -90,19 +102,27 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 			ErrMsg: err.Error(),
 		}
 	} else {
-		redisItem, ok := item.(*redis.RedisItem)
-		if !ok {
-			response = network.ReadResponse{
-				Status: "Error",
-				ErrMsg: "unexpected data type",
-			}
-		} else {
-			response = network.ReadResponse{
-				Status:   "OK",
-				DataType: dataType,
-				Data:     redisItem,
-			}
+		// redisItem, ok := item.(*redis.RedisItem)
+		// if !ok {
+		// 	response = network.ReadResponse{
+		// 		Status: "Error",
+		// 		ErrMsg: "unexpected data type",
+		// 	}
+		// } else {
+		// 	response = network.ReadResponse{
+		// 		Status:   "OK",
+		// 		DataType: dataType,
+		// 		Data:     redisItem,
+		// 	}
+		// }
+
+		response = network.ReadResponse{
+			Status:       "OK",
+			DataStrategy: dataType,
+			Data:         item,
+			ItemType:     s.getItemType(req.DsName),
 		}
+		// fmt.Printf("Read response: %v\n", response)
 	}
 	respBytes, _ := json.Marshal(response)
 	ctx.Write(respBytes)
@@ -116,17 +136,14 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 
 	var req network.PrepareRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		ctx.Error("Invalid request body.", fasthttp.StatusBadRequest)
+		errMsg := fmt.Sprintf("Invalid prepare request body, error: %s\n Body: %v\n", err.Error(), string(ctx.PostBody()))
+		ctx.Error(errMsg, fasthttp.StatusBadRequest)
 		return
 	}
 
-	var itemList []txn.DataItem
-	for _, item := range req.ItemList {
-		i := item
-		itemList = append(itemList, &i)
-	}
-
-	verMap, err := s.committer.Prepare(itemList, req.StartTime, req.CommitTime, req.Config)
+	verMap, err := s.committer.Prepare(req.DsName, req.ItemList,
+		req.StartTime, req.CommitTime,
+		req.Config, req.ValidationMap)
 	var resp network.Response[map[string]string]
 	if err != nil {
 		resp = network.Response[map[string]string]{
@@ -151,11 +168,11 @@ func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 
 	var req network.CommitRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		ctx.Error("Invalid request body.", fasthttp.StatusBadRequest)
+		ctx.Error("Invalid commit request body.", fasthttp.StatusBadRequest)
 		return
 	}
 
-	err := s.committer.Commit(req.List)
+	err := s.committer.Commit(req.DsName, req.List)
 	var resp network.Response[string]
 	if err != nil {
 		resp = network.Response[string]{
@@ -179,11 +196,11 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 
 	var req network.AbortRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		ctx.Error("Invalid request body.", fasthttp.StatusBadRequest)
+		ctx.Error("Invalid abort request body.", fasthttp.StatusBadRequest)
 		return
 	}
 
-	err := s.committer.Abort(req.KeyList, req.TxnId)
+	err := s.committer.Abort(req.DsName, req.KeyList, req.TxnId)
 	var resp network.Response[string]
 	if err != nil {
 		resp = network.Response[string]{
@@ -199,9 +216,18 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 	ctx.Write(respBytes)
 }
 
+const (
+	RedisPassword = "@ljy123456"
+	MongoUsername = "admin"
+	MongoPassword = "admin"
+)
+
 var port = 8000
 var poolSize = 60
 var traceFlag = false
+var redisAddr1 = ""
+var mongoAddr1 = ""
+var mongoAddr2 = ""
 
 var Log *zap.SugaredLogger
 
@@ -209,6 +235,9 @@ func main() {
 	flag.IntVar(&port, "p", 8000, "Server Port")
 	flag.IntVar(&poolSize, "s", 60, "Pool Size")
 	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
+	flag.StringVar(&redisAddr1, "r1", "", "Redis Address")
+	flag.StringVar(&mongoAddr1, "m1", "", "Mongo Address")
+	flag.StringVar(&mongoAddr2, "m2", "", "Mongo Address")
 	flag.Parse()
 	newLogger()
 
@@ -224,12 +253,56 @@ func main() {
 		defer trace.Stop()
 	}
 
-	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address:  "localhost:6380",
-		Password: "@ljy123456",
-		PoolSize: poolSize,
-	})
-	server := NewServer(port, redisConn, &redis.RedisItemFactory{})
+	if redisAddr1 == "" && mongoAddr1 == "" && mongoAddr2 == "" {
+		Log.Fatal("No datastore address specified")
+	}
+
+	connMap := make(map[string]txn.Connector)
+
+	if redisAddr1 != "" {
+		redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
+			Address:  redisAddr1,
+			Password: RedisPassword,
+			PoolSize: poolSize,
+		})
+		err := redisConn.Connect()
+		if err != nil {
+			Log.Fatal(err)
+		}
+		connMap["redis1"] = redisConn
+	}
+
+	if mongoAddr1 != "" {
+		mongoConn1 := mongo.NewMongoConnection(&mongo.ConnectionOptions{
+			Address:        mongoAddr1,
+			DBName:         "oreo",
+			CollectionName: "benchmark",
+			Username:       MongoUsername,
+			Password:       MongoPassword,
+		})
+		err := mongoConn1.Connect()
+		if err != nil {
+			Log.Fatal(err)
+		}
+		connMap["mongo1"] = mongoConn1
+	}
+
+	if mongoAddr2 != "" {
+		mongoConn2 := mongo.NewMongoConnection(&mongo.ConnectionOptions{
+			Address:        mongoAddr2,
+			DBName:         "oreo",
+			CollectionName: "benchmark",
+			Username:       MongoUsername,
+			Password:       MongoPassword,
+		})
+		err := mongoConn2.Connect()
+		if err != nil {
+			Log.Fatal(err)
+		}
+		connMap["mongo2"] = mongoConn2
+	}
+
+	server := NewServer(port, connMap, &redis.RedisItemFactory{})
 	server.Run()
 }
 

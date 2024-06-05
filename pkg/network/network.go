@@ -1,8 +1,11 @@
 package network
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
+	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
@@ -14,30 +17,114 @@ type Response[T any] struct {
 }
 
 type ReadResponse struct {
-	Status   string
-	ErrMsg   string
-	DataType txn.RemoteDataType
-	Data     *redis.RedisItem
+	Status       string
+	ErrMsg       string
+	DataStrategy txn.RemoteDataStrategy
+	ItemType     txn.ItemType
+	Data         txn.DataItem
 }
 
 type ReadRequest struct {
+	DsName    string
 	Key       string
 	StartTime time.Time
 	Config    txn.RecordConfig
 }
 
 type PrepareRequest struct {
-	ItemList   []redis.RedisItem
-	StartTime  time.Time
-	CommitTime time.Time
-	Config     txn.RecordConfig
+	DsName        string
+	ValidationMap map[string]txn.PredicateInfo
+	ItemType      txn.ItemType
+	ItemList      []txn.DataItem
+	StartTime     time.Time
+	CommitTime    time.Time
+	Config        txn.RecordConfig
 }
 
 type CommitRequest struct {
-	List []txn.CommitInfo
+	DsName string
+	List   []txn.CommitInfo
 }
 
 type AbortRequest struct {
+	DsName  string
 	KeyList []string
 	TxnId   string
+}
+
+func (r *ReadResponse) UnmarshalJSON(data []byte) error {
+	type Alias ReadResponse
+	aux := &struct {
+		Data json.RawMessage `json:"Data"`
+		*Alias
+	}{
+		Alias: (*Alias)(r),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	switch r.ItemType {
+	case txn.RedisItem:
+		var redisItem redis.RedisItem
+		if err := json.Unmarshal(aux.Data, &redisItem); err != nil {
+			return err
+		}
+		r.Data = &redisItem
+	case txn.MongoItem:
+		var mongoItem mongo.MongoItem
+		if err := json.Unmarshal(aux.Data, &mongoItem); err != nil {
+			return err
+		}
+		r.Data = &mongoItem
+	case txn.NoneItem:
+		r.Data = nil
+	default:
+		return fmt.Errorf("[network.go - ReadResponse] unsupported data type: %v", r.ItemType)
+	}
+
+	return nil
+}
+
+func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
+	type Alias PrepareRequest
+	aux := &struct {
+		ItemList json.RawMessage `json:"ItemList"`
+		*Alias
+	}{
+		Alias: (*Alias)(p),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	switch p.ItemType {
+	case txn.RedisItem:
+		var redisItemList []redis.RedisItem
+		if err := json.Unmarshal(aux.ItemList, &redisItemList); err != nil {
+			return err
+		}
+		p.ItemList = make([]txn.DataItem, len(redisItemList))
+		for i, it := range redisItemList {
+			item := it
+			p.ItemList[i] = &item
+		}
+	case txn.MongoItem:
+		var mongoItemList []mongo.MongoItem
+		if err := json.Unmarshal(aux.ItemList, &mongoItemList); err != nil {
+			return err
+		}
+		p.ItemList = make([]txn.DataItem, len(mongoItemList))
+		for i, it := range mongoItemList {
+			item := it
+			p.ItemList[i] = &item
+		}
+	case txn.NoneItem:
+		p.ItemList = nil
+	default:
+		return fmt.Errorf("[network.go - PrepareRequest]unsupported data type: %v", p.ItemType)
+	}
+
+	return nil
 }
