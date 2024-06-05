@@ -96,6 +96,7 @@ func main() {
 
 	switch preset {
 	case "cg":
+		fmt.Printf("Running under Cherry Garcia Mode\n")
 		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.CherryGarciaMode = true
 		cfg.Debug.DebugMode = true

@@ -3,7 +3,9 @@ package mongo
 import (
 	"benchmark/ycsb"
 	"context"
+	"time"
 
+	"github.com/kkkzoz/oreo/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -52,6 +54,11 @@ func (r *Mongo) CleanupThread(ctx context.Context) {
 }
 
 func (r *Mongo) Read(ctx context.Context, table string, key string) (string, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	keyName := getKeyName("", key)
 	var doc MyDocument
 	err := r.coll.FindOne(ctx, bson.M{"_id": keyName}).Decode(&doc)
@@ -63,8 +70,12 @@ func (r *Mongo) Read(ctx context.Context, table string, key string) (string, err
 }
 
 func (r *Mongo) Update(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName("", key)
 
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	keyName := getKeyName("", key)
 	_, err := r.coll.UpdateOne(
 		context.Background(),
 		bson.M{"_id": keyName},
@@ -79,8 +90,12 @@ func (r *Mongo) Update(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Insert(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName("", key)
 
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	keyName := getKeyName("", key)
 	_, err := r.coll.UpdateOne(
 		context.Background(),
 		bson.M{"_id": keyName},
@@ -95,8 +110,12 @@ func (r *Mongo) Insert(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Delete(ctx context.Context, table string, key string) error {
-	keyName := getKeyName("", key)
 
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	keyName := getKeyName("", key)
 	_, err := r.coll.DeleteOne(ctx, bson.M{"_id": keyName})
 	return err
 }
