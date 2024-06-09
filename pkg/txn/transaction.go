@@ -463,7 +463,11 @@ func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDat
 	if !t.isRemote {
 		return nil, Normal, errors.New("not a remote transaction")
 	}
+
+	globalName := t.tsrMaintainer.(Datastorer).GetName()
+
 	return t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
+		GlobalName:   globalName,
 		MaxRecordLen: config.Config.MaxRecordLength,
 		ReadStrategy: config.Config.ReadStrategy,
 	})
@@ -479,8 +483,10 @@ func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem, validati
 	if !t.isRemote {
 		return nil, errors.New("not a remote transaction")
 	}
+	globalName := t.tsrMaintainer.(Datastorer).GetName()
 
 	cfg := RecordConfig{
+		GlobalName:   globalName,
 		MaxRecordLen: config.Config.MaxRecordLength,
 		ReadStrategy: config.Config.ReadStrategy,
 	}

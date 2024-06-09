@@ -43,12 +43,12 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 			return errors.New("validation failed due to predicate item's empty key")
 		}
 		eg.Go(func() error {
-			curState, err := c.reader.readTSR(dsName, txnId)
+			curState, err := c.reader.readTSR(cfg.GlobalName, txnId)
 			if err != nil {
 				if config.Config.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
 						key := pred.ItemKey
-						err := c.rollbackFromConn(dsName, key, txnId)
+						err := c.rollbackFromConn(dsName, key, txnId, cfg.GlobalName)
 						if err != nil {
 							return errors.Join(errors.New("validation failed in AA mode"), err)
 						} else {
@@ -278,7 +278,7 @@ func (c *Committer) rollback(dsName string, item txn.DataItem) (txn.DataItem, er
 	return newItem, err
 }
 
-func (c *Committer) rollbackFromConn(dsName string, key string, txnId string) error {
+func (c *Committer) rollbackFromConn(dsName string, key string, txnId string, globalName string) error {
 
 	item, err := c.connMap[dsName].GetItem(key)
 	if err != nil {
@@ -293,7 +293,7 @@ func (c *Committer) rollbackFromConn(dsName string, key string, txnId string) er
 	}
 
 	if item.TLease().Before(time.Now()) {
-		curState, err := c.reader.createTSR(dsName, item.TxnId(), config.ABORTED)
+		curState, err := c.reader.createTSR(globalName, item.TxnId(), config.ABORTED)
 		if err != nil {
 			if err.Error() == "key exists" {
 				if curState == config.COMMITTED {

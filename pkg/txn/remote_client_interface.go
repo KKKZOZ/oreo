@@ -33,6 +33,7 @@ type CommitInfo struct {
 }
 
 type RecordConfig struct {
+	GlobalName   string
 	MaxRecordLen int
 	ReadStrategy config.ReadStrategy
 }
