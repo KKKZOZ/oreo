@@ -47,6 +47,9 @@ func (r *Reader) Read(dsName string, key string, ts time.Time, cfg txn.RecordCon
 	}
 	logicFunc := func(curItem txn.DataItem, isFound bool) (txn.DataItem, error) {
 		if !isFound {
+			if curItem.IsDeleted() {
+				return nil, errors.New("key not found, item is deleted")
+			}
 			return nil, errors.New("key not found")
 		}
 		if isRemoteCall && cfg.MaxRecordLen > 2 {
@@ -91,7 +94,7 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		return item, txn.Normal, nil
 	}
 	if item.TxnState() == config.PREPARED {
-		state, err := r.readTSR(dsName, item.TxnId())
+		state, err := r.readTSR(cfg.GlobalName, item.TxnId())
 		if err == nil {
 			switch state {
 			// if TSR exists and the TSR is in COMMITTED state
@@ -107,11 +110,12 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		}
 		// if TSR does not exist
 		// and if t_lease has expired
+		// that is, item's TLease < current time
 		// we should roll back the record
-		if item.TLease().Before(startTime) {
+		if item.TLease().Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
-			err := r.writeTSR(dsName, item.TxnId(), config.ABORTED)
+			err := r.writeTSR(cfg.GlobalName, item.TxnId(), config.ABORTED)
 			if err != nil {
 				return nil, txn.Normal, err
 			}
@@ -145,15 +149,14 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 			preItem, err := r.getPrevItem(item)
 			return preItem, txn.Normal, err
 		}
+
 		if cfg.ReadStrategy == config.Pessimistic {
 			return nil, txn.Normal, errors.New(ReadFailed)
 		} else {
 			switch cfg.ReadStrategy {
 			case config.AssumeCommit:
-				// r.validationSet.Set(item.TxnId(), config.COMMITTED)
 				return item, txn.AssumeCommit, nil
 			case config.AssumeAbort:
-				// r.validationSet.Set(item.TxnId(), config.ABORTED)
 				if item.Prev() == "" {
 					return nil, txn.Normal, errors.New("key not found in AssumeAbort")
 				}

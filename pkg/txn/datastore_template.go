@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +107,8 @@ func (r *Datastore) Read(key string, value any) error {
 	if r.Txn.isRemote {
 		item, dataType, err := r.Txn.RemoteRead(r.Name, key)
 		if err != nil {
+			// errMsg := err.Error() + "in " + r.Name
+			// return errors.New(errMsg)
 			return err
 		}
 		// TODO: logic for AssumeCommit and AssumeAbort
@@ -136,16 +139,21 @@ func (r *Datastore) Read(key string, value any) error {
 func (r *Datastore) readFromConn(key string, value any) error {
 	item, err := r.conn.GetItem(key)
 	if err != nil {
-		return err
+		errMsg := err.Error() + "at GetItem in " + r.Name
+		return errors.New(errMsg)
 	}
 
 	item, err = r.dirtyReadChecker(item)
 	if err != nil {
+		// errMsg := err.Error() + "at dirtyReadChecker in " + r.Name
+		// return errors.New(errMsg)
 		return err
 	}
 
 	resItem, err := r.basicVisibilityProcessor(item)
 	if err != nil {
+		// errMsg := err.Error() + "at basicVisibilityProcessor in " + r.Name
+		// return errors.New(errMsg)
 		return err
 	}
 
@@ -162,6 +170,8 @@ func (r *Datastore) readFromConn(key string, value any) error {
 				// so the code will regard it as a new record
 				// and create a new record in the prepare phase (set `doCreate` to true)
 				r.readCache.Set(curItem.Key(), curItem)
+				errMsg := "key not found because item is already deleted in " + r.Name
+				return errors.New(errMsg)
 			}
 			return errors.New(KeyNotFound)
 		}
@@ -444,8 +454,10 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 
 	// else we read from connection
 	err := r.readFromConn(cacheItem.Key(), nil)
-	if err != nil && !errors.Is(err, KeyNotFound) {
-		return err
+	if err != nil {
+		if !strings.Contains(err.Error(), "key not found") {
+			return err
+		}
 	}
 	dbItem, _ := r.readCache.Get(cacheItem.Key())
 	// if the record is dropped by the repeatable read rule
