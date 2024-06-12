@@ -19,13 +19,13 @@ import (
 )
 
 const (
-	RedisDBAddr   = "43.139.62.221:6379"
-	OreoRedisAddr = "43.139.62.221:6380"
+	RedisDBAddr   = "10.206.0.5:6379"
+	OreoRedisAddr = "10.206.0.5:6380"
 
-	MongoDBAddr1     = "mongodb://43.139.62.221:27017"
-	MongoDBAddr2     = "mongodb://localhost:27017"
-	OreoMongoDBAddr1 = "mongodb://43.139.62.221:27018"
-	OreoMongoDBAddr2 = "mongodb://localhost:27018"
+	MongoDBAddr1     = "mongodb://10.206.0.7:27017"
+	MongoDBAddr2     = "mongodb://10.206.0.7:27017"
+	OreoMongoDBAddr1 = "mongodb://10.206.0.7:27018"
+	OreoMongoDBAddr2 = "mongodb://10.206.0.7:27018"
 
 	OreoCouchDBAddr = "http://admin:password@43.139.62.221:5984"
 )
@@ -39,6 +39,7 @@ var threadNum = 1
 var traceFlag = false
 var isRemote = false
 var preset = ""
+var readStrategy = ""
 
 func main() {
 
@@ -57,14 +58,14 @@ func main() {
 	}
 
 	wp := &workload.WorkloadParameter{
-		RecordCount:               10000,
+		RecordCount:               1000000,
 		OperationCount:            10000,
 		TxnOperationGroup:         6,
 		ReadProportion:            0,
-		UpdateProportion:          0,
+		UpdateProportion:          1.0,
 		InsertProportion:          0,
 		ScanProportion:            0,
-		ReadModifyWriteProportion: 1.0,
+		ReadModifyWriteProportion: 0,
 		DoubleSeqCommitProportion: 0,
 
 		InitialAmountPerKey:   1000,
@@ -100,21 +101,34 @@ func main() {
 		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.CherryGarciaMode = true
 		cfg.Debug.DebugMode = true
-		cfg.Debug.ConnAdditionalLatency = 0 * time.Millisecond
+		cfg.Debug.ConnAdditionalLatency = 50 * time.Millisecond
 		cfg.Config.ConcurrentOptimizationLevel = 0
 		cfg.Config.AsyncLevel = 1
 
+	case "native":
+		fmt.Printf("Running under Native Mode\n")
+		cfg.Debug.DebugMode = true
+		cfg.Debug.ConnAdditionalLatency = 3 * time.Millisecond
 	default:
 		fmt.Printf("No preset configuration\n")
-		cfg.Config.ReadStrategy = cfg.AssumeCommit
-		cfg.Debug.DebugMode = false
-		cfg.Debug.HTTPAdditionalLatency = 0 * time.Millisecond
-		cfg.Debug.ConnAdditionalLatency = 1 * time.Millisecond
+		cfg.Config.ReadStrategy = cfg.Pessimistic
+		cfg.Debug.DebugMode = true
+		cfg.Debug.HTTPAdditionalLatency = 50 * time.Millisecond
+		cfg.Debug.ConnAdditionalLatency = 0 * time.Millisecond
 		cfg.Config.ConcurrentOptimizationLevel = 2
 		cfg.Config.AsyncLevel = 2
 	}
 
-	cfg.Config.LeaseTime = 800 * time.Millisecond
+	switch readStrategy {
+	case "p":
+		cfg.Config.ReadStrategy = cfg.Pessimistic
+	case "ac":
+		cfg.Config.ReadStrategy = cfg.AssumeCommit
+	case "aa":
+		cfg.Config.ReadStrategy = cfg.AssumeAbort
+	}
+
+	cfg.Config.LeaseTime = 100 * time.Millisecond
 	cfg.Config.MaxOutstandingRequest = 5
 	cfg.Config.MaxRecordLength = 2
 
@@ -135,6 +149,7 @@ func main() {
 	switch mode {
 	case "load":
 		cfg.Config.ConcurrentOptimizationLevel = cfg.DEFAULT
+		cfg.Debug.DebugMode = false
 		wp.DoBenchmark = false
 		fmt.Println("Start to load data")
 		client.RunLoad()
@@ -324,6 +339,7 @@ func parseAndValidateFlag() {
 	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
 	flag.BoolVar(&isRemote, "remote", false, "Run in remote mode (for Oreo series)")
 	flag.StringVar(&preset, "ps", "", "Preset configuration for evaluation")
+	flag.StringVar(&readStrategy, "read", "p", "Read Strategy")
 	flag.Parse()
 
 	if *help {
@@ -370,6 +386,7 @@ func displayBenchmarkInfo() {
 	fmt.Printf("WorkloadType: %s\n", workloadType)
 	fmt.Printf("ThreadNum: %d\n", threadNum)
 	fmt.Printf("Remote Mode: %v\n", isRemote)
+	fmt.Printf("Read Strategy: %v\n", readStrategy)
 	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
 		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
 		cfg.Config.MaxOutstandingRequest, cfg.Config.MaxRecordLength)
