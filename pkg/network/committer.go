@@ -2,6 +2,7 @@ package network
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -44,9 +45,11 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 		}
 		eg.Go(func() error {
 			curState, err := c.reader.readTSR(cfg.GlobalName, txnId)
+			// fmt.Printf("curState: %v, err: %v\n",curState, err)
 			if err != nil {
-				if config.Config.ReadStrategy == config.AssumeAbort {
+				if cfg.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
+						// fmt.Printf("Leasetime has expired\n")
 						key := pred.ItemKey
 						err := c.rollbackFromConn(dsName, key, txnId, cfg.GlobalName)
 						if err != nil {
@@ -90,7 +93,9 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 			// if this item follows the read-modify-write pattern
 			if item.Version() != "" {
 				doCreate = false
+				// fmt.Printf("TCommit: %v  TLease: %v\n",item.TValid(),item.TLease())
 			} else {
+				fmt.Printf("do a txn Read\n")
 				// else we do a txn Read to determine its version
 				dbItem, _, err := c.reader.Read(dsName, item.Key(), startTime, cfg, false)
 				if err != nil && err.Error() != "key not found" {
@@ -289,6 +294,7 @@ func (c *Committer) rollbackFromConn(dsName string, key string, txnId string, gl
 		return errors.New("rollback failed due to wrong state")
 	}
 	if item.TxnId() != txnId {
+		// fmt.Printf("item: %v   txnId: %v\n",item,txnId)
 		return errors.New("rollback failed due to wrong txnId")
 	}
 
@@ -314,5 +320,6 @@ func (c *Committer) rollbackFromConn(dsName string, key string, txnId string, gl
 		_, err = c.rollback(dsName, item)
 		return err
 	}
+	fmt.Printf("rollbackFromConn OK\n")
 	return nil
 }

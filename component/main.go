@@ -9,6 +9,7 @@ import (
 	"runtime/trace"
 	"time"
 
+	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/network"
@@ -228,6 +229,7 @@ var traceFlag = false
 var redisAddr1 = ""
 var mongoAddr1 = ""
 var mongoAddr2 = ""
+var cg = false
 
 var Log *zap.SugaredLogger
 
@@ -238,6 +240,7 @@ func main() {
 	flag.StringVar(&redisAddr1, "r1", "", "Redis Address")
 	flag.StringVar(&mongoAddr1, "m1", "", "Mongo Address")
 	flag.StringVar(&mongoAddr2, "m2", "", "Mongo Address")
+	flag.BoolVar(&cg, "cg", false, "Enable Cherry Garcia Mode")
 	flag.Parse()
 	newLogger()
 
@@ -251,6 +254,10 @@ func main() {
 			panic(err)
 		}
 		defer trace.Stop()
+	}
+	if cg {
+		fmt.Printf("Running under Cherry Garcia Mode")
+		config.Debug.CherryGarciaMode = true
 	}
 
 	if redisAddr1 == "" && mongoAddr1 == "" && mongoAddr2 == "" {

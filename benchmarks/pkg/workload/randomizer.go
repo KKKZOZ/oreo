@@ -29,7 +29,8 @@ func NewRandomizer(wp *WorkloadParameter) *Randomizer {
 	var keyrangeLowerBound int64 = insertStart
 	var keyrangeUpperBound int64 = insertStart + insertCount - 1
 
-	return &Randomizer{
+	fmt.Println("Start NewRandomizer")
+	r := &Randomizer{
 		mu:               sync.Mutex{},
 		r:                rand.New(rand.NewSource(time.Now().UnixNano())),
 		operationChooser: createOperationGenerator(wp),
@@ -40,6 +41,8 @@ func NewRandomizer(wp *WorkloadParameter) *Randomizer {
 			keyrangeUpperBound,
 			generator.ZipfianConstant),
 	}
+	fmt.Println("NewRandomizer")
+	return r
 }
 
 func (r *Randomizer) ResetKeySequence() {
@@ -144,7 +147,7 @@ func (r *Randomizer) buildKeyName(keyNum int64) string {
 func (r *Randomizer) BuildRandomValue() string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	len := r.r.Intn(MAX_VALUE_LENGTH) + 1
+	len := MAX_VALUE_LENGTH + 1
 	buf := make([]byte, len)
 	util.RandBytes(r.r, buf)
 	return string(buf)
