@@ -5,8 +5,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 var _ ycsb.DBCreator = (*OreoCouchCreator)(nil)
@@ -59,6 +59,11 @@ func (r *CouchDatastore) Commit() error {
 
 func (r *CouchDatastore) Abort() error {
 	return r.txn.Abort()
+}
+
+func (r *CouchDatastore) NewTransaction() ycsb.TransactionDB {
+	rds := NewCouchDatastore(r.conn)
+	return rds
 }
 
 func (r *CouchDatastore) Close() error {

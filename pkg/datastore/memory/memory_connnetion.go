@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
 )
 
 type MemoryConnection struct {

@@ -1,7 +1,7 @@
 package redis
 
 import (
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 // RedisDatastore represents a datastore implementation using Redis as the underlying storage.

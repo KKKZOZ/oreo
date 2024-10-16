@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"strconv"
 
-	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

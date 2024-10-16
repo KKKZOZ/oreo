@@ -1,6 +1,10 @@
 package config
 
-const (
-	RemoteAddress = "43.139.62.221:8000"
-	// RemoteAddress = "localhost:8000"
+import "time"
+
+var (
+	RemoteAddressList = []string{"localhost:8001"}
+	TimeOracleUrl     = "http://localhost:8010"
+	ZipfianConstant   = 0.9
+	Latency           = 5 * time.Millisecond
 )

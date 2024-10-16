@@ -6,15 +6,20 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var _ txn.Connector = (*MongoConnection)(nil)
+
+type KeyValueItem struct {
+	Key   string `bson:"_id"`
+	Value string `bson:"Value"`
+}
 
 type MongoConnection struct {
 	client       *mongo.Client
@@ -113,6 +118,11 @@ func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 	if !m.hasConnected {
 		return &MongoItem{}, errors.Errorf("not connected to MongoDB")
 	}
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	var item MongoItem
 	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&item)
 	if err != nil {
@@ -129,6 +139,10 @@ func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
+	}
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	_, err := m.coll.UpdateOne(
@@ -155,8 +169,12 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		return "", errors.Errorf("not connected to MongoDB")
 	}
 
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	if doCreat {
-		return m.atomicCreate(key, value)
+		return m.atomicCreateMongoItem(key, value)
 	}
 
 	newVer := util.AddToString(value.Version(), 1)
@@ -167,7 +185,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 			{Key: "Value", Value: value.Value()},
 			{Key: "TxnId", Value: value.TxnId()},
 			{Key: "TxnState", Value: value.TxnState()},
-			{Key: "TValid", Value: value.TValid().Format(time.RFC3339Nano)},
+			{Key: "TValid", Value: value.TValid()},
 			{Key: "TLease", Value: value.TLease().Format(time.RFC3339Nano)},
 			{Key: "Prev", Value: value.Prev()},
 			{Key: "LinkedLen", Value: value.LinkedLen()},
@@ -204,6 +222,10 @@ func (m *MongoConnection) ConditionalCommit(key string, version string) (string,
 		return "", errors.Errorf("not connected to MongoDB")
 	}
 
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	newVer := util.AddToString(version, 1)
 
 	filter := bson.M{"_id": key, "Version": version}
@@ -231,9 +253,40 @@ func (m *MongoConnection) ConditionalCommit(key string, version string) (string,
 	return newVer, nil
 }
 
-func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) (string, error) {
-	filter := bson.M{"_id": key}
+func (m *MongoConnection) AtomicCreate(key string, value any) (string, error) {
+	if !m.hasConnected {
+		return "", errors.Errorf("not connected to MongoDB")
+	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
 
+	filter := bson.M{"_id": key}
+	var result KeyValueItem
+	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
+
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// we can safely create the item
+			str := util.ToString(value)
+			_, err := m.coll.InsertOne(context.Background(), bson.D{
+				{Key: "_id", Value: key},
+				{Key: "Value", Value: str},
+			})
+			if err != nil {
+				return "", err
+			}
+			return "", nil
+		}
+		return "", err
+	}
+	// the key already exists, return an error and the old state
+	return result.Value, errors.New(txn.KeyExists)
+}
+
+func (m *MongoConnection) atomicCreateMongoItem(key string, value txn.DataItem) (string, error) {
+
+	filter := bson.M{"_id": key}
 	var result MongoItem
 	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
 
@@ -246,7 +299,7 @@ func (m *MongoConnection) atomicCreate(key string, value txn.DataItem) (string, 
 				{Key: "Value", Value: value.Value()},
 				{Key: "TxnId", Value: value.TxnId()},
 				{Key: "TxnState", Value: value.TxnState()},
-				{Key: "TValid", Value: value.TValid().Format(time.RFC3339Nano)},
+				{Key: "TValid", Value: value.TValid()},
 				{Key: "TLease", Value: value.TLease().Format(time.RFC3339Nano)},
 				{Key: "Prev", Value: value.Prev()},
 				{Key: "LinkedLen", Value: value.LinkedLen()},
@@ -272,10 +325,12 @@ func (m *MongoConnection) Get(key string) (string, error) {
 	if !m.hasConnected {
 		return "", fmt.Errorf("not connected to MongoDB")
 	}
-	var result struct {
-		Key   string `bson:"_id"`
-		Value string `bson:"Value"`
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
+
+	var result KeyValueItem
 	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
@@ -292,6 +347,10 @@ func (m *MongoConnection) Get(key string) (string, error) {
 func (m *MongoConnection) Put(key string, value any) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
+	}
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	str := util.ToString(value)
@@ -318,6 +377,11 @@ func (m *MongoConnection) Delete(key string) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
 	}
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	_, err := m.coll.DeleteOne(context.Background(), bson.M{"_id": key})
 	if err != nil {
 		return err

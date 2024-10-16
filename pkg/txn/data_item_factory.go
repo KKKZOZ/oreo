@@ -3,7 +3,7 @@ package txn
 import (
 	"time"
 
-	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
 type ItemOptions struct {
@@ -11,7 +11,7 @@ type ItemOptions struct {
 	Value     string
 	TxnId     string
 	TxnState  config.State
-	TValid    time.Time
+	TValid    int64
 	TLease    time.Time
 	Prev      string
 	LinkedLen int

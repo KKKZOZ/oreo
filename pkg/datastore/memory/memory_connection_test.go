@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
 )
 
 func TestConnectionGetNormal(t *testing.T) {

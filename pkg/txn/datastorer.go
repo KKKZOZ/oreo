@@ -31,6 +31,9 @@ type Datastorer interface {
 	// It rolls back the records in the writeCache to the state before the transaction.
 	Abort(hasCommitted bool) error
 
+	// OnePhaseCommit executes the one-phase commit protocol.
+	OnePhaseCommit() error
+
 	// GetName returns the name of the data store.
 	GetName() string
 

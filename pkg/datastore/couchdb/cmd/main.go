@@ -5,8 +5,8 @@ import (
 	"time"
 
 	_ "github.com/go-kivik/kivik/v4/couchdb" // The CouchDB driver
-	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 func main() {
@@ -15,7 +15,7 @@ func main() {
 		Key:     "item1",
 		Value:   "value1",
 		TxnId:   "txn1",
-		TValid:  time.Now(),
+		TValid:  time.Now().UnixMicro(),
 		TLease:  time.Now(),
 		Version: "1",
 	})

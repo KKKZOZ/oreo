@@ -3,7 +3,9 @@ package mongo
 import (
 	"benchmark/ycsb"
 	"context"
+	"time"
 
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -52,10 +54,13 @@ func (r *Mongo) CleanupThread(ctx context.Context) {
 }
 
 func (r *Mongo) Read(ctx context.Context, table string, key string) (string, error) {
-	keyName := getKeyName(table, key)
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
 
 	var doc MyDocument
-	err := r.coll.FindOne(ctx, bson.M{"_id": keyName}).Decode(&doc)
+	err := r.coll.FindOne(ctx, bson.M{"_id": key}).Decode(&doc)
 	if err != nil {
 		return "", err
 	}
@@ -64,11 +69,14 @@ func (r *Mongo) Read(ctx context.Context, table string, key string) (string, err
 }
 
 func (r *Mongo) Update(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName(table, key)
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
 
 	_, err := r.coll.UpdateOne(
 		context.Background(),
-		bson.M{"_id": keyName},
+		bson.M{"_id": key},
 		bson.D{
 			{Key: "$set", Value: bson.D{
 				{Key: "Value", Value: value},
@@ -80,11 +88,14 @@ func (r *Mongo) Update(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Insert(ctx context.Context, table string, key string, value string) error {
-	keyName := getKeyName(table, key)
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
 
 	_, err := r.coll.UpdateOne(
 		context.Background(),
-		bson.M{"_id": keyName},
+		bson.M{"_id": key},
 		bson.D{
 			{Key: "$set", Value: bson.D{
 				{Key: "Value", Value: value},
@@ -96,12 +107,11 @@ func (r *Mongo) Insert(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Delete(ctx context.Context, table string, key string) error {
-	keyName := getKeyName(table, key)
 
-	_, err := r.coll.DeleteOne(ctx, bson.M{"_id": keyName})
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	_, err := r.coll.DeleteOne(ctx, bson.M{"_id": key})
 	return err
-}
-
-func getKeyName(table string, key string) string {
-	return table + "/" + key
 }

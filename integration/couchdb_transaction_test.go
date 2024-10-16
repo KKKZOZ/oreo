@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/mock"
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
-	"github.com/kkkzoz/oreo/pkg/datastore/redis"
-	"github.com/kkkzoz/oreo/pkg/factory"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/mock"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/factory"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -577,7 +577,7 @@ func TestCouchDB_SimpleExpiredRead(t *testing.T) {
 		CValue:    util.ToJSONString(testutil.NewTestItem("item1")),
 		CTxnId:    "TestCouchDB_SimpleExpiredRead1",
 		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
+		CTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		CTLease:   time.Now().Add(-9 * time.Second),
 		CVersion:  "1",
 	}
@@ -587,7 +587,7 @@ func TestCouchDB_SimpleExpiredRead(t *testing.T) {
 		CValue:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		CTxnId:    "TestCouchDB_SimpleExpiredRead2",
 		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(-5 * time.Second),
+		CTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 		CTLease:   time.Now().Add(-4 * time.Second),
 		CPrev:     util.ToJSONString(tarMemItem),
 		// CVersion:  "2",
@@ -1029,7 +1029,7 @@ func TestCouchDB_RollbackConflict(t *testing.T) {
 			CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			CTxnId:     "TestCouchDB_RollbackConflict1",
 			CTxnState:  config.COMMITTED,
-			CTValid:    time.Now().Add(-5 * time.Second),
+			CTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			CTLease:    time.Now().Add(-4 * time.Second),
 			CLinkedLen: 1,
 			CVersion:   "1",
@@ -1039,7 +1039,7 @@ func TestCouchDB_RollbackConflict(t *testing.T) {
 			CValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			CTxnId:     "TestCouchDB_RollbackConflict2",
 			CTxnState:  config.PREPARED,
-			CTValid:    time.Now().Add(-5 * time.Second),
+			CTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			CTLease:    time.Now().Add(-4 * time.Second),
 			CPrev:      util.ToJSONString(redisItem1),
 			CLinkedLen: 2,
@@ -1099,7 +1099,7 @@ func TestCouchDB_RollbackConflict(t *testing.T) {
 			CValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			CTxnId:     "TestCouchDB_RollbackConflict2-emptyField",
 			CTxnState:  config.PREPARED,
-			CTValid:    time.Now().Add(-5 * time.Second),
+			CTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			CTLease:    time.Now().Add(-4 * time.Second),
 			CPrev:      "",
 			CLinkedLen: 1,
@@ -1162,7 +1162,7 @@ func TestCouchDB_RollForwardConflict(t *testing.T) {
 		CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		CTxnId:    "TestCouchDB_RollForwardConflict1",
 		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-5 * time.Second),
+		CTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 		CTLease:   time.Now().Add(-4 * time.Second),
 		CVersion:  "1",
 	}
@@ -1171,7 +1171,7 @@ func TestCouchDB_RollForwardConflict(t *testing.T) {
 		CValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 		CTxnId:     "TestCouchDB_RollForwardConflict2",
 		CTxnState:  config.PREPARED,
-		CTValid:    time.Now().Add(-5 * time.Second),
+		CTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 		CTLease:    time.Now().Add(-4 * time.Second),
 		CPrev:      util.ToJSONString(redisItem1),
 		CLinkedLen: 2,
@@ -1524,7 +1524,7 @@ func TestCouchDB_DeleteTimingProblems(t *testing.T) {
 			CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			CTxnId:    "TestCouchDB_DeleteTimingProblems",
 			CTxnState: config.COMMITTED,
-			CTValid:   time.Now().Add(-5 * time.Second),
+			CTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 			CTLease:   time.Now().Add(-4 * time.Second),
 			CVersion:  "1",
 		}

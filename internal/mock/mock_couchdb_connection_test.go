@@ -10,7 +10,7 @@ import (
 func TestCouchDB_DebugCounter(t *testing.T) {
 	t.Run("test less than limit", func(t *testing.T) {
 
-		conn := NewMockMongoConnection("localhost", 27017, 10, true,
+		conn := NewMockMongoConnection("localhost", 27017, "admin", "admin", 10, true,
 			0, func() error { return errors.New("error") })
 		conn.Connect()
 
@@ -28,7 +28,7 @@ func TestCouchDB_DebugCounter(t *testing.T) {
 	})
 
 	t.Run("test equal the limit", func(t *testing.T) {
-		conn := NewMockMongoConnection("localhost", 27017, 3, true,
+		conn := NewMockMongoConnection("localhost", 27017, "admin", "admin", 3, true,
 			0, func() error { return errors.New("error") })
 		conn.Connect()
 
@@ -50,7 +50,7 @@ func TestCouchDB_DebugCounter(t *testing.T) {
 func TestCouchDB_DebugFunc(t *testing.T) {
 
 	t.Run("trigger debugFunc", func(t *testing.T) {
-		conn := NewMockMongoConnection("localhost", 27017, 3, true,
+		conn := NewMockMongoConnection("localhost", 27017, "admin", "admin", 3, true,
 			0, func() error { return errors.New("my error") })
 		conn.Connect()
 
@@ -68,7 +68,7 @@ func TestCouchDB_DebugFunc(t *testing.T) {
 	})
 
 	t.Run("after triggering debugFunc", func(t *testing.T) {
-		conn := NewMockMongoConnection("localhost", 27017, 3, true,
+		conn := NewMockMongoConnection("localhost", 27017, "admin", "admin", 3, true,
 			0, func() error { return errors.New("my error") })
 		conn.Connect()
 
@@ -95,7 +95,7 @@ func TestCouchDB_DebugFunc(t *testing.T) {
 func TestCouchDB_CallTimes(t *testing.T) {
 	testCases := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	for _, testCase := range testCases {
-		conn := NewMockMongoConnection("localhost", 27017, 20, true,
+		conn := NewMockMongoConnection("localhost", 27017, "admin", "admin", 20, true,
 			0, func() error { return errors.New("my error") })
 		conn.Connect()
 

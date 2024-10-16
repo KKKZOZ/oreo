@@ -3,7 +3,7 @@ package txn
 import (
 	"testing"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
 )
 
 func NewTransactionWithSetup() *Transaction {

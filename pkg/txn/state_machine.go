@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
 type StateMachine struct {

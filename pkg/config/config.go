@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/kkkzoz/oreo/pkg/serializer"
+	"github.com/oreo-dtx-lab/oreo/pkg/generator"
+	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
 	"go.uber.org/zap/zapcore"
 )
 
 type DataStoreType string
 
 type Mode string
+
+type ReadStrategy string
 
 const (
 	REMOTE Mode = "remote"
@@ -40,7 +43,22 @@ const (
 
 	// AsyncLevelTwo means async ds.Commit() and delete the TSR after return
 	AsyncLevelTwo int = 2
+
+	Pessimistic  ReadStrategy = "pessimistic"
+	AssumeCommit ReadStrategy = "commit"
+	AssumeAbort  ReadStrategy = "abort"
 )
+
+type debug struct {
+	// DebugMode specifies whether to enable debug mode
+	DebugMode bool
+
+	CherryGarciaMode bool
+
+	HTTPAdditionalLatency time.Duration
+
+	ConnAdditionalLatency time.Duration
+}
 
 type config struct {
 
@@ -55,7 +73,7 @@ type config struct {
 	MaxRecordLength int
 
 	// IdGenerator generates unique IDs for records.
-	IdGenerator IdGenerator
+	IdGenerator generator.IdGenerator
 
 	// Serializer serializes and deserializes records.
 	Serializer serializer.Serializer
@@ -72,17 +90,27 @@ type config struct {
 
 	// MaxOutstandingRequest specifies the maximum number of outstanding requests
 	MaxOutstandingRequest int
+
+	ReadStrategy ReadStrategy
 }
 
 var Config = config{
 	LeaseTime:                   1000 * time.Millisecond,
 	MaxRecordLength:             2,
-	IdGenerator:                 NewUUIDGenerator(),
+	IdGenerator:                 generator.NewUUIDGenerator(),
 	Serializer:                  serializer.NewJSONSerializer(),
 	LogLevel:                    zapcore.InfoLevel,
 	ConcurrentOptimizationLevel: DEFAULT,
 	AsyncLevel:                  AsyncLevelZero,
 	MaxOutstandingRequest:       5,
+	ReadStrategy:                Pessimistic,
+}
+
+var Debug = debug{
+	DebugMode:             false,
+	CherryGarciaMode:      false,
+	HTTPAdditionalLatency: 0,
+	ConnAdditionalLatency: 0,
 }
 
 type State int

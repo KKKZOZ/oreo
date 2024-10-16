@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	red "github.com/kkkzoz/oreo/pkg/datastore/redis"
-	. "github.com/kkkzoz/oreo/pkg/logger"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	red "github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	. "github.com/oreo-dtx-lab/oreo/pkg/logger"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 type User struct {
@@ -30,7 +30,7 @@ func main() {
 		Value:     util.ToJSONString(expectedValue),
 		TxnId:     "1",
 		TxnState:  config.COMMITTED,
-		TValid:    time.Now().Add(-3 * time.Second),
+		TValid:    time.Now().Add(-3 * time.Second).UnixMicro(),
 		TLease:    time.Now().Add(-2 * time.Second),
 		Prev:      "",
 		IsDeleted: false,

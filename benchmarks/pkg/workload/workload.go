@@ -13,17 +13,20 @@ const (
 	insert
 	scan
 	readModifyWrite
+	doubleSeqCommit
 )
 
 type datastoreType int64
 
 const (
-	redisDatastore datastoreType = iota + 1
-	mongoDatastore
+	redisDatastore1 datastoreType = iota + 1
+	mongoDatastore1
+	mongoDatastore2
+	couchDatastore1
 )
 
 const (
-	MAX_VALUE_LENGTH = 100
+	MAX_VALUE_LENGTH = 1000
 )
 
 type Workload interface {

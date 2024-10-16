@@ -1,6 +1,7 @@
 package client
 
 import (
+	"benchmark/pkg/errrecord"
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
@@ -107,14 +108,20 @@ func (c *Client) RunBenchmark() {
 	wg.Wait()
 
 	fmt.Println("----------------------------------")
-	fmt.Printf("Run finished, takes %s\n", time.Since(start))
+	fmt.Printf("Run finished, takes %.8fs\n", time.Since(start).Seconds())
 	measurement.Output()
+	errrecord.Summary()
+
+	// if c.wp.WorkloadName == "ycsb" {
+	// 	fmt.Printf("Check record distribution\n")
+	// 	c.wl.DisplayCheckResult()
+	// }
 
 	if !c.wl.NeedPostCheck() {
 		return
 	}
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(time.Duration(c.wp.PostCheckInterval) * time.Millisecond)
 	// amountMap := make(map[string]int)
 
 	for dbName, creator := range c.dbCreatorMap {

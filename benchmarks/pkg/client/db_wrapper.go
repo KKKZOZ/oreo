@@ -1,6 +1,7 @@
 package client
 
 import (
+	"benchmark/pkg/errrecord"
 	"benchmark/pkg/measurement"
 	"benchmark/ycsb"
 	"context"
@@ -42,6 +43,7 @@ func (db DbWrapper) Read(ctx context.Context, table string, key string) (_ strin
 	start := time.Now()
 	defer func() {
 		measure(start, "READ", err)
+		errrecord.Record("READ", err)
 	}()
 
 	return db.DB.Read(ctx, table, key)
@@ -78,6 +80,7 @@ func (db DbWrapper) Update(ctx context.Context, table string, key string, value 
 	start := time.Now()
 	defer func() {
 		measure(start, "UPDATE", err)
+		errrecord.Record("UPDATE", err)
 	}()
 
 	return db.DB.Update(ctx, table, key, value)
@@ -105,6 +108,7 @@ func (db DbWrapper) Insert(ctx context.Context, table string, key string, value 
 	start := time.Now()
 	defer func() {
 		measure(start, "INSERT", err)
+		errrecord.Record("INSERT", err)
 	}()
 
 	return db.DB.Insert(ctx, table, key, value)
@@ -132,6 +136,7 @@ func (db DbWrapper) Delete(ctx context.Context, table string, key string) (err e
 	start := time.Now()
 	defer func() {
 		measure(start, "DELETE", err)
+		errrecord.Record("DELETE", err)
 	}()
 
 	return db.DB.Delete(ctx, table, key)

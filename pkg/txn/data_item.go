@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
@@ -17,8 +17,8 @@ type TxnItem interface {
 	TxnState() config.State
 	SetTxnState(config.State)
 
-	TValid() time.Time
-	SetTValid(time.Time)
+	TValid() int64
+	SetTValid(int64)
 
 	TLease() time.Time
 	SetTLease(time.Time)
@@ -52,7 +52,7 @@ type DataItem2 struct {
 	Value     string       `redis:"Value" bson:"Value"`
 	TxnId     string       `redis:"TxnId" bson:"TxnId"`
 	TxnState  config.State `redis:"TxnState" bson:"TxnState"`
-	TValid    time.Time    `redis:"TValid" bson:"TValid"`
+	TValid    int64        `redis:"TValid" bson:"TValid"`
 	TLease    time.Time    `redis:"TLease" bson:"TLease"`
 	Prev      string       `redis:"Prev" bson:"Prev"`
 	LinkedLen int          `redis:"LinkedLen" bson:"LinkedLen"`
@@ -77,7 +77,7 @@ func (r DataItem2) String() string {
     IsDeleted: %v,
     Version:   %d,
 }`, r.Key, r.Value, r.TxnId, util.ToString(r.TxnState),
-		r.TValid.Format(time.RFC3339), r.TLease.Format(time.RFC3339),
+		r.TValid, r.TLease.Format(time.RFC3339),
 		r.Prev, r.LinkedLen, r.IsDeleted, r.Version)
 }
 
@@ -86,7 +86,7 @@ func (r *DataItem2) Equal(other DataItem2) bool {
 		r.Value == other.Value &&
 		r.TxnId == other.TxnId &&
 		r.TxnState == other.TxnState &&
-		r.TValid.Equal(other.TValid) &&
+		r.TValid == other.TValid &&
 		r.TLease.Equal(other.TLease) &&
 		r.Prev == other.Prev &&
 		r.LinkedLen == other.LinkedLen &&
@@ -104,7 +104,7 @@ func (mi DataItem2) MarshalBSONValue() (bsontype.Type, []byte, error) {
 		"Value":     mi.Value,
 		"TxnId":     mi.TxnId,
 		"TxnState":  mi.TxnState,
-		"TValid":    mi.TValid.Format(time.RFC3339Nano),
+		"TValid":    mi.TValid,
 		"TLease":    mi.TLease.Format(time.RFC3339Nano),
 		"Prev":      mi.Prev,
 		"LinkedLen": mi.LinkedLen,
@@ -135,10 +135,11 @@ func (mi *DataItem2) UnmarshalBSONValue(t bsontype.Type, raw []byte) error {
 		mi.TxnState = config.State(value.(int32))
 	}
 	if value, ok := m["TValid"]; ok {
-		mi.TValid, err = time.Parse(time.RFC3339Nano, value.(string))
-		if err != nil {
-			return err
-		}
+		// mi.TValid, err = time.Parse(time.RFC3339Nano, value.(string))
+		// if err != nil {
+		// 	return err
+		// }
+		mi.TValid = value.(int64)
 	}
 	if value, ok := m["TLease"]; ok {
 		mi.TLease, err = time.Parse(time.RFC3339Nano, value.(string))

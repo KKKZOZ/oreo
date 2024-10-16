@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
 // GetBodyString reads the response body from the provided http.Response

@@ -2,6 +2,7 @@ package generator
 
 import (
 	"benchmark/pkg/util"
+	"fmt"
 	"math/rand"
 )
 
@@ -27,11 +28,12 @@ func NewScrambledZipfian(min int64, max int64, zipfianConstant float64) *Scrambl
 	s.min = min
 	s.max = max
 	s.itemCount = max - min + 1
-	if zipfianConstant == usedZipfianConstant {
-		s.gen = NewZipfian(0, itemCount, zipfianConstant, zetan)
-	} else {
-		s.gen = NewZipfianWithRange(0, itemCount, zipfianConstant)
-	}
+	// if zipfianConstant == usedZipfianConstant {
+	// 	s.gen = NewZipfian(0, itemCount, zipfianConstant, zetan)
+	// } else {
+		fmt.Println("Re-calulate zetan...")
+		s.gen = NewZipfianWithRange(0, s.itemCount, zipfianConstant)
+	// }
 	return s
 }
 

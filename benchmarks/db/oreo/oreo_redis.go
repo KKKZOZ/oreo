@@ -6,9 +6,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kkkzoz/oreo/pkg/datastore/redis"
-	"github.com/kkkzoz/oreo/pkg/network"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/network"
+	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 var _ ycsb.DBCreator = (*OreoRedisCreator)(nil)
@@ -52,12 +53,13 @@ func NewRedisDatastore(conn *redis.RedisConnection, isRemote bool) *RedisDatasto
 func (r *RedisDatastore) Start() error {
 	var txn1 *txn.Transaction
 	if r.isRemote {
-		client := network.NewClient(config.RemoteAddress)
-		txn1 = txn.NewTransactionWithRemote(client)
+		client := network.NewClient(config.RemoteAddressList)
+		oracle := timesource.NewGlobalTimeSource(config.TimeOracleUrl)
+		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {
 		txn1 = txn.NewTransaction()
 	}
-	rds := redis.NewRedisDatastore("redis", r.conn)
+	rds := redis.NewRedisDatastore("redis1", r.conn)
 	txn1.AddDatastore(rds)
 	txn1.SetGlobalDatastore(rds)
 	r.txn = txn1
@@ -70,6 +72,11 @@ func (r *RedisDatastore) Commit() error {
 
 func (r *RedisDatastore) Abort() error {
 	return r.txn.Abort()
+}
+
+func (r *RedisDatastore) NewTransaction() ycsb.TransactionDB {
+	rds := NewRedisDatastore(r.conn, r.isRemote)
+	return rds
 }
 
 func (r *RedisDatastore) Close() error {
@@ -86,7 +93,7 @@ func (r *RedisDatastore) CleanupThread(ctx context.Context) {
 func (r *RedisDatastore) Read(ctx context.Context, table string, key string) (string, error) {
 	keyName := getKeyName(table, key)
 	var value string
-	err := r.txn.Read("redis", keyName, &value)
+	err := r.txn.Read("redis1", keyName, &value)
 	if err != nil {
 		return "", err
 	}
@@ -95,15 +102,15 @@ func (r *RedisDatastore) Read(ctx context.Context, table string, key string) (st
 
 func (r *RedisDatastore) Update(ctx context.Context, table string, key string, value string) error {
 	keyName := getKeyName(table, key)
-	return r.txn.Write("redis", keyName, value)
+	return r.txn.Write("redis1", keyName, value)
 }
 
 func (r *RedisDatastore) Insert(ctx context.Context, table string, key string, value string) error {
 	keyName := getKeyName(table, key)
-	return r.txn.Write("redis", keyName, value)
+	return r.txn.Write("redis1", keyName, value)
 }
 
 func (r *RedisDatastore) Delete(ctx context.Context, table string, key string) error {
 	keyName := getKeyName(table, key)
-	return r.txn.Delete("redis", keyName)
+	return r.txn.Delete("redis1", keyName)
 }

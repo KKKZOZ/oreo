@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
