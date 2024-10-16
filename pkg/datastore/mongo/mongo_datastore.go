@@ -1,7 +1,7 @@
 package mongo
 
 import (
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 type MongoDatastore struct {

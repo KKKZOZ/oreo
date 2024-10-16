@@ -3,15 +3,17 @@ package txn
 
 import (
 	"cmp"
+	"log"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/logger"
-	"github.com/kkkzoz/oreo/pkg/serializer"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
+	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -22,6 +24,12 @@ const (
 	EMPTY         string = ""
 	RETRYINTERVAL        = 10 * time.Millisecond
 )
+
+type PredicateInfo struct {
+	State     config.State
+	ItemKey   string
+	LeaseTime time.Time
+}
 
 // Datastore represents a datastorer implementation using the underlying connector.
 type Datastore struct {
@@ -47,6 +55,8 @@ type Datastore struct {
 	// invisibleSet is the set of keys that are not visible to the current transaction.
 	invisibleSet map[string]bool
 
+	validationSet util.ConcurrentMap[string, PredicateInfo]
+
 	// se is the serializer used for serializing and deserializing data in Datastore.
 	se serializer.Serializer
 
@@ -61,14 +71,15 @@ type Datastore struct {
 // It initializes the read and write caches, as well as the serializer.
 func NewDatastore(name string, conn Connector, factory DataItemFactory) *Datastore {
 	return &Datastore{
-		Name:         name,
-		conn:         conn,
-		readCache:    util.NewConcurrentMap[DataItem](),
-		writeCache:   make(map[string]DataItem),
-		writtenSet:   util.NewConcurrentMap[bool](),
-		invisibleSet: make(map[string]bool),
-		se:           config.Config.Serializer,
-		itemFactory:  factory,
+		Name:          name,
+		conn:          conn,
+		readCache:     util.NewConcurrentMap[DataItem](),
+		writeCache:    make(map[string]DataItem),
+		writtenSet:    util.NewConcurrentMap[bool](),
+		invisibleSet:  make(map[string]bool),
+		validationSet: util.NewConcurrentMap[PredicateInfo](),
+		se:            config.Config.Serializer,
+		itemFactory:   factory,
 	}
 }
 
@@ -94,10 +105,26 @@ func (r *Datastore) Read(key string, value any) error {
 	}
 
 	if r.Txn.isRemote {
-		item, err := r.Txn.RemoteRead(r.Name, key)
+		item, dataType, err := r.Txn.RemoteRead(r.Name, key)
 		if err != nil {
+			// errMsg := err.Error() + "in " + r.Name
+			// return errors.New(errMsg)
 			return err
 		}
+		// TODO: logic for AssumeCommit and AssumeAbort
+		switch dataType {
+		case AssumeCommit:
+			r.validationSet.Set(item.TxnId(), PredicateInfo{
+				ItemKey: item.Key(),
+				State:   config.COMMITTED,
+			})
+		case AssumeAbort:
+			r.validationSet.Set(item.TxnId(), PredicateInfo{
+				ItemKey: item.Key(),
+				State:   config.ABORTED,
+			})
+		}
+
 		if item.IsDeleted() {
 			return errors.New(KeyNotFound)
 		}
@@ -112,16 +139,21 @@ func (r *Datastore) Read(key string, value any) error {
 func (r *Datastore) readFromConn(key string, value any) error {
 	item, err := r.conn.GetItem(key)
 	if err != nil {
-		return err
+		errMsg := err.Error() + "at GetItem in " + r.Name
+		return errors.New(errMsg)
 	}
 
 	item, err = r.dirtyReadChecker(item)
 	if err != nil {
+		// errMsg := err.Error() + "at dirtyReadChecker in " + r.Name
+		// return errors.New(errMsg)
 		return err
 	}
 
 	resItem, err := r.basicVisibilityProcessor(item)
 	if err != nil {
+		// errMsg := err.Error() + "at basicVisibilityProcessor in " + r.Name
+		// return errors.New(errMsg)
 		return err
 	}
 
@@ -138,6 +170,8 @@ func (r *Datastore) readFromConn(key string, value any) error {
 				// so the code will regard it as a new record
 				// and create a new record in the prepare phase (set `doCreate` to true)
 				r.readCache.Set(curItem.Key(), curItem)
+				errMsg := "key not found because item is already deleted in " + r.Name
+				return errors.New(errMsg)
 			}
 			return errors.New(KeyNotFound)
 		}
@@ -208,33 +242,79 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		}
 		// if TSR does not exist
 		// and if t_lease has expired
+		// that is, item's TLease < current time
 		// we should roll back the record
-		if item.TLease().Before(r.Txn.TxnStartTime) {
+		if item.TLease().Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
-			err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+
+			curState, err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
 			if err != nil {
-				return nil, err
+				if err.Error() == "key exists" {
+					if curState == config.COMMITTED {
+						return nil, errors.New("rollback failed because the corresponding transaction has committed")
+					}
+					// if curState == config.ABORTED
+					// it means the transaction has been rolled back
+					// so we can safely rollback the record
+				} else {
+					return nil, err
+				}
 			}
+
+			// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+			// if err != nil {
+			// 	return nil, err
+			// }
 			return rollbackFunc()
 		}
-		// the corresponding transaction is running,
-		// we should try previous record instead of raising an error
 
-		// a little trick here:
-		// if the record is not found in the treatAsCommitted,
-		// we should add it to the invisibleSet.
-		// if the record can be found in the treatAsCommitted,
-		// it will be stored in the readCache,
-		// so we don't bother dirtyReadChecker anymore.
-		r.invisibleSet[item.Key()] = true
-		// if prev is empty
-		if item.Prev() == "" {
-			return nil, errors.New(KeyNotFound)
+		// if TSR does not exist
+		// and if the corresponding transaction is a concurrent transaction
+		// that is, txn's TStart < item's TValid < item's TLease
+		// we should try check the previous record
+		if r.Txn.TxnStartTime < item.TValid() {
+			// Origin Cherry Garcia would do
+			if config.Debug.CherryGarciaMode {
+				return nil, errors.New(ReadFailed)
+			}
+
+			// a little trick here:
+			// if the record is not found in the treatAsCommitted,
+			// we should add it to the invisibleSet.
+			// if the record can be found in the treatAsCommitted,
+			// it will be stored in the readCache,
+			// so we don't bother dirtyReadChecker anymore.
+			r.invisibleSet[item.Key()] = true
+			// if prev is empty
+			if item.Prev() == "" {
+				return nil, errors.New(KeyNotFound)
+			}
+			return r.getPrevItem(item)
 		}
 
-		return r.getPrevItem(item)
-		// return DataItem{}, DirtyRead
+		if config.Config.ReadStrategy == config.Pessimistic {
+			return nil, errors.New(ReadFailed)
+		} else {
+			switch config.Config.ReadStrategy {
+			case config.AssumeCommit:
+				r.validationSet.Set(item.TxnId(), PredicateInfo{
+					ItemKey: item.Key(),
+					State:   config.COMMITTED,
+				})
+				return item, nil
+			case config.AssumeAbort:
+				r.validationSet.Set(item.TxnId(), PredicateInfo{
+					State:     config.ABORTED,
+					ItemKey:   item.Key(),
+					LeaseTime: item.TLease(),
+				})
+				if item.Prev() == "" {
+					return nil, errors.New("key not found in AssumeAbort")
+				}
+				return r.getPrevItem(item)
+			}
+		}
 	}
 	return nil, errors.New(KeyNotFound)
 }
@@ -245,7 +325,7 @@ func (r *Datastore) treatAsCommitted(item DataItem, logicFunc func(DataItem, boo
 	curItem := item
 	for i := 1; i <= config.Config.MaxRecordLength; i++ {
 
-		if curItem.TValid().Before(r.Txn.TxnStartTime) {
+		if curItem.TValid() < r.Txn.TxnStartTime {
 			// find the corresponding version,
 			// do some business logic.
 			return logicFunc(curItem, true)
@@ -374,8 +454,10 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 
 	// else we read from connection
 	err := r.readFromConn(cacheItem.Key(), nil)
-	if err != nil && !errors.Is(err, KeyNotFound) {
-		return err
+	if err != nil {
+		if !strings.Contains(err.Error(), "key not found") {
+			return err
+		}
 	}
 	dbItem, _ := r.readCache.Get(cacheItem.Key())
 	// if the record is dropped by the repeatable read rule
@@ -465,19 +547,101 @@ func (r *Datastore) updateMetadata(newItem DataItem, oldItem DataItem) (DataItem
 
 	newItem.SetTxnState(config.PREPARED)
 	newItem.SetTValid(r.Txn.TxnCommitTime)
-	newItem.SetTLease(r.Txn.TxnCommitTime.Add(config.Config.LeaseTime))
+	// TODO: time.Now() is temporary
+	newItem.SetTLease(time.Now().Add(config.Config.LeaseTime))
 	return newItem, nil
+}
+
+func (r *Datastore) rollbackFromConn(key string, txnId string) error {
+
+	item, err := r.conn.GetItem(key)
+	if err != nil {
+		return err
+	}
+
+	if item.TxnState() != config.PREPARED {
+		return errors.New("rollback failed due to wrong state")
+	}
+	if item.TxnId() != txnId {
+		return errors.New("rollback failed due to wrong txnId")
+	}
+
+	if item.TLease().Before(time.Now()) {
+		curState, err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
+		if err != nil {
+			if err.Error() == "key exists" {
+				if curState == config.COMMITTED {
+					return errors.New("rollback failed because the corresponding transaction has committed")
+				}
+				// if curState == config.ABORTED
+				// it means the transaction has been rolled back
+				// so we can safely rollback the record
+			} else {
+				return err
+			}
+		}
+
+		// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
+		// if err != nil {
+		// 	return err
+		// }
+		_, err = r.rollback(item)
+		return err
+	}
+	return nil
+}
+
+func (r *Datastore) validate() error {
+
+	if config.Config.ReadStrategy == config.Pessimistic {
+		return nil
+	}
+
+	var eg errgroup.Group
+	set := r.validationSet.Items()
+	for tId, predicate := range set {
+		txnId := tId
+		pred := predicate
+		if pred.ItemKey == "" {
+			log.Fatalf("item's key is empty")
+			continue
+		}
+		eg.Go(func() error {
+			curState, err := r.Txn.tsrMaintainer.ReadTSR(txnId)
+			if err != nil {
+				if config.Config.ReadStrategy == config.AssumeAbort {
+					if pred.LeaseTime.Before(time.Now()) {
+						key := pred.ItemKey
+						err := r.rollbackFromConn(key, txnId)
+						if err != nil {
+							return errors.Join(errors.New("validation failed in AA mode"), err)
+						} else {
+							return nil
+						}
+					}
+				}
+				return errors.New("validation failed due to unknown status")
+			}
+			if curState != pred.State {
+				return errors.New("validation failed due to false assumption")
+			} else {
+				return nil
+			}
+		})
+	}
+
+	return eg.Wait()
 }
 
 // Prepare prepares the Datastore for commit.
 func (r *Datastore) Prepare() error {
+
 	items := make([]DataItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
 		items = append(items, v)
 	}
 
 	if r.Txn.isRemote {
-
 		// for those whose version is clear, update their metadata
 		for _, item := range items {
 			if item.Version() != "" {
@@ -490,9 +654,10 @@ func (r *Datastore) Prepare() error {
 			}
 		}
 
-		verMap, err := r.Txn.RemotePrepare(r.Name, items)
-		logger.Log.Infow("Remote prepare Result",
-			"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err)
+		validationMap := r.validationSet.Items()
+		verMap, err := r.Txn.RemotePrepare(r.Name, items, validationMap)
+		logger.Log.Debugw("Remote prepare Result",
+			"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err, "Latency", time.Since(r.Txn.debugStart), "Topic", "CheckPoint")
 		if err != nil {
 			return errors.Join(errors.New("Remote prepare failed"), err)
 		}
@@ -500,6 +665,11 @@ func (r *Datastore) Prepare() error {
 			r.writeCache[k].SetVersion(v)
 		}
 		return nil
+	}
+
+	err := r.validate()
+	if err != nil {
+		return err
 	}
 
 	if config.Config.ConcurrentOptimizationLevel < config.PARALLELIZE_ON_UPDATE {
@@ -551,23 +721,47 @@ func (r *Datastore) Commit() error {
 		return err
 	}
 
+	// if config.Debug.CherryGarciaMode {
+	// 	for _, item := range r.writeCache {
+	// 		item.SetTxnState(config.COMMITTED)
+	// 		_, err := r.conn.ConditionalUpdate(item.Key(), item, false)
+	// 		if errors.Is(err, VersionMismatch) {
+	// 			// this indicates that the record has been rolled forward
+	// 			// by another transaction.
+	// 			return nil
+	// 		}
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// 	return nil
+	// }
+
 	// update record's state to the COMMITTED state in the data store
 	var eg errgroup.Group
-	eg.SetLimit(config.Config.MaxOutstandingRequest)
+	// eg.SetLimit(config.Config.MaxOutstandingRequest)
 	for _, item := range r.writeCache {
 		it := item
 		eg.Go(func() error {
 			it.SetTxnState(config.COMMITTED)
-			return util.RetryHelper(3, RETRYINTERVAL,
-				func() error {
-					_, err := r.conn.ConditionalUpdate(it.Key(), it, false)
-					if errors.Is(err, VersionMismatch) {
-						// this indicates that the record has been rolled forward
-						// by another transaction.
-						return nil
-					}
-					return err
-				})
+
+			_, err := r.conn.ConditionalUpdate(it.Key(), it, false)
+			if errors.Is(err, VersionMismatch) {
+				// this indicates that the record has been rolled forward
+				// by another transaction.
+				return nil
+			}
+			return err
+			// return util.RetryHelper(3, RETRYINTERVAL,
+			// 	func() error {
+			// 		_, err := r.conn.ConditionalUpdate(it.Key(), it, false)
+			// 		if errors.Is(err, VersionMismatch) {
+			// 			// this indicates that the record has been rolled forward
+			// 			// by another transaction.
+			// 			return nil
+			// 		}
+			// 		return err
+			// 	})
 		})
 	}
 	eg.Wait()
@@ -609,6 +803,17 @@ func (r *Datastore) Abort(hasCommitted bool) error {
 		}
 	}
 	r.clear()
+	return nil
+}
+
+func (r *Datastore) OnePhaseCommit() error {
+	if len(r.writeCache) == 0 {
+		return nil
+	}
+	// there is only one record in the writeCache
+	for _, item := range r.writeCache {
+		return r.conditionalUpdate(item)
+	}
 	return nil
 }
 
@@ -696,6 +901,11 @@ func (r *Datastore) SetSerializer(se serializer.Serializer) {
 // ReadTSR reads the transaction state from the Redis datastore.
 // It takes a transaction ID as input and returns the corresponding state and an error, if any.
 func (r *Datastore) ReadTSR(txnId string) (config.State, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
 	var txnState config.State
 	state, err := r.conn.Get(txnId)
 	if err != nil {
@@ -708,7 +918,34 @@ func (r *Datastore) ReadTSR(txnId string) (config.State, error) {
 // WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the Redis datastore.
 // It returns an error if the write operation fails.
 func (r *Datastore) WriteTSR(txnId string, txnState config.State) error {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
 	return r.conn.Put(txnId, util.ToString(txnState))
+}
+
+// CreateTSR creates a new transaction state record in the Datastore.
+// If the transaction ID already exists in the Datastore, it returns the old state and an error.
+// If an error occurs during the creation process, it returns -1 and the error.
+// Otherwise, it returns -1 and nil.
+func (r *Datastore) CreateTSR(txnId string, txnState config.State) (config.State, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
+	oldValue, err := r.conn.AtomicCreate(txnId, util.ToString(txnState))
+	if err != nil {
+		if err.Error() == "key exists" {
+			oldState := config.State(util.ToInt(oldValue))
+			return oldState, errors.New(KeyExists)
+		} else {
+			return -1, err
+		}
+	}
+	return -1, nil
 }
 
 // DeleteTSR deletes a transaction with the given transaction ID from the Redis datastore.

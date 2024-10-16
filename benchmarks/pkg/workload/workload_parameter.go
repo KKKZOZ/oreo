@@ -1,32 +1,41 @@
 package workload
 
 type WorkloadParameter struct {
-	DBName    string
-	TableName string
+	DBName       string
+	TableName    string
+	WorkloadName string
 
-	ThreadCount int
-	DoBenchmark bool
+	ThreadCount       int
+	DoBenchmark       bool
+	PostCheckInterval int `yaml:"postcheckinterval"`
 
-	RecordCount       int
-	OperationCount    int
-	TxnOperationGroup int
+	RecordCount       int `yaml:"recordcount"`
+	OperationCount    int `yaml:"operationcount"`
+	TxnOperationGroup int `yaml:"txnoperationgroup"`
 
-	ReadProportion            float64
-	UpdateProportion          float64
-	InsertProportion          float64
-	ScanProportion            float64
-	ReadModifyWriteProportion float64
+	ReadProportion            float64 `yaml:"readproportion"`
+	UpdateProportion          float64 `yaml:"updateproportion"`
+	InsertProportion          float64 `yaml:"insertproportion"`
+	ScanProportion            float64 `yaml:"scanproportion"`
+	ReadModifyWriteProportion float64 `yaml:"readmodifywriteproportion"`
+	DoubleSeqCommitProportion float64 `yaml:"doubleseqcommitproportion"`
 
 	// These parameters are for the data consistency test
-	InitialAmountPerKey   int
-	TransferAmountPerTxn  int
-	TotalAmount           int
-	PostCheckWorkerThread int
+	InitialAmountPerKey   int `yaml:"initialamountperkey"`
+	TransferAmountPerTxn  int `yaml:"transferamountpertxn"`
+	TotalAmount           int `yaml:"totalamount"`
+	PostCheckWorkerThread int `yaml:"postcheckworkerthread"`
 
 	// These parameters are for the data distribution test
-	GlobalDatastoreName string
-	RedisProportion     float64
-	MongoProportion     float64
+	GlobalDatastoreName string  `yaml:"globaldatastorename"`
+	Redis1Proportion    float64 `yaml:"redis1proportion"`
+	Mongo1Proportion    float64 `yaml:"mongo1proportion"`
+	Mongo2Proportion    float64 `yaml:"mongo2proportion"`
+	CouchDBProportion   float64 `yaml:"couchdbproportion"`
+
+	Task1Proportion float64 `yaml:"task1proportion"`
+	Task2Proportion float64 `yaml:"task2proportion"`
+	Task3Proportion float64 `yaml:"task3proportion"`
 }
 
 // ----------------------------------------------------------------------------

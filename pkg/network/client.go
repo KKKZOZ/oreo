@@ -4,49 +4,74 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
-	"github.com/kkkzoz/oreo/pkg/datastore/redis"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 var _ txn.RemoteClient = (*Client)(nil)
 
 var HttpClient = &http.Client{
 	Transport: &http.Transport{
-		MaxIdleConns:        600,
-		MaxIdleConnsPerHost: 300,
-		MaxConnsPerHost:     300,
+		MaxIdleConns:        6000,
+		MaxIdleConnsPerHost: 1000,
+		MaxConnsPerHost:     1000,
 	},
 }
 
 type Client struct {
-	ServerAddr string
+	ServerAddrList []string
+	mutex          sync.Mutex
+	curIndex       int
 }
 
-func NewClient(serverAddr string) *Client {
-	serverAddr = "http://" + serverAddr
+func NewClient(serverAddrList []string) *Client {
+
+	addrList := make([]string, 0)
+
+	for _, serverAddr := range serverAddrList {
+		serverAddr = "http://" + serverAddr
+		addrList = append(addrList, serverAddr)
+	}
 	return &Client{
-		ServerAddr: serverAddr,
+		ServerAddrList: addrList,
 	}
 }
 
-func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
-	// startTime := time.Now()
-	// defer func() {
-	// 	fmt.Printf("Read request latency: %v\n", time.Since(startTime))
-	// }()
+func (c *Client) GetServerAddr() string {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if c.curIndex >= len(c.ServerAddrList) {
+		c.curIndex = 0
+	}
+	addr := c.ServerAddrList[c.curIndex]
+	c.curIndex++
+	return addr
+}
+
+func (c *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataStrategy, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
 
 	data := ReadRequest{
+		DsName:    dsName,
 		Key:       key,
 		StartTime: ts,
+		Config:    cfg,
 	}
 	json_data, _ := json.Marshal(data)
 
-	reqUrl := c.ServerAddr + "/read"
+	reqUrl := c.GetServerAddr() + "/read"
 
 	// Create a new POST request
 	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))
@@ -70,43 +95,53 @@ func (c *Client) Read(key string, ts time.Time) (txn.DataItem, error) {
 		log.Fatal(err)
 	}
 	if response.Status == "OK" {
-		return response.Data, nil
+		return response.Data, response.DataStrategy, nil
 	} else {
 		errMsg := response.ErrMsg
-		return nil, errors.New(errMsg)
+		return nil, txn.Normal, errors.New(errMsg)
 	}
 }
 
-func (c *Client) Prepare(itemList []txn.DataItem,
-	startTime time.Time, commitTime time.Time) (map[string]string, error) {
-	// sTime := time.Now()
-	// defer func() {
-	// 	fmt.Printf("Prepare request latency: %v\n", time.Since(sTime))
-	// }()
+func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
+	startTime int64, commitTime int64,
+	cfg txn.RecordConfig, validationMap map[string]txn.PredicateInfo) (map[string]string, error) {
 
-	itemArr := make([]redis.RedisItem, 0)
-	for _, item := range itemList {
-		redisItem, ok := item.(*redis.RedisItem)
-		if !ok {
-			return nil, errors.New("unexpected data type")
-		}
-		itemArr = append(itemArr, *redisItem)
+	debugStart := time.Now()
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
+
+	// itemArr := make([]redis.RedisItem, 0)
+	// for _, item := range itemList {
+	// 	redisItem, ok := item.(*redis.RedisItem)
+	// 	if !ok {
+	// 		return nil, errors.New("unexpected data type")
+	// 	}
+	// 	itemArr = append(itemArr, *redisItem)
+	// }
 	data := PrepareRequest{
-		ItemList:   itemArr,
-		StartTime:  startTime,
-		CommitTime: commitTime,
+		DsName:        dsName,
+		ItemType:      c.getItemType(dsName),
+		ItemList:      itemList,
+		StartTime:     startTime,
+		CommitTime:    commitTime,
+		Config:        cfg,
+		ValidationMap: validationMap,
 	}
 	json_data, _ := json.Marshal(data)
 
-	reqUrl := c.ServerAddr + "/prepare"
+	reqUrl := c.GetServerAddr() + "/prepare"
 	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))
 	if err != nil {
 		log.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	debugMsg := fmt.Sprintf("HttpClient.Do(Prepare) in %v", dsName)
+	logger.Log.Debugw("Before "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	resp, err := HttpClient.Do(req)
+	logger.Log.Debugw("After "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -118,7 +153,7 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 	var response Response[map[string]string]
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Prepare call resp Unmarshal error: %v\nbody: %v", err, string(body))
 	}
 	if response.Status == "OK" {
 		return response.Data, nil
@@ -128,18 +163,19 @@ func (c *Client) Prepare(itemList []txn.DataItem,
 	}
 }
 
-func (c *Client) Commit(infoList []txn.CommitInfo) error {
-	// startTime := time.Now()
-	// defer func() {
-	// 	fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
-	// }()
+func (c *Client) Commit(dsName string, infoList []txn.CommitInfo) error {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
 
 	data := CommitRequest{
-		List: infoList,
+		DsName: dsName,
+		List:   infoList,
 	}
 	json_data, _ := json.Marshal(data)
 
-	reqUrl := c.ServerAddr + "/commit"
+	reqUrl := c.GetServerAddr() + "/commit"
 
 	// Create a new POST request
 	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))
@@ -160,7 +196,7 @@ func (c *Client) Commit(infoList []txn.CommitInfo) error {
 	var response Response[string]
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Commit call resp Unmarshal error: %v\nbody: %v", err, string(body))
 	}
 	if response.Status == "OK" {
 		return nil
@@ -170,14 +206,20 @@ func (c *Client) Commit(infoList []txn.CommitInfo) error {
 	}
 }
 
-func (c *Client) Abort(keyList []string, txnId string) error {
+func (c *Client) Abort(dsName string, keyList []string, txnId string) error {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
 	data := AbortRequest{
+		DsName:  dsName,
 		KeyList: keyList,
 		TxnId:   txnId,
 	}
 	json_data, _ := json.Marshal(data)
 
-	reqUrl := c.ServerAddr + "/abort"
+	reqUrl := c.GetServerAddr() + "/abort"
 
 	// Create a new POST request
 	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))
@@ -198,12 +240,27 @@ func (c *Client) Abort(keyList []string, txnId string) error {
 	var response Response[string]
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Abort call resp Unmarshal error: %v\nbody: %v", err, string(body))
 	}
 	if response.Status == "OK" {
 		return nil
 	} else {
 		errMsg := response.ErrMsg
 		return errors.New(errMsg)
+	}
+}
+
+func (c *Client) getItemType(dsName string) txn.ItemType {
+	switch dsName {
+	case "redis1", "Redis":
+		return txn.RedisItem
+	case "mongo1", "mongo2", "MongoDB":
+		return txn.MongoItem
+	case "CouchDB":
+		return txn.CouchItem
+	case "KVRocks":
+		return txn.RedisItem
+	default:
+		return ""
 	}
 }

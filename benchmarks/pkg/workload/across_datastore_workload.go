@@ -221,30 +221,30 @@ func (wl *AcrossDatastoreWorkload) doInOthers(ctx context.Context, db ycsb.DB) e
 	return nil
 }
 
-func createDatastoreGenerator(wp *WorkloadParameter) *generator.Discrete {
-	redisProportion := wp.RedisProportion
-	mongoProportion := wp.MongoProportion
+// func createDatastoreGenerator(wp *WorkloadParameter) *generator.Discrete {
+// 	redisProportion := wp.RedisProportion
+// 	mongoProportion := wp.MongoProportion
 
-	datastoreChooser := generator.NewDiscrete()
-	if redisProportion > 0 {
-		datastoreChooser.Add(redisProportion, int64(redisDatastore))
-	}
+// 	datastoreChooser := generator.NewDiscrete()
+// 	if redisProportion > 0 {
+// 		datastoreChooser.Add(redisProportion, int64(redisDatastore))
+// 	}
 
-	if mongoProportion > 0 {
-		datastoreChooser.Add(mongoProportion, int64(mongoDatastore))
-	}
+// 	if mongoProportion > 0 {
+// 		datastoreChooser.Add(mongoProportion, int64(mongoDatastore))
+// 	}
 
-	return datastoreChooser
-}
+// 	return datastoreChooser
+// }
 
 func (wl *AcrossDatastoreWorkload) NextDatastore() string {
 	wl.mu.Lock()
 	defer wl.mu.Unlock()
 	switch datastoreType(wl.datastoreChooser.Next(wl.r)) {
-	case redisDatastore:
-		return "redis"
-	case mongoDatastore:
-		return "mongo"
+	case redisDatastore1:
+		return "redis1"
+	case mongoDatastore1:
+		return "mongo1"
 	default:
 		return "unknown"
 	}

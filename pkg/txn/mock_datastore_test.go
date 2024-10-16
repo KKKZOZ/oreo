@@ -1,7 +1,7 @@
 package txn
 
 import (
-	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -529,6 +529,11 @@ func (_c *MockDatastore_Write_Call) Return(_a0 error) *MockDatastore_Write_Call 
 func (_c *MockDatastore_Write_Call) RunAndReturn(run func(string, interface{}) error) *MockDatastore_Write_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+func (_m *MockDatastore) OnePhaseCommit() error {
+	ret := _m.Called()
+	return ret.Error(0)
 }
 
 func (_m *MockDatastore) ReadTSR(txnId string) (config.State, error) {

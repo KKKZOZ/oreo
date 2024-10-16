@@ -54,6 +54,9 @@ type DB interface {
 type TransactionDB interface {
 	DB
 
+	// NewTransaction creates a new datastore based on itself with a clean state.
+	NewTransaction() TransactionDB
+
 	// Start starts a new transaction.
 	Start() error
 

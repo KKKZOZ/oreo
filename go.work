@@ -1,7 +1,6 @@
-go 1.21.1
+go 1.21
 
 use (
 	.
-	./examples/oreo_backend_with_memory_datastore
 	./benchmarks
 )

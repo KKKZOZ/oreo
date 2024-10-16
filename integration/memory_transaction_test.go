@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/datastore/memory"
-	"github.com/kkkzoz/oreo/pkg/factory"
-	trxn "github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/memory"
+	"github.com/oreo-dtx-lab/oreo/pkg/factory"
+	trxn "github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -622,7 +622,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "99",
 		TxnState: config.COMMITTED,
-		TValid:   time.Now().Add(-10 * time.Second),
+		TValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		TLease:   time.Now().Add(-9 * time.Second),
 		Version:  1,
 	}
@@ -632,7 +632,7 @@ func TestMemory_SimpleExpiredRead(t *testing.T) {
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "100",
 		TxnState: config.PREPARED,
-		TValid:   time.Now().Add(-5 * time.Second),
+		TValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 		TLease:   time.Now().Add(-4 * time.Second),
 		Prev:     util.ToJSONString(tarMemItem),
 		Version:  2,

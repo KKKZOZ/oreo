@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 var _ txn.DataItem = (*CouchDBItem)(nil)
@@ -16,7 +16,7 @@ type CouchDBItem struct {
 	CValue     string       `json:"Value"`
 	CTxnId     string       `json:"TxnId"`
 	CTxnState  config.State `json:"State"`
-	CTValid    time.Time    `json:"TValid"`
+	CTValid    int64        `json:"TValid"`
 	CTLease    time.Time    `json:"TLease"`
 	CPrev      string       `json:"Prev"`
 	CLinkedLen int          `json:"LinkedLen"`
@@ -63,11 +63,11 @@ func (c *CouchDBItem) SetTxnState(state config.State) {
 	c.CTxnState = state
 }
 
-func (c *CouchDBItem) TValid() time.Time {
+func (c *CouchDBItem) TValid() int64 {
 	return c.CTValid
 }
 
-func (c *CouchDBItem) SetTValid(tValid time.Time) {
+func (c *CouchDBItem) SetTValid(tValid int64) {
 	c.CTValid = tValid
 }
 
@@ -125,7 +125,7 @@ func (c *CouchDBItem) Equal(other txn.DataItem) bool {
 		c.Value() == otherItem.Value() &&
 		c.TxnId() == otherItem.TxnId() &&
 		c.TxnState() == otherItem.TxnState() &&
-		c.TValid().Equal(otherItem.TValid()) &&
+		c.TValid() == otherItem.TValid() &&
 		c.TLease().Equal(otherItem.TLease()) &&
 		c.Prev() == otherItem.Prev() &&
 		c.LinkedLen() == otherItem.LinkedLen() &&
@@ -143,13 +143,13 @@ func (c *CouchDBItem) String() string {
     Value:     %s,
     TxnId:     %s,
     TxnState:  %s,
-    TValid:    %s,
+    TValid:    %v,
     TLease:    %s,
     Prev:      %s,
 	LinkedLen: %d,
     IsDeleted: %v,
     Version:   %s,
 }`, c.CKey, c.CValue, c.CTxnId, util.ToString(c.CTxnState),
-		c.CTValid.Format(time.RFC3339), c.CTLease.Format(time.RFC3339),
+		c.CTValid, c.CTLease.Format(time.RFC3339),
 		c.CPrev, c.CLinkedLen, c.CIsDeleted, c.CVersion)
 }

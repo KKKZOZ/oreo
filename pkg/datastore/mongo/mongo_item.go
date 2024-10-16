@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
@@ -19,7 +19,7 @@ type MongoItem struct {
 	MValue     string       `bson:"Value" json:"Value"`
 	MTxnId     string       `bson:"TxnId" json:"TxnId"`
 	MTxnState  config.State `bson:"TxnState" json:"TxnState"`
-	MTValid    time.Time    `bson:"TValid" json:"TValid"`
+	MTValid    int64        `bson:"TValid" json:"TValid"`
 	MTLease    time.Time    `bson:"TLease" json:"TLease"`
 	MPrev      string       `bson:"Prev" json:"Prev"`
 	MLinkedLen int          `bson:"LinkedLen" json:"LinkedLen"`
@@ -66,11 +66,11 @@ func (m *MongoItem) SetTxnState(state config.State) {
 	m.MTxnState = state
 }
 
-func (m *MongoItem) TValid() time.Time {
+func (m *MongoItem) TValid() int64 {
 	return m.MTValid
 }
 
-func (m *MongoItem) SetTValid(tValid time.Time) {
+func (m *MongoItem) SetTValid(tValid int64) {
 	m.MTValid = tValid
 }
 
@@ -127,14 +127,14 @@ func (r MongoItem) String() string {
     IsDeleted: %v,
     Version:   %s,
 }`, r.MKey, r.MValue, r.MTxnId, util.ToString(r.MTxnState),
-		r.MTValid.Format(time.RFC3339), r.MTLease.Format(time.RFC3339),
+		r.MTValid, r.MTLease.Format(time.RFC3339),
 		r.MPrev, r.MLinkedLen, r.MIsDeleted, r.MVersion)
 }
 
 func (r *MongoItem) Empty() bool {
 	return r.MKey == "" && r.MValue == "" &&
 		r.MTxnId == "" && r.MTxnState == config.State(0) &&
-		r.MTValid.IsZero() && r.MTLease.IsZero() &&
+		r.MTValid == 0 && r.MTLease.IsZero() &&
 		r.MPrev == "" && r.MLinkedLen == 0 &&
 		!r.MIsDeleted && r.MVersion == ""
 }
@@ -144,7 +144,7 @@ func (r *MongoItem) Equal(other txn.DataItem) bool {
 		r.MValue == other.Value() &&
 		r.MTxnId == other.TxnId() &&
 		r.MTxnState == other.TxnState() &&
-		r.MTValid.Equal(other.TValid()) &&
+		r.MTValid == other.TValid() &&
 		r.MTLease.Equal(other.TLease()) &&
 		r.MPrev == other.Prev() &&
 		r.MLinkedLen == other.LinkedLen() &&
@@ -162,7 +162,7 @@ func (mi MongoItem) MarshalBSONValue() (bsontype.Type, []byte, error) {
 		"Value":     mi.MValue,
 		"TxnId":     mi.MTxnId,
 		"TxnState":  mi.MTxnState,
-		"TValid":    mi.MTValid.Format(time.RFC3339Nano),
+		"TValid":    mi.MTValid,
 		"TLease":    mi.MTLease.Format(time.RFC3339Nano),
 		"Prev":      mi.MPrev,
 		"LinkedLen": mi.MLinkedLen,
@@ -193,10 +193,11 @@ func (mi *MongoItem) UnmarshalBSONValue(t bsontype.Type, raw []byte) error {
 		mi.MTxnState = config.State(value.(int32))
 	}
 	if value, ok := m["TValid"]; ok {
-		mi.MTValid, err = time.Parse(time.RFC3339Nano, value.(string))
-		if err != nil {
-			return err
-		}
+		// mi.MTValid, err = time.Parse(time.RFC3339Nano, value.(string))
+		// if err != nil {
+		// 	return err
+		// }
+		mi.MTValid = value.(int64)
 	}
 	if value, ok := m["TLease"]; ok {
 		mi.MTLease, err = time.Parse(time.RFC3339Nano, value.(string))

@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/mock"
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/datastore/redis"
-	"github.com/kkkzoz/oreo/pkg/factory"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/mock"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/factory"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -576,7 +576,7 @@ func TestKvrocks_SimpleExpiredRead(t *testing.T) {
 		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
 		TxnId:    "TestRedis_SimpleExpiredRead1",
 		TxnState: config.COMMITTED,
-		TValid:   time.Now().Add(-10 * time.Second),
+		TValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		TLease:   time.Now().Add(-9 * time.Second),
 		Version:  "1",
 	})
@@ -586,7 +586,7 @@ func TestKvrocks_SimpleExpiredRead(t *testing.T) {
 		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		TxnId:    "TestRedis_SimpleExpiredRead2",
 		TxnState: config.PREPARED,
-		TValid:   time.Now().Add(-5 * time.Second),
+		TValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 		TLease:   time.Now().Add(-4 * time.Second),
 		Prev:     util.ToJSONString(tarMemItem),
 		Version:  "2",
@@ -1030,7 +1030,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 			RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			RTxnId:     "TestRedis_RollbackConflict1",
 			RTxnState:  config.COMMITTED,
-			RTValid:    time.Now().Add(-5 * time.Second),
+			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RLinkedLen: 1,
 			RVersion:   "1",
@@ -1040,7 +1040,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			RTxnId:     "TestRedis_RollbackConflict2",
 			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second),
+			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RPrev:      util.ToJSONString(redisItem1),
 			RLinkedLen: 2,
@@ -1093,7 +1093,7 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			RTxnId:     "TestRedis_RollbackConflict2-emptyField",
 			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second),
+			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			RTLease:    time.Now().Add(-4 * time.Second),
 			RPrev:      "",
 			RLinkedLen: 1,
@@ -1150,7 +1150,7 @@ func TestKvrocks_RollForwardConflict(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		RTxnId:    "TestKvrocks_RollForwardConflict2",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-5 * time.Second),
+		RTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-4 * time.Second),
 		RVersion:  "1",
 	}
@@ -1159,7 +1159,7 @@ func TestKvrocks_RollForwardConflict(t *testing.T) {
 		RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 		RTxnId:     "TestKvrocks_RollForwardConflict2",
 		RTxnState:  config.PREPARED,
-		RTValid:    time.Now().Add(-5 * time.Second),
+		RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 		RTLease:    time.Now().Add(-4 * time.Second),
 		RPrev:      util.ToJSONString(redisItem1),
 		RLinkedLen: 2,
@@ -1510,7 +1510,7 @@ func TestKvrocks_DeleteTimingProblems(t *testing.T) {
 			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			RTxnId:    "TestRedis_DeleteTimingProblems",
 			RTxnState: config.COMMITTED,
-			RTValid:   time.Now().Add(-5 * time.Second),
+			RTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 			RTLease:   time.Now().Add(-4 * time.Second),
 			RVersion:  "1",
 		}

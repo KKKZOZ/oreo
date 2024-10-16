@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/logger"
-	"github.com/kkkzoz/oreo/pkg/serializer"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
+	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 )
@@ -23,6 +23,7 @@ type RedisConnection struct {
 	se                   serializer.Serializer
 	connected            bool
 	atomicCreateSHA      string
+	atomicCreateItemSHA  string
 	conditionalUpdateSHA string
 	conditionalCommitSHA string
 }
@@ -35,6 +36,14 @@ type ConnectionOptions struct {
 }
 
 const AtomicCreateScript = `
+if redis.call('EXISTS', KEYS[1]) == 0 then
+	return redis.call('SET',ARGV[1] , ARGV[2])
+else
+	return redis.error_reply('already exists')
+end
+`
+
+const AtomicCreateItemScript = `
 if redis.call('EXISTS', KEYS[1]) == 0 then
 	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
 	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
@@ -145,6 +154,15 @@ func (r *RedisConnection) Connect() error {
 	})
 
 	eg.Go(func() error {
+		sha, err := r.rdb.ScriptLoad(ctx, AtomicCreateItemScript).Result()
+		if err != nil {
+			return err
+		}
+		r.atomicCreateItemSHA = sha
+		return nil
+	})
+
+	eg.Go(func() error {
 		sha, err := r.rdb.ScriptLoad(ctx, ConditionalUpdateScript).Result()
 		if err != nil {
 			return err
@@ -168,6 +186,11 @@ func (r *RedisConnection) Connect() error {
 // GetItem retrieves a txn.DataItem from the Redis database based on the specified key.
 // If the key is not found, it returns an empty txn.DataItem and an error.
 func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	var value RedisItem
 	err := r.rdb.HGetAll(context.Background(), key).Scan(&value)
 	if err != nil {
@@ -184,13 +207,18 @@ func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 // It sets various fields of the txn.DataItem struct as hash fields in the Redis hash.
 // The function returns an error if there was a problem executing the Redis commands.
 func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	ctx := context.Background()
 	_, err := r.rdb.Pipelined(ctx, func(rdb redis.Pipeliner) error {
 		rdb.HSet(ctx, key, "Key", value.Key())
 		rdb.HSet(ctx, key, "Value", value.Value())
 		rdb.HSet(ctx, key, "TxnId", value.TxnId())
 		rdb.HSet(ctx, key, "TxnState", value.TxnState())
-		rdb.HSet(ctx, key, "TValid", value.TValid().Format(time.RFC3339Nano))
+		rdb.HSet(ctx, key, "TValid", value.TValid())
 		rdb.HSet(ctx, key, "TLease", value.TLease().Format(time.RFC3339Nano))
 		rdb.HSet(ctx, key, "Prev", value.Prev())
 		rdb.HSet(ctx, key, "LinkedLen", value.LinkedLen())
@@ -210,18 +238,28 @@ func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
 func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
-	logger.Log.Debugw("Start  ConditionalUpdate", "key", key)
-	defer logger.Log.Debugw("End    ConditionalUpdate", "key", key)
+
+	debugStart := time.Now()
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	logger.Log.Debugw("Start  ConditionalUpdate", "DataItem", value, "doCreate", doCreate, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
+	defer func() {
+		logger.Log.Debugw("End    ConditionalUpdate", "key", key, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
+	}()
 
 	if doCreate {
 		ctx := context.Background()
 		newVer := util.AddToString(value.Version(), 1)
 
-		_, err := r.rdb.EvalSha(ctx, r.atomicCreateSHA, []string{value.Key()}, value.Version(), value.Key(),
+		_, err := r.rdb.EvalSha(ctx, r.atomicCreateItemSHA, []string{value.Key()}, value.Version(), value.Key(),
 			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
 			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
 			if err.Error() == "version mismatch" {
+				logger.Log.Debugw("Version mismatch", "expected version", value.Version(), "current version", value.Version())
 				return "", errors.New(txn.VersionMismatch)
 			}
 			return "", err
@@ -241,6 +279,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		}
 		return "", err
 	}
+
 	return newVer, nil
 }
 
@@ -249,6 +288,11 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
 func (r *RedisConnection) ConditionalCommit(key string, version string) (string, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	logger.Log.Debugw("Start  ConditionalCommit", "key", key)
 	defer logger.Log.Debugw("End    ConditionalCommit", "key", key)
 
@@ -267,11 +311,36 @@ func (r *RedisConnection) ConditionalCommit(key string, version string) (string,
 
 }
 
+func (r *RedisConnection) AtomicCreate(name string, value any) (string, error) {
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	ctx := context.Background()
+	_, err := r.rdb.EvalSha(ctx, r.atomicCreateSHA, []string{name}, name, value).Result()
+	if err != nil {
+		if err.Error() == "already exists" {
+			old, err := r.Get(name)
+			if err != nil {
+				return "", errors.New("get old state failed")
+			}
+			return old, errors.New(txn.KeyExists)
+		}
+		return "", err
+	}
+	return "", nil
+}
+
 // Get retrieves the value associated with the given key from the Redis database.
 // If the key is not found, it returns an empty string and an error indicating the key was not found.
 // If an error occurs during the retrieval, it returns an empty string and the error.
 // Otherwise, it returns the retrieved value and nil error.
 func (r *RedisConnection) Get(name string) (string, error) {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	str, err := r.rdb.Get(context.Background(), name).Result()
 	if err != nil {
 		if err == redis.Nil {
@@ -286,11 +355,21 @@ func (r *RedisConnection) Get(name string) (string, error) {
 // It will overwrite the value if the key already exists.
 // It returns an error if the operation fails.
 func (r *RedisConnection) Put(name string, value any) error {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	return r.rdb.Set(context.Background(), name, value, 0).Err()
 }
 
 // Delete removes the specified key from Redis.
 // It allows for the deletion of a key that does not exist.
 func (r *RedisConnection) Delete(name string) error {
+
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	return r.rdb.Del(context.Background(), name).Err()
 }

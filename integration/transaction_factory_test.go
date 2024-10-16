@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/pkg/datastore/memory"
-	"github.com/kkkzoz/oreo/pkg/factory"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/memory"
+	"github.com/oreo-dtx-lab/oreo/pkg/factory"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 

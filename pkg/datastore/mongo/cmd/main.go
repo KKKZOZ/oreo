@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	mong "github.com/kkkzoz/oreo/pkg/datastore/mongo"
+	mong "github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -37,7 +37,7 @@ func main() {
 		MValue:     "test_value",
 		MTxnId:     "1",
 		MTxnState:  1,
-		MTValid:    now.Add(-3 * time.Second),
+		MTValid:    now.Add(-3 * time.Second).UnixMicro(),
 		MTLease:    now.Add(-2 * time.Second),
 		MPrev:      "",
 		MIsDeleted: false,

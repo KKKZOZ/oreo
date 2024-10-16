@@ -2,19 +2,19 @@ package integration
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/mock"
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
-	"github.com/kkkzoz/oreo/pkg/datastore/redis"
-	"github.com/kkkzoz/oreo/pkg/factory"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/mock"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -510,22 +510,11 @@ func TestMongo_TxnAbortCausedByWriteConflict(t *testing.T) {
 
 func TestMongo_ConcurrentTransaction(t *testing.T) {
 
-	// Create a new redis datastore instance
-	redisDst1 := redis.NewRedisDatastore("redis1", NewConnectionWithSetup(MONGO))
-
-	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
-		DatastoreList:    []txn.Datastorer{redisDst1},
-		GlobalDatastore:  redisDst1,
-		TimeOracleSource: txn.LOCAL,
-		LockerSource:     txn.LOCAL,
-	})
-	assert.NoError(t, err)
-
-	preTxn := txnFactory.NewTransaction()
+	preTxn := NewTransactionWithSetup(MONGO)
 	preTxn.Start()
 	person := testutil.NewDefaultPerson()
 	preTxn.Write(MONGO, "John", person)
-	err = preTxn.Commit()
+	err := preTxn.Commit()
 	assert.NoError(t, err)
 
 	resChan := make(chan bool)
@@ -544,9 +533,10 @@ func TestMongo_ConcurrentTransaction(t *testing.T) {
 			txn.Read(MONGO, "John", &person)
 			person.Age = person.Age + id
 			txn.Write(MONGO, "John", person)
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 			err = txn.Commit()
 			if err != nil {
+				fmt.Printf("txn commit err: %s\n", err)
 				resChan <- false
 			} else {
 				resChan <- true
@@ -576,7 +566,7 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 		MValue:    util.ToJSONString(testutil.NewTestItem("item1")),
 		MTxnId:    "TestMongo_SimpleExpiredRead1",
 		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
+		MTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		MTLease:   time.Now().Add(-9 * time.Second),
 		MVersion:  "1",
 	}
@@ -586,7 +576,7 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 		MValue:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		MTxnId:    "TestMongo_SimpleExpiredRead2",
 		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-5 * time.Second),
+		MTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 		MTLease:   time.Now().Add(-4 * time.Second),
 		MPrev:     util.ToJSONString(tarMemItem),
 		MVersion:  "2",
@@ -831,7 +821,7 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 
 // A complex test
 // preTxn writes data to the redis database
-// slowTxn read all data and write all data,
+// slowTxn reads all data and write all data,
 // but it will block for 3s and **fail** when writing the TSR
 // so when slowTxn blocks, the internal state of redis database:
 //   - item1-slow PREPARED
@@ -1026,7 +1016,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 			MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			MTxnId:     "TestMongo_RollbackConflict1",
 			MTxnState:  config.COMMITTED,
-			MTValid:    time.Now().Add(-5 * time.Second),
+			MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MLinkedLen: 1,
 			MVersion:   "1",
@@ -1036,7 +1026,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 			MValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			MTxnId:     "TestMongo_RollbackConflict2",
 			MTxnState:  config.PREPARED,
-			MTValid:    time.Now().Add(-5 * time.Second),
+			MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MPrev:      util.ToJSONString(redisItem1),
 			MLinkedLen: 2,
@@ -1089,7 +1079,7 @@ func TestMongo_RollbackConflict(t *testing.T) {
 			MValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 			MTxnId:     "TestMongo_RollbackConflict2-emptyField",
 			MTxnState:  config.PREPARED,
-			MTValid:    time.Now().Add(-5 * time.Second),
+			MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 			MTLease:    time.Now().Add(-4 * time.Second),
 			MPrev:      "",
 			MLinkedLen: 1,
@@ -1146,7 +1136,7 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 		MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		MTxnId:    "TestMongo_RollForwardConflict1",
 		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-5 * time.Second),
+		MTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 		MTLease:   time.Now().Add(-4 * time.Second),
 		MVersion:  "1",
 	}
@@ -1155,7 +1145,7 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 		MValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
 		MTxnId:     "TestMongo_RollForwardConflict2",
 		MTxnState:  config.PREPARED,
-		MTValid:    time.Now().Add(-5 * time.Second),
+		MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
 		MTLease:    time.Now().Add(-4 * time.Second),
 		MPrev:      util.ToJSONString(redisItem1),
 		MLinkedLen: 2,
@@ -1501,7 +1491,7 @@ func TestMongo_DeleteTimingProblems(t *testing.T) {
 			MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			MTxnId:    "TestMongo_DeleteTimingProblems",
 			MTxnState: config.COMMITTED,
-			MTValid:   time.Now().Add(-5 * time.Second),
+			MTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
 			MTLease:   time.Now().Add(-4 * time.Second),
 			MVersion:  "1",
 		}
@@ -1588,11 +1578,11 @@ func TestMongo_ReadModifyWritePattern(t *testing.T) {
 		assert.NoError(t, err)
 
 		txn := txn.NewTransaction()
-		mockConn := mock.NewMockRedisConnection("localhost", 6379, -1, false,
+		mockConn := mock.NewMockMongoConnection("localhost", 6379, "admin", "admin", -1, false,
 			0, func() error { time.Sleep(1 * time.Second); return nil })
-		rds := redis.NewRedisDatastore(MONGO, mockConn)
-		txn.AddDatastore(rds)
-		txn.SetGlobalDatastore(rds)
+		mds := mongo.NewMongoDatastore(MONGO, mockConn)
+		txn.AddDatastore(mds)
+		txn.SetGlobalDatastore(mds)
 		txn.Start()
 
 		var item1 testutil.TestItem

@@ -3,8 +3,8 @@ package factory
 import (
 	"errors"
 
-	"github.com/kkkzoz/oreo/pkg/locker"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/pkg/locker"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 // TransactionFactory represents a factory for creating transactions.
@@ -102,14 +102,14 @@ func (t *TransactionFactory) NewTransaction() *txn.Transaction {
 	// By default, time oracle and locker are local
 	txn1 := txn.NewTransaction()
 
-	if t.TimeOracleSource == txn.GLOBAL {
-		txn1.SetGlobalTimeSource(t.oracleURL)
-		txn1.SetLocker(locker.NewHttpLocker(t.oracleURL))
-	}
+	// if t.TimeOracleSource == txn.GLOBAL {
+	// 	txn1.SetGlobalTimeSource(t.oracleURL)
+	// 	txn1.SetLocker(locker.NewHttpLocker(t.oracleURL))
+	// }
 
-	if t.LockerSource == txn.GLOBAL {
-		txn1.SetLocker(locker.NewHttpLocker(t.oracleURL))
-	}
+	// if t.LockerSource == txn.GLOBAL {
+	// 	txn1.SetLocker(locker.NewHttpLocker(t.oracleURL))
+	// }
 
 	for _, ds := range t.dateStoreList {
 		copy := ds.Copy()

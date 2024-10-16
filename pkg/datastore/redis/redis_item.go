@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 var _ txn.DataItem = (*RedisItem)(nil)
@@ -17,7 +17,7 @@ type RedisItem struct {
 	RValue     string       `redis:"Value" json:"Value"`
 	RTxnId     string       `redis:"TxnId" json:"TxnId"`
 	RTxnState  config.State `redis:"TxnState" json:"TxnState"`
-	RTValid    time.Time    `redis:"TValid" json:"TValid"`
+	RTValid    int64        `redis:"TValid" json:"TValid"`
 	RTLease    time.Time    `redis:"TLease" json:"TLease"`
 	RPrev      string       `redis:"Prev" json:"Prev"`
 	RLinkedLen int          `redis:"LinkedLen" json:"LinkedLen"`
@@ -64,11 +64,11 @@ func (r *RedisItem) SetTxnState(s config.State) {
 	r.RTxnState = s
 }
 
-func (r *RedisItem) TValid() time.Time {
+func (r *RedisItem) TValid() int64 {
 	return r.RTValid
 }
 
-func (r *RedisItem) SetTValid(t time.Time) {
+func (r *RedisItem) SetTValid(t int64) {
 	r.RTValid = t
 }
 
@@ -125,14 +125,14 @@ func (r RedisItem) String() string {
     IsDeleted: %v,
     Version:   %s,
 }`, r.RKey, r.RValue, r.RTxnId, util.ToString(r.RTxnState),
-		r.RTValid.Format(time.RFC3339), r.RTLease.Format(time.RFC3339),
+		util.ToString(r.RTValid), r.RTLease.Format(time.RFC3339),
 		r.RPrev, r.RLinkedLen, r.RIsDeleted, r.RVersion)
 }
 
 func (r *RedisItem) Empty() bool {
 	return r.RKey == "" && r.RValue == "" &&
 		r.RTxnId == "" && r.RTxnState == config.State(0) &&
-		r.RTValid.IsZero() && r.RTLease.IsZero() &&
+		r.RTValid == 0 && r.RTLease.IsZero() &&
 		r.RPrev == "" && r.RLinkedLen == 0 &&
 		!r.RIsDeleted && r.RVersion == ""
 }
@@ -142,7 +142,7 @@ func (r *RedisItem) Equal(other txn.DataItem) bool {
 		r.Value() == other.Value() &&
 		r.TxnId() == other.TxnId() &&
 		r.TxnState() == other.TxnState() &&
-		r.TValid().Equal(other.TValid()) &&
+		r.TValid() == other.TValid() &&
 		r.TLease().Equal(other.TLease()) &&
 		r.Prev() == other.Prev() &&
 		r.LinkedLen() == other.LinkedLen() &&

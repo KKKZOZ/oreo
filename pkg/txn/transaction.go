@@ -2,15 +2,15 @@ package txn
 
 import (
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/locker"
-	. "github.com/kkkzoz/oreo/pkg/logger"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/locker"
+	. "github.com/oreo-dtx-lab/oreo/pkg/logger"
+	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 )
 
 type SourceType string
@@ -26,6 +26,8 @@ var (
 	DirtyRead        = errors.Errorf("dirty read")
 	DeserializeError = errors.Errorf("deserialize error")
 	VersionMismatch  = errors.Errorf("version mismatch")
+	KeyExists        = errors.Errorf("key exists")
+	ReadFailed       = errors.Errorf("read failed due to unknown txn status")
 )
 
 const (
@@ -41,9 +43,9 @@ type Transaction struct {
 	// TxnId is the unique identifier for the transaction.
 	TxnId string
 	// TxnStartTime is the timestamp when the transaction started.
-	TxnStartTime time.Time
+	TxnStartTime int64
 	// TxnCommitTime is the timestamp when the transaction was committed.
-	TxnCommitTime time.Time
+	TxnCommitTime int64
 
 	// tsrMaintainer is used to maintain the TSR (Transaction Status Record)
 	// tsrMaintainer is responsible for handling and updating the status of transactions.
@@ -51,7 +53,7 @@ type Transaction struct {
 	// dataStoreMap is a map of transaction-specific datastores.
 	dataStoreMap map[string]Datastorer
 	// timeSource represents the source of time for the transaction.
-	timeSource SourceType
+	timeSource timesource.TimeSourcer
 	// oracleURL is the URL of the oracle service used by the transaction.
 	oracleURL string
 	// locker is used for transaction-level locking.
@@ -60,12 +62,18 @@ type Transaction struct {
 	// isReadOnly indicates whether the transaction is read-only.
 	isReadOnly bool
 
+	// writeCount is the number of write operations performed by the transaction.
+	writeCount int
+
 	// client is the network client used by the transaction.
 	client RemoteClient
 
+	// isRemote indicates whether the transaction is remote.
 	isRemote bool
 
 	*StateMachine
+
+	debugStart time.Time
 }
 
 // NewTransaction creates a new Transaction object.
@@ -73,7 +81,7 @@ type Transaction struct {
 func NewTransaction() *Transaction {
 	return &Transaction{
 		dataStoreMap: make(map[string]Datastorer),
-		timeSource:   LOCAL,
+		timeSource:   timesource.NewSimpleTimeSource(),
 		locker:       locker.AMemoryLocker,
 		isReadOnly:   true,
 		StateMachine: NewStateMachine(),
@@ -81,10 +89,10 @@ func NewTransaction() *Transaction {
 	}
 }
 
-func NewTransactionWithRemote(client RemoteClient) *Transaction {
+func NewTransactionWithRemote(client RemoteClient, oracle timesource.TimeSourcer) *Transaction {
 	return &Transaction{
 		dataStoreMap: make(map[string]Datastorer),
-		timeSource:   LOCAL,
+		timeSource:   oracle,
 		locker:       locker.AMemoryLocker,
 		isReadOnly:   true,
 		StateMachine: NewStateMachine(),
@@ -100,6 +108,11 @@ func NewTransactionWithRemote(client RemoteClient) *Transaction {
 // It starts each datastore associated with the transaction.
 // Returns an error if any of the above steps fail, otherwise returns nil.
 func (t *Transaction) Start() error {
+	t.debugStart = time.Now()
+	defer func() {
+		Log.Debugw("txn.Start() ends", "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+	}()
+
 	err := t.SetState(config.STARTED)
 	if err != nil {
 		return err
@@ -114,7 +127,7 @@ func (t *Transaction) Start() error {
 	}
 	t.TxnId = config.Config.IdGenerator.GenerateId()
 	Log.Infow("starting transaction", "txnId", t.TxnId)
-	t.TxnStartTime, err = t.getTime()
+	t.TxnStartTime, err = t.getTime("start")
 	if err != nil {
 		return err
 	}
@@ -182,6 +195,7 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 		return err
 	}
 	t.isReadOnly = false
+	t.writeCount++
 	// msgStr := fmt.Sprintf("write in %v: [Key: %v]", dsName, key)
 	// Log.Debugw(msgStr, "txnId", t.TxnId, "topic", testutil.DWrite)
 	// t.debug(testutil.DWrite, "write in %v: [Key: %v]", dsName, key)
@@ -215,33 +229,53 @@ func (t *Transaction) Delete(dsName string, key string) error {
 // Returns an error if any operation fails.
 func (t *Transaction) Commit() error {
 
-	// startTime := time.Now()
-	// defer func() {
-	// 	fmt.Printf("Commit request latency: %v\n", time.Since(startTime))
-	// }()
+	defer func() {
+		Log.Debugw("txn.Commit() ends", "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+	}()
 
-	Log.Infow("Starts to txn.Commit()", "txnId", t.TxnId)
+	Log.Infow("Starts to txn.Commit()", "txnId", t.TxnId, "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 	err := t.SetState(config.COMMITTED)
 	if err != nil {
 		return err
 	}
 
+	// Two special cases
+
+	// Case 1: If the transaction is read-only,
+	// we can skip the prepare and commit phases.
 	if t.isReadOnly {
 		Log.Infow("transaction is read-only, Commit() complete", "txnId", t.TxnId)
 		return nil
 	}
 
-	// ------------------- Prepare phase ----------------------------
-	t.TxnCommitTime, err = t.getTime()
+	t.TxnCommitTime, err = t.getTime("commit")
 	if err != nil {
 		return err
 	}
+	// note: one phase commit needs t.TxnCommitTime
+	// so we initialize it above
+
+	// Case 2: If the write count is 1,
+	// we can do one phase commit
+	// TODO:
+	// if t.writeCount == 1 {
+	// 	return t.OnePhaseCommit()
+	// }
+
+	// Or, we go through the normal process
+	// ------------------- Prepare phase ----------------------------
 
 	success := true
 	var cause error
 	mu := sync.Mutex{}
 
 	prepareDatastore := func(ds Datastorer) {
+
+		defer func() {
+			msg := fmt.Sprintf("%s prepare phase ends", ds.GetName())
+			Log.Debugw(msg, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+		}()
+
 		err := ds.Prepare()
 		if err != nil {
 			mu.Lock()
@@ -255,7 +289,7 @@ func (t *Transaction) Commit() error {
 		}
 	}
 
-	Log.Infow("Starting to make ds.Prepare()", "txnId", t.TxnId)
+	Log.Infow("Starting to make ds.Prepare()", "txnId", t.TxnId, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 	if config.Config.ConcurrentOptimizationLevel == config.PARALLELIZE_ON_PREPARE {
 		var wg = sync.WaitGroup{}
 		for _, ds := range t.dataStoreMap {
@@ -282,24 +316,31 @@ func (t *Transaction) Commit() error {
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
-	Log.Infow("finishes prepare phase", "txnId", t.TxnId)
+	Log.Infow("finishes prepare phase", "txnId", t.TxnId, "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 
 	// ------------------- Commit phase ----------------------------
 	// The sync point
-	// fmt.Printf("Before getting TSR latency: %v\n", time.Since(startTime))
-	txnState, err := t.GetTSRState(t.TxnId)
-	if err == nil && txnState == config.ABORTED {
-		Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
+
+	// txnState, err := t.GetTSRState(t.TxnId)
+	// if err == nil && txnState == config.ABORTED {
+	// 	Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
+	// 	go t.Abort()
+	// 	return errors.New("transaction is aborted by other transaction")
+	// }
+	// err = t.WriteTSR(t.TxnId, config.COMMITTED)
+	// if err != nil {
+	// 	go t.Abort()
+	// 	return err
+	// }
+	_, err = t.CreateTSR(t.TxnId, config.COMMITTED)
+	// if there is already a TSR,
+	// it means the transaction is aborted by other transaction
+	if err != nil {
+		// fmt.Printf("Error: %v\n", err.Error())
 		go t.Abort()
 		return errors.New("transaction is aborted by other transaction")
 	}
-	// fmt.Printf("Before writing TSR latency: %v\n", time.Since(startTime))
-	Log.Infow("Writing TSR", "txnId", t.TxnId)
-	err = t.WriteTSR(t.TxnId, config.COMMITTED)
-	if err != nil {
-		go t.Abort()
-		return err
-	}
+	Log.Debugw("TSR created", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 
 	if config.Config.AsyncLevel == config.AsyncLevelTwo {
 		go func() {
@@ -320,7 +361,6 @@ func (t *Transaction) Commit() error {
 		}()
 		return nil
 	}
-	// fmt.Printf("Before commit ds latency: %v\n", time.Since(startTime))
 	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
@@ -332,7 +372,6 @@ func (t *Transaction) Commit() error {
 		}(ds)
 	}
 	wg.Wait()
-	// fmt.Printf("After commit ds latency: %v\n", time.Since(startTime))
 
 	if config.Config.AsyncLevel == config.AsyncLevelOne {
 		go func() {
@@ -345,6 +384,18 @@ func (t *Transaction) Commit() error {
 	Log.Infow("Deleting TSR", "txnId", t.TxnId)
 	t.DeleteTSR()
 	Log.Infow("Successfully Commit()", "txnId", t.TxnId)
+	return nil
+}
+
+func (t *Transaction) OnePhaseCommit() error {
+	for _, ds := range t.dataStoreMap {
+		err := ds.OnePhaseCommit()
+		if err != nil {
+			Log.Errorw("one phase commit failed", "txnId", t.TxnId, "ds", ds.GetName(), "cause", err)
+			go t.Abort()
+			return err
+		}
+	}
 	return nil
 }
 
@@ -374,13 +425,17 @@ func (t *Transaction) Abort() error {
 	return nil
 }
 
-// WriteTSR writes the Transaction State Record (TSR) for the given transaction ID and state.
+func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
+	return t.tsrMaintainer.WriteTSR(txnId, txnState)
+}
+
+// SetTSR writes the Transaction State Record (TSR) for the given transaction ID and state.
 // It uses the global data store to persist the TSR.
 // The txnId parameter specifies the ID of the transaction.
 // The txnState parameter specifies the state of the transaction.
 // Returns an error if there was a problem writing the TSR.
-func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
-	return t.tsrMaintainer.WriteTSR(txnId, txnState)
+func (t *Transaction) CreateTSR(txnId string, txnState config.State) (config.State, error) {
+	return t.tsrMaintainer.CreateTSR(txnId, txnState)
 }
 
 // DeleteTSR deletes the Transaction Status Record (TSR) associated with the Transaction.
@@ -394,91 +449,67 @@ func (t *Transaction) GetTSRState(txnId string) (config.State, error) {
 	return t.tsrMaintainer.ReadTSR(txnId)
 }
 
-// SetGlobalTimeSource sets the global time source for the transaction.
-// It takes a URL as a parameter and assigns it to the transaction's oracleURL field.
-// The timeSource field is set to GLOBAL.
-func (t *Transaction) SetGlobalTimeSource(url string) {
-	t.timeSource = GLOBAL
-	t.oracleURL = url
-}
-
 // getTime returns the current time based on the time source configured in the Transaction.
 // If the time source is set to LOCAL, it returns the current local time.
 // If the time source is set to GLOBAL, it retrieves the time from the specified time URL.
 // It returns the parsed time value and any error encountered during the process.
-func (t *Transaction) getTime() (time.Time, error) {
-	if t.timeSource == LOCAL {
-		return time.Now(), nil
-	}
-	if t.timeSource == GLOBAL {
-		res, err := http.Get(t.oracleURL + "/time")
-		if err != nil {
-			return time.Now(), errors.New("failed to get time from global time source")
-		}
-
-		var timeString string
-		fmt.Fscan(res.Body, &timeString)
-		return time.Parse(time.RFC3339, timeString)
-	}
-	return time.Now(), nil
+func (t *Transaction) getTime(mode string) (int64, error) {
+	startTime := time.Now()
+	defer func() {
+		msg := fmt.Sprintf("GetTime request latency: %v", time.Since(startTime))
+		Log.Debugw(msg, "Topic", "LowSpeed")
+	}()
+	return t.timeSource.GetTime(mode)
 }
 
-// SetLocker sets the locker for the transaction.
-// The locker is responsible for managing the concurrency of the transaction.
-// It ensures that only one goroutine can access the transaction at a time.
-// The locker must implement the locker.Locker interface.
-func (t *Transaction) SetLocker(locker locker.Locker) {
-	t.locker = locker
-}
-
-// Lock locks the specified key with the given ID for the specified duration.
-// If the locker is not set, it returns an error.
-func (t *Transaction) Lock(key string, id string, duration time.Duration) error {
-	if t.locker == nil {
-		return errors.New("locker not set")
+func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDataStrategy, error) {
+	if !t.isRemote {
+		return nil, Normal, errors.New("not a remote transaction")
 	}
-	return t.locker.Lock(key, id, duration)
+
+	globalName := t.tsrMaintainer.(Datastorer).GetName()
+
+	return t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
+		GlobalName:                  globalName,
+		MaxRecordLen:                config.Config.MaxRecordLength,
+		ReadStrategy:                config.Config.ReadStrategy,
+		ConcurrentOptimizationLevel: config.Config.ConcurrentOptimizationLevel,
+	})
 }
 
-// Unlock unlocks the specified key with the given ID.
-// It returns an error if the locker is not set or if unlocking fails.
-func (t *Transaction) Unlock(key string, id string) error {
-	if t.locker == nil {
-		return errors.New("locker not set")
-	}
-	return t.locker.Unlock(key, id)
-}
-
-func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, error) {
+func (t *Transaction) RemoteValidate(dsName string, key string, item DataItem) error {
 	// TODO: Handle dsName
+	panic("not implemented")
+}
+
+func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem, validationMap map[string]PredicateInfo) (map[string]string, error) {
 	if !t.isRemote {
 		return nil, errors.New("not a remote transaction")
 	}
-	return t.client.Read(key, t.TxnStartTime)
-}
+	globalName := t.tsrMaintainer.(Datastorer).GetName()
 
-func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem) (map[string]string, error) {
-	// TODO: Handle dsName
-	if !t.isRemote {
-		return nil, errors.New("not a remote transaction")
+	cfg := RecordConfig{
+		GlobalName:                  globalName,
+		MaxRecordLen:                config.Config.MaxRecordLength,
+		ReadStrategy:                config.Config.ReadStrategy,
+		ConcurrentOptimizationLevel: config.Config.ConcurrentOptimizationLevel,
 	}
-	return t.client.Prepare(itemList, t.TxnStartTime, t.TxnCommitTime)
+	return t.client.Prepare(dsName, itemList, t.TxnStartTime, t.TxnCommitTime,
+		cfg, validationMap)
 }
 
 func (t *Transaction) RemoteCommit(dsName string, infoList []CommitInfo) error {
-	// TODO: Handle dsName
 	if !t.isRemote {
 		return errors.New("not a remote transaction")
 	}
-	return t.client.Commit(infoList)
+	return t.client.Commit(dsName, infoList)
 }
 
 func (t *Transaction) RemoteAbort(dsName string, keyList []string) error {
-	// TODO: Handle dsName
 	if !t.isRemote {
 		return errors.New("not a remote transaction")
 	}
-	return t.client.Abort(keyList, t.TxnId)
+	return t.client.Abort(dsName, keyList, t.TxnId)
 }
 
 func (t *Transaction) debug(topic testutil.TxnTopic, format string, a ...interface{}) {

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	trxn "github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	trxn "github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -1887,7 +1887,7 @@ func TestTSROperations(t *testing.T) {
 		ds := cds.(trxn.TSRMaintainer)
 		conn.Delete("txn-1")
 
-		err := ds.WriteTSR("txn-1", config.COMMITTED)
+		_, err := ds.CreateTSR("txn-1", config.COMMITTED)
 		assert.NoError(t, err)
 	})
 
@@ -1907,7 +1907,7 @@ func TestTSROperations(t *testing.T) {
 
 		ds.DeleteTSR("txn-1")
 
-		err := ds.WriteTSR("txn-1", config.COMMITTED)
+		_, err := ds.CreateTSR("txn-1", config.COMMITTED)
 		assert.NoError(t, err)
 
 		state, err := ds.ReadTSR("txn-1")

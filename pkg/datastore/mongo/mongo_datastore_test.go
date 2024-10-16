@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	trxn "github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	trxn "github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,6 +22,8 @@ func NewDefaultConnection() *MongoConnection {
 		Address:        "mongodb://localhost:27017",
 		DBName:         "oreo",
 		CollectionName: "records",
+		Username:       "admin",
+		Password:       "admin",
 	})
 	err := conn.Connect()
 	if err != nil {
@@ -39,6 +41,8 @@ func NewTransactionWithSetup() *trxn.Transaction {
 		Address:        "mongodb://localhost:27017",
 		DBName:         "oreo",
 		CollectionName: "records",
+		Username:       "admin",
+		Password:       "admin",
 	})
 	txn := trxn.NewTransaction()
 	rds := NewMongoDatastore("mongo", conn)

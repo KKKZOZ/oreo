@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-errors/errors"
 	"github.com/go-kivik/kivik/v4"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 
 	_ "github.com/go-kivik/kivik/v4/couchdb"
 )
@@ -77,6 +78,9 @@ func (r *CouchDBConnection) GetItem(key string) (txn.DataItem, error) {
 	if !r.hasConnected {
 		return &CouchDBItem{}, fmt.Errorf("not connected to CouchDB")
 	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
 
 	row := r.db.Get(context.Background(), key)
 	var value CouchDBItem
@@ -95,6 +99,9 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) (string, err
 	if !r.hasConnected {
 		return "", fmt.Errorf("not connected to CouchDB")
 	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
 
 	rev, err := r.db.Put(context.Background(), key, value, nil)
 	if err != nil {
@@ -106,6 +113,9 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) (string, err
 func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
 	if !r.hasConnected {
 		return "", fmt.Errorf("not connected to CouchDB")
+	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	var existing CouchDBItem
@@ -144,6 +154,10 @@ func (r *CouchDBConnection) ConditionalCommit(key string, version string) (strin
 	if !r.hasConnected {
 		return "", fmt.Errorf("not connected to CouchDB")
 	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
 	var existing CouchDBItem
 	err := r.db.Get(context.Background(), key).ScanDoc(&existing)
 
@@ -161,10 +175,33 @@ func (r *CouchDBConnection) ConditionalCommit(key string, version string) (strin
 	return newVer, nil
 }
 
+func (r *CouchDBConnection) AtomicCreate(name string, value any) (string, error) {
+	if !r.hasConnected {
+		return "", fmt.Errorf("not connected to CouchDB")
+	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
+	}
+
+	value = map[string]interface{}{
+		"value": util.ToString(value),
+	}
+
+	_, err := r.db.Put(context.Background(), name, value)
+	if err != nil {
+		oldValue, _ := r.Get(name)
+		return oldValue, errors.New(txn.KeyExists)
+	}
+	return "", nil
+}
+
 // Retrieve the value associated with the given key
 func (r *CouchDBConnection) Get(name string) (string, error) {
 	if !r.hasConnected {
 		return "", fmt.Errorf("not connected to CouchDB")
+	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	row := r.db.Get(context.Background(), name)
@@ -182,6 +219,9 @@ func (r *CouchDBConnection) Get(name string) (string, error) {
 func (r *CouchDBConnection) Put(name string, value interface{}) error {
 	if !r.hasConnected {
 		return fmt.Errorf("not connected to CouchDB")
+	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	if _, ok := value.(string); ok {
@@ -206,6 +246,9 @@ func (r *CouchDBConnection) Put(name string, value interface{}) error {
 func (r *CouchDBConnection) Delete(name string) error {
 	if !r.hasConnected {
 		return fmt.Errorf("not connected to CouchDB")
+	}
+	if config.Debug.DebugMode {
+		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	type Item struct {

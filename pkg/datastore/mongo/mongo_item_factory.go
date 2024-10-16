@@ -1,6 +1,6 @@
 package mongo
 
-import "github.com/kkkzoz/oreo/pkg/txn"
+import "github.com/oreo-dtx-lab/oreo/pkg/txn"
 
 var _ txn.DataItemFactory = (*MongoItemFactory)(nil)
 

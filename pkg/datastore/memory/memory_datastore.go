@@ -7,9 +7,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 type MemoryDatastore struct {
@@ -91,9 +91,10 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		// and if t_lease has expired
 		// we should rollback the record
 		// because the transaction that modified the record has been aborted
-		if item.TLease.Before(m.Txn.TxnStartTime) {
+		// TODO: Not sure...
+		if item.TLease.Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
-			m.Txn.WriteTSR(item.TxnId, config.ABORTED)
+			m.Txn.CreateTSR(item.TxnId, config.ABORTED)
 			item, err := m.rollback(item)
 			if err != nil {
 				return err
@@ -111,7 +112,7 @@ func (m *MemoryDatastore) readAsCommitted(item txn.DataItem2, value any) error {
 	curItem := item
 	for i := 1; i <= config.Config.MaxRecordLength; i++ {
 
-		if curItem.TValid.Before(m.Txn.TxnStartTime) {
+		if curItem.TValid < m.Txn.TxnStartTime {
 			// if the record has been deleted
 			if curItem.IsDeleted {
 				return errors.New("key not found")
@@ -166,7 +167,7 @@ func (m *MemoryDatastore) Write(key string, value any) error {
 		Key:       key,
 		Value:     jsonString,
 		TxnId:     m.Txn.TxnId,
-		TValid:    time.Now(),
+		TValid:    time.Now().UnixMicro(),
 		TLease:    time.Now().Add(config.Config.LeaseTime),
 		Version:   version,
 		IsDeleted: false,
@@ -213,7 +214,7 @@ func (m *MemoryDatastore) Delete(key string) error {
 		IsDeleted: true,
 		TxnId:     m.Txn.TxnId,
 		TxnState:  config.COMMITTED,
-		TValid:    time.Now(),
+		TValid:    time.Now().UnixMicro(),
 		TLease:    time.Now(),
 		Version:   version,
 	}
@@ -223,15 +224,15 @@ func (m *MemoryDatastore) Delete(key string) error {
 func (m *MemoryDatastore) conditionalUpdate(item txn.DataItem2) error {
 	memItem := item
 
-	key := "memory" + memItem.Key
-	err := m.Txn.Lock(key, memItem.TxnId, 100*time.Millisecond)
-	if err != nil {
-		return err
-	}
-	defer m.Txn.Unlock(key, memItem.TxnId)
+	// key := "memory" + memItem.Key
+	// err := m.Txn.Lock(key, memItem.TxnId, 100*time.Millisecond)
+	// if err != nil {
+	// 	return err
+	// }
+	// defer m.Txn.Unlock(key, memItem.TxnId)
 
 	var oldItem txn.DataItem2
-	err = m.conn.Get(memItem.Key, &oldItem)
+	err := m.conn.Get(memItem.Key, &oldItem)
 	if err != nil {
 		// this is a new record
 		newItem, err := m.updateMetadata(memItem, txn.DataItem2{})
@@ -328,7 +329,8 @@ func (m *MemoryDatastore) updateMetadata(newItem txn.DataItem2, oldItem txn.Data
 	newItem.Version++
 	newItem.TxnState = config.PREPARED
 	newItem.TValid = m.Txn.TxnCommitTime
-	newItem.TLease = m.Txn.TxnCommitTime.Add(config.Config.LeaseTime)
+	// TODO: time.Now() is temporary
+	newItem.TLease = time.Now().Add(config.Config.LeaseTime)
 
 	return newItem, nil
 }
@@ -403,6 +405,11 @@ func (m *MemoryDatastore) Abort(hasCommitted bool) error {
 	}
 	m.readCache = make(map[string]txn.DataItem2)
 	m.writeCache = make(map[string]txn.DataItem2)
+	return nil
+}
+
+func (m *MemoryDatastore) OnePhaseCommit() error {
+	// TODO: implement me
 	return nil
 }
 

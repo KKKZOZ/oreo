@@ -3,14 +3,15 @@ package redis
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/testutil"
-	"github.com/kkkzoz/oreo/internal/util"
-	"github.com/kkkzoz/oreo/pkg/config"
-	trxn "github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/testutil"
+	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	trxn "github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -40,6 +41,7 @@ func NewTransactionWithSetup() *trxn.Transaction {
 }
 
 func TestSimpleReadWhenCommitted(t *testing.T) {
+	startTime := time.Now()
 
 	txn := trxn.NewTransaction()
 	conn := NewRedisConnection(&ConnectionOptions{
@@ -48,6 +50,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 	rds := NewRedisDatastore("redis", conn)
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
+	fmt.Printf("Time to create transaction: %v\n", time.Since(startTime))
 
 	// initialize the redis database
 	expected := testutil.Person{
@@ -59,19 +62,21 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "123123",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
 
 	key := "John"
 	conn.PutItem(key, expectedRedisItem)
+	fmt.Printf("Time to put item: %v\n", time.Since(startTime))
 
 	// Start the transaction
 	err := txn.Start()
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
+	fmt.Printf("Time to start transaction: %v\n", time.Since(startTime))
 
 	// Read the value
 	var result testutil.Person
@@ -106,7 +111,7 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "TestSimpleReadWhenCommittedFindEmpty",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(+10 * time.Second),
+		RTValid:   time.Now().Add(+10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(+5 * time.Second),
 		RVersion:  "2",
 	}
@@ -153,7 +158,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "99",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "1",
 	}
@@ -162,7 +167,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		RValue:    util.ToJSONString(curPerson),
 		RTxnId:    "100",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(10 * time.Second),
+		RTValid:   time.Now().Add(10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(5 * time.Second),
 		RVersion:  "2",
 		RPrev:     util.ToJSONString(preRedisItem),
@@ -214,7 +219,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "99",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(10 * time.Second),
+		RTValid:   time.Now().Add(10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(5 * time.Second),
 		RVersion:  "1",
 	}
@@ -223,7 +228,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		RValue:    util.ToJSONString(curPerson),
 		RTxnId:    "100",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(20 * time.Second),
+		RTValid:   time.Now().Add(20 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(15 * time.Second),
 		RVersion:  "2",
 		RPrev:     util.ToJSONString(preRedisItem),
@@ -316,7 +321,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1")),
 		RTxnId:    "99",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-9 * time.Second),
 		RVersion:  "1",
 	}
@@ -379,7 +384,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "100",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
@@ -624,7 +629,7 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "123123",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
@@ -687,7 +692,7 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "123123",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
@@ -749,7 +754,7 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "123123",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
@@ -797,7 +802,7 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "123123",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
@@ -892,7 +897,7 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "123123",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
@@ -955,7 +960,7 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		RValue:    util.ToJSONString(expected),
 		RTxnId:    "123123",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-5 * time.Second),
 		RVersion:  "2",
 	}
@@ -1383,7 +1388,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			RTxnId:    "99",
 			RTxnState: config.PREPARED,
-			RTValid:   time.Now().Add(-10 * time.Second),
+			RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 			RTLease:   time.Now().Add(-9 * time.Second),
 			RVersion:  "1",
 		}
@@ -1490,7 +1495,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			RTxnId:    "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
 			RTxnState: config.PREPARED,
-			RTValid:   time.Now().Add(-10 * time.Second),
+			RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 			RTLease:   time.Now().Add(-9 * time.Second),
 			RVersion:  "1",
 		}
@@ -1537,12 +1542,13 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		RTxnId:    "TestDirectWriteOnPreparingRecord",
 		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(2 * time.Second),
-		RTLease:   time.Now().Add(1 * time.Second),
+		RTValid:   time.Now().Add(20 * time.Second).UnixMicro(),
+		RTLease:   time.Now().Add(10 * time.Second),
 		RVersion:  "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
+	conn.Delete("TestDirectWriteOnPreparingRecord")
 
 	txn := NewTransactionWithSetup()
 	txn.Start()
@@ -1593,7 +1599,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		RTxnId:    "TestRollback",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-9 * time.Second),
 		RVersion:  "1",
 	}
@@ -1658,7 +1664,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		RTxnId:    "TestRollback",
 		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-9 * time.Second),
 		RVersion:  "1",
 	}
@@ -1746,7 +1752,7 @@ func TestRollForwardWhenReading(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		RTxnId:    "TestRollForward",
 		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-9 * time.Second),
 		RVersion:  "1",
 	}
@@ -1779,7 +1785,7 @@ func TestRollForwardWhenWriting(t *testing.T) {
 		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
 		RTxnId:    "TestRollForward",
 		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-10 * time.Second),
+		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:   time.Now().Add(-9 * time.Second),
 		RVersion:  "1",
 	}

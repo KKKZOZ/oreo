@@ -3,12 +3,12 @@ package integration
 import (
 	"time"
 
-	"github.com/kkkzoz/oreo/internal/mock"
-	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
-	"github.com/kkkzoz/oreo/pkg/datastore/memory"
-	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
-	"github.com/kkkzoz/oreo/pkg/datastore/redis"
-	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/oreo-dtx-lab/oreo/internal/mock"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/memory"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
 const (
@@ -31,8 +31,8 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 	if dsType == "mongo" {
 		conn = mongo.NewMongoConnection(&mongo.ConnectionOptions{
 			Address:        "mongodb://localhost:27017",
-			Username:       "",
-			Password:       "",
+			Username:       "admin",
+			Password:       "admin",
 			DBName:         "oreo",
 			CollectionName: "records",
 		})
@@ -46,7 +46,8 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 
 	if dsType == "kvrocks" {
 		conn = redis.NewRedisConnection(&redis.ConnectionOptions{
-			Address: "localhost:6666",
+			Address:  "localhost:6666",
+			Password: "password",
 		})
 	}
 	conn.Connect()
@@ -72,8 +73,8 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 	if dsType == "mongo" {
 		conn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 			Address:        "mongodb://localhost:27017",
-			Username:       "",
-			Password:       "",
+			Username:       "admin",
+			Password:       "admin",
 			DBName:         "oreo",
 			CollectionName: "records",
 		})
@@ -92,7 +93,8 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 	}
 	if dsType == "kvrocks" {
 		conn := redis.NewRedisConnection(&redis.ConnectionOptions{
-			Address: "localhost:6666",
+			Address:  "localhost:6666",
+			Password: "password",
 		})
 		rds := redis.NewRedisDatastore("kvrocks", conn)
 		txn.AddDatastore(rds)
@@ -117,7 +119,7 @@ func NewTransactionWithMockConn(dsType string, limit int,
 
 	if dsType == "mongo" {
 		mockConn := mock.NewMockMongoConnection(
-			"localhost", 27017, limit, isReturned, networkDelay, debugFunc)
+			"localhost", 27017, "admin", "admin", limit, isReturned, networkDelay, debugFunc)
 		mds := mongo.NewMongoDatastore("mongo", mockConn)
 		txn.AddDatastore(mds)
 		txn.SetGlobalDatastore(mds)
