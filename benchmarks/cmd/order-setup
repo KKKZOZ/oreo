@@ -1,0 +1,29 @@
+#!/bin/bash
+
+echo "Remove MongoDB, Redis, KVRocks and CouchDB containers"
+
+docker rm -f mongo
+docker rm -f redis
+docker rm -f kvrocks
+docker rm -f couch
+
+echo "Create new containers"
+
+docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass password
+
+docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
+
+docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -d couchdb
+
+
+docker run -d \
+  --name mongo \
+  -p 27018:27017 \
+  -e MONGO_INITDB_ROOT_USERNAME=admin \
+  -e MONGO_INITDB_ROOT_PASSWORD=admin \
+  --restart=always \
+  mongo
+
+echo "Order setup complete"
+
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

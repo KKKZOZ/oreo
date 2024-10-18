@@ -139,7 +139,7 @@ func (r *Datastore) Read(key string, value any) error {
 func (r *Datastore) readFromConn(key string, value any) error {
 	item, err := r.conn.GetItem(key)
 	if err != nil {
-		errMsg := err.Error() + "at GetItem in " + r.Name
+		errMsg := err.Error() + " at GetItem in " + r.Name
 		return errors.New(errMsg)
 	}
 
@@ -225,6 +225,7 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 	if item.TxnState() == config.COMMITTED {
 		return item, nil
 	}
+
 	if item.TxnState() == config.PREPARED {
 		state, err := r.Txn.GetTSRState(item.TxnId())
 		if err == nil {

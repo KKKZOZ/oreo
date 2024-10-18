@@ -1,0 +1,22 @@
+#!/bin/bash
+
+echo "Remove mongoDB and kvrocks containers"
+
+docker rm -f mongo
+docker rm -f kvrocks
+
+echo "Create new containers"
+
+docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass password
+
+docker run -d \
+  --name mongo \
+  -p 27018:27017 \
+  -e MONGO_INITDB_ROOT_USERNAME=admin \
+  -e MONGO_INITDB_ROOT_PASSWORD=admin \
+  --restart=always \
+  mongo
+
+echo "IOT setup complete"
+
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
