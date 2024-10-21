@@ -3,10 +3,8 @@ package timesource
 import (
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/oreo-dtx-lab/oreo/internal/util"
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
 type GlobalTimeSource struct {
@@ -30,12 +28,6 @@ func NewGlobalTimeSource(url string) *GlobalTimeSource {
 }
 
 func (g *GlobalTimeSource) GetTime(mode string) (int64, error) {
-
-	if config.Debug.DebugMode && mode == "start" {
-		// simulate the latency of the HTTP request
-		// used in benchmark
-		time.Sleep(config.Debug.HTTPAdditionalLatency)
-	}
 
 	resp, err := HttpClient.Get(g.Url + "/timestamp/common")
 	if err != nil {
