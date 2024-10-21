@@ -4,11 +4,9 @@ import (
 	"math"
 	"sync"
 	"time"
-
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
-type LocalTimeSource struct {
+type HybridTimeSource struct {
 	physicalTimeUpdateInterval int
 	logicalTimeBits            int
 
@@ -20,12 +18,12 @@ type LocalTimeSource struct {
 	mu           sync.Mutex
 }
 
-var _ TimeSourcer = (*LocalTimeSource)(nil)
+var _ TimeSourcer = (*HybridTimeSource)(nil)
 
-func NewLocalTimeSource() *LocalTimeSource {
-	ts := &LocalTimeSource{
-		physicalTimeUpdateInterval: 1,
-		logicalTimeBits:            6,
+func NewHybridTimeSource(physicalTimeUpdateInterval int, logicalTimeBits int) *HybridTimeSource {
+	ts := &HybridTimeSource{
+		physicalTimeUpdateInterval: physicalTimeUpdateInterval,
+		logicalTimeBits:            logicalTimeBits,
 	}
 	ts.maxLogicalTime = (1 << ts.logicalTimeBits) - 1
 	ts.physicalTime = time.Now().UnixMilli()
@@ -33,7 +31,7 @@ func NewLocalTimeSource() *LocalTimeSource {
 	return ts
 }
 
-func (ts *LocalTimeSource) updatePhysicalTime() {
+func (ts *HybridTimeSource) updatePhysicalTime() {
 	ticker := time.NewTicker(time.Duration(ts.physicalTimeUpdateInterval) * time.Millisecond)
 	defer ticker.Stop()
 
@@ -46,12 +44,7 @@ func (ts *LocalTimeSource) updatePhysicalTime() {
 	}
 }
 
-func (ts *LocalTimeSource) GetTime(mode string) (int64, error) {
-	if config.Debug.DebugMode && mode == "start" {
-		// simulate the latency of the HTTP request
-		// used in benchmark
-		time.Sleep(config.Debug.HTTPAdditionalLatency)
-	}
+func (ts *HybridTimeSource) GetTime(mode string) (int64, error) {
 
 	ts.mu.Lock()
 	defer ts.mu.Unlock()

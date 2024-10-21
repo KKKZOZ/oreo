@@ -10,6 +10,7 @@ import (
 )
 
 var port int
+var oracleType string
 
 type TimeOracleServer struct {
 	oracle timesource.TimeSourcer
@@ -23,12 +24,24 @@ func (t TimeOracleServer) handleTimestamp(w http.ResponseWriter, r *http.Request
 }
 
 func main() {
-	// 使用 flag 包解析命令行参数
 	flag.IntVar(&port, "port", 8010, "HTTP server port number")
+	flag.StringVar(&oracleType, "type", "hybrid", "Time Oracle Implementaion Type")
 	flag.Parse()
 
+	var oracle timesource.TimeSourcer
+	switch oracleType {
+	case "hybrid":
+		oracle = timesource.NewHybridTimeSource(10, 6)
+	case "simple":
+		oracle = timesource.NewSimpleTimeSource()
+	case "counter":
+		oracle = timesource.NewCounterTimeSource()
+	default:
+		panic("Time oracle Implementaion MUST be specified")
+	}
+
 	server := TimeOracleServer{
-		oracle: timesource.NewSimpleTimeSource(),
+		oracle: oracle,
 		port:   port,
 	}
 

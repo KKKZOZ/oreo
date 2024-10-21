@@ -454,11 +454,17 @@ func (t *Transaction) GetTSRState(txnId string) (config.State, error) {
 // If the time source is set to GLOBAL, it retrieves the time from the specified time URL.
 // It returns the parsed time value and any error encountered during the process.
 func (t *Transaction) getTime(mode string) (int64, error) {
-	startTime := time.Now()
-	defer func() {
-		msg := fmt.Sprintf("GetTime request latency: %v", time.Since(startTime))
-		Log.Debugw(msg, "Topic", "LowSpeed")
-	}()
+	// startTime := time.Now()
+	// defer func() {
+	// 	msg := fmt.Sprintf("GetTime request latency: %v", time.Since(startTime))
+	// 	Log.Debugw(msg, "Topic", "LowSpeed")
+	// }()
+	if config.Debug.DebugMode && mode == "start" {
+		// simulate the latency of the HTTP request
+		// used in benchmark
+		time.Sleep(config.Debug.HTTPAdditionalLatency)
+	}
+
 	return t.timeSource.GetTime(mode)
 }
 
