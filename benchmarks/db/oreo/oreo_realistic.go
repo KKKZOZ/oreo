@@ -47,14 +47,15 @@ func NewOreoRealisticDatastore(connMap map[string]txn.Connector, globalDatastore
 
 func (r *OreoRealisticDatastore) Start() error {
 	var txn1 *txn.Transaction
+	// oracle := timesource.NewGlobalTimeSource(config.TimeOracleUrl)
+	// oracle := timesource.NewLocalTimeSource()
+	oracle := timesource.NewSimpleTimeSource()
 	if r.isRemote {
 		client := network.NewClient(config.RemoteAddressList)
-		// oracle := timesource.NewGlobalTimeSource(config.TimeOracleUrl)
-		// oracle := timesource.NewLocalTimeSource()
-		oracle := timesource.NewSimpleTimeSource()
+
 		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {
-		txn1 = txn.NewTransaction()
+		txn1 = txn.NewTransactionWithOracle(oracle)
 	}
 
 	for dbName, conn := range r.connMap {

@@ -23,7 +23,8 @@ import (
 )
 
 const (
-	OreoKVRocksAddr = "localhost:6666"
+	// TODO: We change it to Redis's address
+	OreoKVRocksAddr = "39.104.105.27:6379"
 	KVRocksPassword = "password"
 	RedisDBAddr     = "localhost:6379"
 	RedisPassword   = "password"
@@ -33,7 +34,7 @@ const (
 	MongoPassword    = "admin"
 	MongoDBAddr1     = "mongodb://localhost:27017"
 	MongoDBAddr2     = "mongodb://localhost:27017"
-	OreoMongoDBAddr1 = "mongodb://localhost:27018"
+	OreoMongoDBAddr1 = "mongodb://39.104.105.27:27018"
 	OreoMongoDBAddr2 = "mongodb://localhost:27018"
 
 	CouchUsername   = "admin"
