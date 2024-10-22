@@ -89,6 +89,17 @@ func NewTransaction() *Transaction {
 	}
 }
 
+func NewTransactionWithOracle(oracle timesource.TimeSourcer) *Transaction {
+	return &Transaction{
+		dataStoreMap: make(map[string]Datastorer),
+		timeSource:   oracle,
+		locker:       locker.AMemoryLocker,
+		isReadOnly:   true,
+		StateMachine: NewStateMachine(),
+		isRemote:     false,
+	}
+}
+
 func NewTransactionWithRemote(client RemoteClient, oracle timesource.TimeSourcer) *Transaction {
 	return &Transaction{
 		dataStoreMap: make(map[string]Datastorer),
