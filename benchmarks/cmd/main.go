@@ -24,7 +24,7 @@ import (
 
 const (
 	// TODO: We change it to Redis's address
-	OreoKVRocksAddr = "39.104.105.27:6379"
+	OreoKVRocksAddr = "localhost:6379"
 	KVRocksPassword = "password"
 	RedisDBAddr     = "localhost:6379"
 	RedisPassword   = "password"
@@ -34,7 +34,7 @@ const (
 	MongoPassword    = "admin"
 	MongoDBAddr1     = "mongodb://localhost:27017"
 	MongoDBAddr2     = "mongodb://localhost:27017"
-	OreoMongoDBAddr1 = "mongodb://39.104.105.27:27018"
+	OreoMongoDBAddr1 = "mongodb://localhost:27018"
 	OreoMongoDBAddr2 = "mongodb://localhost:27018"
 
 	CouchUsername   = "admin"
@@ -70,7 +70,7 @@ func main() {
 			fmt.Println("无法启动 CPU profile:", err)
 			return
 		}
-		defer pprof.StopCPUProfile() // 程序结束时停止 CPU profile
+		defer pprof.StopCPUProfile()
 	}
 
 	if traceFlag {

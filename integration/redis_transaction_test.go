@@ -842,7 +842,7 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 //   - item5-slow PREPARED
 //
 // testTxn read item1,item2,item3, item4
-// (testTxn realize item1,item2,item3, item4 are expired, so it will first rollback, and write the TSR with ABORTED)
+// (testTxn realize item1,item2,item3,item4 are expired, so it will first rollback, and write the TSR with ABORTED)
 // the internal state of redis database:
 //   - item1 rollback to COMMITTED
 //   - item2 rollback to COMMITTED
