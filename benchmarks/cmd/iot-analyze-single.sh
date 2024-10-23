@@ -43,8 +43,8 @@ if [ -n "$pid" ]; then
 fi
 
 verbose_echo "Starting executor"
-# ./executor -p "$executor_port" -w iot -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 > /dev/null 2> executor.log &
-./executor -p "$executor_port" -w iot -kvrocks 39.104.105.27:6379 -mongo1 mongodb://39.104.105.27:27018 > /dev/null 2> executor.log &
+./executor -p "$executor_port" -w iot -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 > /dev/null 2> executor.log &
+# ./executor -p "$executor_port" -w iot -kvrocks 39.104.105.27:6379 -mongo1 mongodb://39.104.105.27:27018 > /dev/null 2> executor.log &
 executor_pid=$!
 
 verbose_echo "Starting time oracle"
@@ -93,4 +93,4 @@ kill -s TERM $executor_pid
 verbose_echo "Killing time oracle"
 kill $time_oracle_pid
 
-python3 timeoracle-latency-analyze.py
+# python3 timeoracle-latency-analyze.py
