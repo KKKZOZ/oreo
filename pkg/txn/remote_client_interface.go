@@ -41,8 +41,8 @@ type RecordConfig struct {
 type RemoteClient interface {
 	Read(dsName string, key string, ts int64, config RecordConfig) (DataItem, RemoteDataStrategy, error)
 	Prepare(dsName string, itemList []DataItem,
-		startTime int64, commitTime int64,
-		config RecordConfig, validationMap map[string]PredicateInfo) (map[string]string, error)
-	Commit(dsName string, infoList []CommitInfo) error
+		startTime int64,
+		config RecordConfig, validationMap map[string]PredicateInfo) (map[string]string, int64, error)
+	Commit(dsName string, infoList []CommitInfo, TCommit int64) error
 	Abort(dsName string, keyList []string, txnId string) error
 }

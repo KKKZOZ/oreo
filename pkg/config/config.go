@@ -58,6 +58,8 @@ type debug struct {
 	HTTPAdditionalLatency time.Duration
 
 	ConnAdditionalLatency time.Duration
+
+	TimeOracleAdditionalLatency time.Duration
 }
 
 type config struct {
@@ -107,10 +109,11 @@ var Config = config{
 }
 
 var Debug = debug{
-	DebugMode:             false,
-	CherryGarciaMode:      false,
-	HTTPAdditionalLatency: 0,
-	ConnAdditionalLatency: 0,
+	DebugMode:                   false,
+	CherryGarciaMode:            false,
+	HTTPAdditionalLatency:       0,
+	ConnAdditionalLatency:       0,
+	TimeOracleAdditionalLatency: 0,
 }
 
 type State int

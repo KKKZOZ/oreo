@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
@@ -60,15 +61,11 @@ func main() {
 	if pprofFlag {
 		cpuFile, err := os.Create("ben_profile.prof")
 		if err != nil {
-			fmt.Println("无法创建 CPU profile 文件:", err)
-			return
+			log.Fatalln("Can not create CPU profile:", err)
 		}
 		defer cpuFile.Close()
-
-		// 开始 CPU profile
 		if err := pprof.StartCPUProfile(cpuFile); err != nil {
-			fmt.Println("无法启动 CPU profile:", err)
-			return
+			log.Fatalln("Can not start CPU profile:", err)
 		}
 		defer pprof.StopCPUProfile()
 	}
@@ -123,18 +120,21 @@ func main() {
 		cfg.Debug.CherryGarciaMode = true
 		cfg.Debug.DebugMode = true
 		cfg.Debug.ConnAdditionalLatency = config.Latency
+		cfg.Debug.TimeOracleAdditionalLatency = config.Latency
 		cfg.Config.ConcurrentOptimizationLevel = 0
 		cfg.Config.AsyncLevel = 2
 	case "native":
 		fmt.Printf("Running under Native Mode\n")
 		cfg.Debug.DebugMode = true
 		cfg.Debug.ConnAdditionalLatency = config.Latency
+		cfg.Debug.TimeOracleAdditionalLatency = config.Latency
 	case "oreo":
 		fmt.Printf("Running under Oreo Mode\n")
 		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.DebugMode = true
 		cfg.Debug.HTTPAdditionalLatency = config.Latency
 		cfg.Debug.ConnAdditionalLatency = 0
+		cfg.Debug.TimeOracleAdditionalLatency = config.Latency
 		cfg.Config.ConcurrentOptimizationLevel = 2
 		cfg.Config.AsyncLevel = 2
 	}

@@ -217,7 +217,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 // It takes a key string and a version string as parameters.
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (m *MongoConnection) ConditionalCommit(key string, version string) (string, error) {
+func (m *MongoConnection) ConditionalCommit(key string, version string, tCommit int64) (string, error) {
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
 	}
@@ -233,6 +233,7 @@ func (m *MongoConnection) ConditionalCommit(key string, version string) (string,
 		{Key: "$set", Value: bson.D{
 			{Key: "TxnState", Value: config.COMMITTED},
 			{Key: "Version", Value: newVer},
+			{Key: "TValid", Value: tCommit},
 		}},
 	}
 	after := options.After

@@ -70,7 +70,7 @@ func (r DataItem2) String() string {
     Value:     %s,
     TxnId:     %s,
     TxnState:  %s,
-    TValid:    %s,
+    TValid:    %d,
     TLease:    %s,
     Prev:      %s,
 	LinkedLen: %d,

@@ -37,13 +37,20 @@ type PrepareRequest struct {
 	ItemType      txn.ItemType
 	ItemList      []txn.DataItem
 	StartTime     int64
-	CommitTime    int64
 	Config        txn.RecordConfig
 }
 
+type PrepareResponse struct {
+	Status  string
+	ErrMsg  string
+	TCommit int64
+	VerMap  map[string]string
+}
+
 type CommitRequest struct {
-	DsName string
-	List   []txn.CommitInfo
+	DsName  string
+	List    []txn.CommitInfo
+	TCommit int64
 }
 
 type AbortRequest struct {

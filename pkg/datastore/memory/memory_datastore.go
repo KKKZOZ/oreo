@@ -65,10 +65,10 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		return m.readAsCommitted(item, value)
 	}
 	if item.TxnState == config.PREPARED {
-		state, err := m.Txn.GetTSRState(item.TxnId)
+		groupKey, err := m.Txn.GetGroupKey(item.TxnId)
 		if err == nil {
 			// if TSR exists and the TSR is in COMMITTED state
-			if state == config.COMMITTED {
+			if groupKey.TxnState == config.COMMITTED {
 				// roll forward the record
 				item, err = m.rollForward(item)
 				if err != nil {
@@ -76,7 +76,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 				}
 				return m.readAsCommitted(item, value)
 			}
-			if state == config.ABORTED {
+			if groupKey.TxnState == config.ABORTED {
 				// if TSR exists and the TSR is in ABORTED state
 				// we should rollback the record
 				// because the transaction that modified the record has been aborted
@@ -94,7 +94,7 @@ func (m *MemoryDatastore) Read(key string, value any) error {
 		// TODO: Not sure...
 		if item.TLease.Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
-			m.Txn.CreateTSR(item.TxnId, config.ABORTED)
+			m.Txn.CreateGroupKey(item.TxnId, config.ABORTED, 0)
 			item, err := m.rollback(item)
 			if err != nil {
 				return err
@@ -335,7 +335,7 @@ func (m *MemoryDatastore) updateMetadata(newItem txn.DataItem2, oldItem txn.Data
 	return newItem, nil
 }
 
-func (m *MemoryDatastore) Prepare() error {
+func (m *MemoryDatastore) Prepare() (int64, error) {
 	records := make([]txn.DataItem2, 0, len(m.writeCache))
 	for _, v := range m.writeCache {
 		records = append(records, v)
@@ -350,10 +350,10 @@ func (m *MemoryDatastore) Prepare() error {
 	for _, v := range records {
 		err := m.conditionalUpdate(v)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 // Commit updates the state of records in the data store to COMMITTED.

@@ -83,6 +83,7 @@ const ConditionalCommitScript = `
 if redis.call('HGET', KEYS[1], 'Version') == ARGV[1] then
 	redis.call('HSET', KEYS[1], 'TxnState', ARGV[2])
 	redis.call('HSET', KEYS[1], 'Version', ARGV[3])
+	redis.call('HSET', KEYS[1], 'TValid', ARGV[4])
 	return redis.call('HGETALL', KEYS[1])
 else
 	return redis.error_reply('version mismatch')
@@ -287,7 +288,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 // It takes a key string and a version string as parameters.
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (r *RedisConnection) ConditionalCommit(key string, version string) (string, error) {
+func (r *RedisConnection) ConditionalCommit(key string, version string, tCommit int64) (string, error) {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
@@ -300,7 +301,7 @@ func (r *RedisConnection) ConditionalCommit(key string, version string) (string,
 	newVer := util.AddToString(version, 1)
 
 	_, err := r.rdb.EvalSha(ctx, r.conditionalCommitSHA,
-		[]string{key}, version, config.COMMITTED, newVer).Result()
+		[]string{key}, version, config.COMMITTED, newVer, tCommit).Result()
 	if err != nil {
 		if err.Error() == "version mismatch" {
 			return "", errors.New(txn.VersionMismatch)

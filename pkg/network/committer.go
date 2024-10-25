@@ -10,6 +10,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/logger"
 	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
+	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"golang.org/x/sync/errgroup"
 )
@@ -19,15 +20,17 @@ type Committer struct {
 	reader      Reader
 	se          serializer.Serializer
 	itemFactory txn.DataItemFactory
+	timeSource  timesource.TimeSourcer
 }
 
-func NewCommitter(connMap map[string]txn.Connector, se serializer.Serializer, itemFactory txn.DataItemFactory) *Committer {
+func NewCommitter(connMap map[string]txn.Connector, se serializer.Serializer, itemFactory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Committer {
 	// conn.Connect()
 	return &Committer{
 		connMap:     connMap,
 		reader:      *NewReader(connMap, itemFactory, se),
 		se:          se,
 		itemFactory: itemFactory,
+		timeSource:  timeSource,
 	}
 }
 
@@ -45,12 +48,10 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 			return errors.New("validation failed due to predicate item's empty key")
 		}
 		eg.Go(func() error {
-			curState, err := c.reader.readTSR(cfg.GlobalName, txnId)
-			// fmt.Printf("curState: %v, err: %v\n",curState, err)
+			groupKey, err := c.reader.readGroupKey(cfg.GlobalName, txnId)
 			if err != nil {
 				if cfg.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
-						// fmt.Printf("Leasetime has expired\n")
 						key := pred.ItemKey
 						err := c.rollbackFromConn(dsName, key, txnId, cfg.GlobalName)
 						if err != nil {
@@ -62,7 +63,7 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 				}
 				return errors.New("validation failed due to unknown status")
 			}
-			if curState != pred.State {
+			if groupKey.TxnState != pred.State {
 				return errors.New("validation failed due to false assumption")
 			} else {
 				return nil
@@ -75,24 +76,24 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 }
 
 func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
-	startTime int64, commitTime int64,
-	cfg txn.RecordConfig, validateMap map[string]txn.PredicateInfo) (map[string]string, error) {
+	startTime int64, cfg txn.RecordConfig,
+	validateMap map[string]txn.PredicateInfo) (map[string]string, int64, error) {
 
 	debugStart := time.Now()
 
 	err := c.validate(dsName, cfg, validateMap)
 	logger.Log.Debugw("After validation", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint", "cfg.ConcurrentOptimizationLevel", cfg.ConcurrentOptimizationLevel)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var mu sync.Mutex
 	var eg errgroup.Group
 	versionMap := make(map[string]string)
 
-	if cfg.ConcurrentOptimizationLevel == 0 {
-		eg.SetLimit(1)
-	}
+	// if cfg.ConcurrentOptimizationLevel == 0 {
+	// 	eg.SetLimit(1)
+	// }
 
 	for _, it := range itemList {
 		item := it
@@ -101,9 +102,7 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 			// if this item follows the read-modify-write pattern
 			if item.Version() != "" {
 				doCreate = false
-				// fmt.Printf("TCommit: %v  TLease: %v\n",item.TValid(),item.TLease())
 			} else {
-				// fmt.Printf("do a txn Read\n")
 				// else we do a txn Read to determine its version
 				dbItem, _, err := c.reader.Read(dsName, item.Key(), startTime, cfg, false)
 				if err != nil && err.Error() != "key not found" {
@@ -116,7 +115,7 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 					doCreate = false
 				}
 				logger.Log.Debugw("do a txn Read to determine the record version", "dbItem", dbItem)
-				item, _ = c.updateMetadata(item, dbItem, commitTime, cfg)
+				item, _ = c.updateMetadata(item, dbItem, 0, cfg)
 			}
 			logger.Log.Debugw("Before c.connMap[dsName].ConditionalUpdate", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 			ver, err := c.connMap[dsName].ConditionalUpdate(item.Key(), item, doCreate)
@@ -131,11 +130,15 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 			return err
 		})
 	}
-	logger.Log.Debugw("Before eg.Wait()", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	err = eg.Wait()
 	logger.Log.Debugw("After eg.Wait()", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 
-	return versionMap, err
+	tCommit, err := c.timeSource.GetTime("commit")
+	if err != nil {
+		return nil, 0, errors.New("GetTime error: " + err.Error())
+	}
+
+	return versionMap, tCommit, err
 }
 
 func (c *Committer) Abort(dsName string, keyList []string, txnId string) error {
@@ -158,12 +161,12 @@ func (c *Committer) Abort(dsName string, keyList []string, txnId string) error {
 	return eg.Wait()
 }
 
-func (c *Committer) Commit(dsName string, infoList []txn.CommitInfo) error {
+func (c *Committer) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64) error {
 	var eg errgroup.Group
 	for _, info := range infoList {
 		item := info
 		eg.Go(func() error {
-			_, err := c.connMap[dsName].ConditionalCommit(item.Key, item.Version)
+			_, err := c.connMap[dsName].ConditionalCommit(item.Key, item.Version, tCommit)
 			return err
 		})
 	}
@@ -314,7 +317,7 @@ func (c *Committer) rollbackFromConn(dsName string, key string, txnId string, gl
 	}
 
 	if item.TLease().Before(time.Now()) {
-		curState, err := c.reader.createTSR(globalName, item.TxnId(), config.ABORTED)
+		curState, err := c.reader.createGroupKey(globalName, item.TxnId(), config.ABORTED, 0)
 		if err != nil {
 			if err.Error() == "key exists" {
 				if curState == config.COMMITTED {

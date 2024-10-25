@@ -4,11 +4,11 @@
 
 - 把 iot-setup 中的 docker container 改为 redis 进行测试
 - iot-workload 代码中保持不变，我们先把 OreoKVRocksAddr 改为 Redis 的地址进行测试
-    - Bash 脚本中 KVRocks 的地址也需要暂时改为 Redis 的
+  - Bash 脚本中 KVRocks 的地址也需要暂时改为 Redis 的
 - 启动独立的中心化 Time Oracle，记得确定地址和配置是否正确
-    - 采用 Hybrid，physicalTimeInterval 为 10ms
+  - 采用 Hybrid，physicalTimeInterval 为 10ms
 - 确定一下 Benchmark 的 Config 是否符合预期
-    - AdditionalLatency: 5ms 应该没有问题
+  - AdditionalLatency: 5ms 应该没有问题
 - 每轮脚本跑完后记得检查一下错误率，确保整个执行过程是正常的
 
 ### Time Oracle 测试
@@ -16,7 +16,6 @@
 - 切换 TimeOracle 类型后记得 ./iot-setup
 - cg 的 TimeOracle 类型必须统一
 - 测试 hybrid 在 physicalInterval = 1 and 10 的情况
-
 
 physicalInterval = 10
 
@@ -122,16 +121,28 @@ Oreo:cg     = .91983
 0            24.353             1.006              2.093827          231
 ```
 
-
 可以发现，32 -> 64 之后额外开销立刻变大：
 
 - 个人感觉是服务器性能问题
-   - 把数据库分隔开试试
-      - 在 s1 中部署数据库
-      - 防火墙问题，需要查看阿里云控制台
-      - 顺便修改所有的脚本，把端口统一到某个区间中，遵循 port_allcation 的规则
-   - 本地跑跑？[14:54]
-     - Latency 调到 10ms 后运行结果就完美了
-   - 对 executor 的 log 进行调整，写一个 py 脚本统计平均延时，观察线程数从 32 到 64 时延迟为什么会发生变化
-   - 在 ipad 上画一个图，分析一下哪些过程可能会导致变慢
-     - 特点： Oreo 独有的慢，
+  - 把数据库分隔开试试
+    - 在 s1 中部署数据库
+    - 防火墙问题，需要查看阿里云控制台
+    - 顺便修改所有的脚本，把端口统一到某个区间中，遵循 port_allcation 的规则
+  - 本地跑跑？[14:54]
+    - Latency 调到 10ms 后运行结果就完美了
+  - 对 executor 的 log 进行调整，写一个 py 脚本统计平均延时，观察线程数从 32 到 64 时延迟为什么会发生变化
+  - 在 ipad 上画一个图，分析一下哪些过程可能会导致变慢
+    - 特点： Oreo 独有的慢
+
+## Piggyback Optimization
+
+只考虑一个 TSR 的情况
+
+- txn.Commit 分为两个子函数
+  - CommitInCherryGarcia
+  - CommitInOreo
+- 考虑跑 Benchmark 时 CG 与 Oreo 的兼容性问题
+  - TSR 的兼容性
+    - CG:
+      - 每个记录的 GroupKeyList 中只会有一个 GroupKey
+      - GroupKey 中的 tCommit 也被设置好
