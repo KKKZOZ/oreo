@@ -26,6 +26,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 var banner = `
  ____  _        _       _               
 / ___|| |_ __ _| |_ ___| | ___  ___ ___ 

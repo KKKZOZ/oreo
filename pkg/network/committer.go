@@ -131,6 +131,9 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 		})
 	}
 	err = eg.Wait()
+	if err != nil {
+		return nil, 0, err
+	}
 	logger.Log.Debugw("After eg.Wait()", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 
 	tCommit, err := c.timeSource.GetTime("commit")

@@ -137,7 +137,7 @@ func (t *Transaction) Start() error {
 		return errors.New("no datastores added")
 	}
 	t.TxnId = config.Config.IdGenerator.GenerateId()
-	Log.Infow("starting transaction", "txnId", t.TxnId)
+	Log.Infow("starting transaction", "txnId", t.TxnId, "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 	t.TxnStartTime, err = t.getTime("start")
 	if err != nil {
 		return err
@@ -331,10 +331,12 @@ func (t *Transaction) commitInOreo() error {
 			Log.Debugw(msg, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 		}()
 		ts, err := ds.Prepare()
+		mu.Lock()
+		tCommit = max(tCommit, ts)
+		mu.Unlock()
 		if err != nil {
 			mu.Lock()
 			success, cause = false, err
-			tCommit = max(tCommit, ts)
 			mu.Unlock()
 			if stackError, ok := err.(*errors.Error); ok {
 				errMsg := fmt.Sprintf("prepare phase failed: %v", stackError.ErrorStack())

@@ -29,6 +29,7 @@ tar_dir=iot
 # Clear files
 # rm iot-native.txt iot-oreo.txt iot-cg.txt
 mkdir -p "$tar_dir"
+# rm "$tar_dir/iot-*.txt"
 
 pid=$(lsof -t -i ":$executor_port")
 if [ -n "$pid" ]; then
@@ -66,11 +67,11 @@ else
   verbose_echo "Data has been already loaded"
 fi
 
-verbose_echo "Running IOT native"
-go run . -d native -wl iot -wc ./workloads/iot.yaml -m run -ps native -t "$thread" > "$tar_dir/iot-native.txt"
+# verbose_echo "Running IOT native"
+# go run . -d native -wl iot -wc ./workloads/iot.yaml -m run -ps native -t "$thread" > "$tar_dir/iot-native.txt"
 
-verbose_echo "Running IOT Cherry Garcia"
-go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -ps cg -t "$thread" > "$tar_dir/iot-cg.txt"
+# verbose_echo "Running IOT Cherry Garcia"
+# go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -ps cg -t "$thread" > "$tar_dir/iot-cg.txt"
 
 verbose_echo "Running IOT oreo"
 go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -remote -t "$thread" > "$tar_dir/iot-oreo.txt"

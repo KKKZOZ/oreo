@@ -128,7 +128,11 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 		Config:        cfg,
 		ValidationMap: validationMap,
 	}
-	json_data, _ := json.Marshal(data)
+	json_data, err := json.Marshal(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// fmt.Printf("Prepare request: %v\n", string(json_data))
 
 	reqUrl := c.GetServerAddr() + "/prepare"
 	req, err := http.NewRequest("POST", reqUrl, bytes.NewBuffer(json_data))
@@ -149,9 +153,10 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 		log.Fatal(err)
 	}
 	var response PrepareResponse
+	// fmt.Println("Prepare response: ", string(body))
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		log.Fatalf("Prepare call resp Unmarshal error: %v\nbody: %v", err, string(body))
+		log.Fatalf("Prepare call resp Unmarshal error: %v\nbody:\n%v", err, string(body))
 	}
 	if response.Status == "OK" {
 		return response.VerMap, response.TCommit, nil
