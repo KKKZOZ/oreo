@@ -28,26 +28,21 @@ func NewGlobalTimeSource(url string) *GlobalTimeSource {
 }
 
 func (g *GlobalTimeSource) GetTime(mode string) (int64, error) {
-
 	resp, err := HttpClient.Get(g.Url + "/timestamp/common")
 	if err != nil {
 		return 0, err
 	}
 	defer resp.Body.Close()
 
-	// 检查 HTTP 响应状态码
 	if resp.StatusCode != http.StatusOK {
 		return 0, err
 	}
 
-	// 读取响应体
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return 0, err
 	}
 
-	// 将响应体转换为 int64
 	timeValue := util.ToInt(string(body))
-
 	return timeValue, nil
 }

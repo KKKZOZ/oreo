@@ -10,6 +10,8 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
+// var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 type Response[T any] struct {
 	Status string
 	ErrMsg string
