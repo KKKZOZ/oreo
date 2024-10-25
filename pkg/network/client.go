@@ -103,8 +103,8 @@ func (c *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig)
 }
 
 func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
-	startTime int64, commitTime int64,
-	cfg txn.RecordConfig, validationMap map[string]txn.PredicateInfo) (map[string]string, error) {
+	startTime int64, cfg txn.RecordConfig,
+	validationMap map[string]txn.PredicateInfo) (map[string]string, int64, error) {
 
 	debugStart := time.Now()
 
@@ -125,7 +125,6 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 		ItemType:      c.getItemType(dsName),
 		ItemList:      itemList,
 		StartTime:     startTime,
-		CommitTime:    commitTime,
 		Config:        cfg,
 		ValidationMap: validationMap,
 	}
@@ -139,7 +138,6 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 	req.Header.Set("Content-Type", "application/json")
 
 	debugMsg := fmt.Sprintf("HttpClient.Do(Prepare) in %v", dsName)
-	logger.Log.Debugw("Before "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	resp, err := HttpClient.Do(req)
 	logger.Log.Debugw("After "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	if err != nil {
@@ -150,28 +148,29 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 	if err != nil {
 		log.Fatal(err)
 	}
-	var response Response[map[string]string]
+	var response PrepareResponse
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		log.Fatalf("Prepare call resp Unmarshal error: %v\nbody: %v", err, string(body))
 	}
 	if response.Status == "OK" {
-		return response.Data, nil
+		return response.VerMap, response.TCommit, nil
 	} else {
 		errMsg := response.ErrMsg
-		return nil, errors.New(errMsg)
+		return nil, 0, errors.New(errMsg)
 	}
 }
 
-func (c *Client) Commit(dsName string, infoList []txn.CommitInfo) error {
+func (c *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64) error {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
 	data := CommitRequest{
-		DsName: dsName,
-		List:   infoList,
+		DsName:  dsName,
+		List:    infoList,
+		TCommit: tCommit,
 	}
 	json_data, _ := json.Marshal(data)
 

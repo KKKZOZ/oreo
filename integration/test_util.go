@@ -25,7 +25,8 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 
 	if dsType == "redis" {
 		conn = redis.NewRedisConnection(&redis.ConnectionOptions{
-			Address: "localhost:6379",
+			Address:  "localhost:6379",
+			Password: "password",
 		})
 	}
 	if dsType == "mongo" {
@@ -64,7 +65,8 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 	}
 	if dsType == "redis" {
 		conn := redis.NewRedisConnection(&redis.ConnectionOptions{
-			Address: "localhost:6379",
+			Address:  "localhost:6379",
+			Password: "password",
 		})
 		rds := redis.NewRedisDatastore("redis", conn)
 		txn.AddDatastore(rds)
@@ -109,7 +111,6 @@ func NewTransactionWithMockConn(dsType string, limit int,
 
 	txn := txn.NewTransaction()
 	if dsType == "redis" {
-
 		mockConn := mock.NewMockRedisConnection(
 			"localhost", 6379, limit, isReturned, networkDelay, debugFunc)
 		rds := redis.NewRedisDatastore("redis", mockConn)

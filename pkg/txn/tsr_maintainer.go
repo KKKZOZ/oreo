@@ -3,17 +3,17 @@ package txn
 import "github.com/oreo-dtx-lab/oreo/pkg/config"
 
 //go:generate mockery --name Datastore
-type TSRMaintainer interface {
-	// ReadTSR reads the transaction state record (TSR) for a transaction.
-	ReadTSR(txnId string) (config.State, error)
+type GroupKeyMaintainer interface {
+	// ReadGroupKey reads the transaction state record (TSR) for a transaction.
+	ReadGroupKey(key string) (GroupKey, error)
 
-	// WriteTSR writes the transaction state record (TSR) for a transaction.
-	WriteTSR(txnId string, txnState config.State) error
+	// WriteGroupKey writes the transaction state record (TSR) for a transaction.
+	WriteGroupKey(key string, txnState config.State, tCommit int64) error
 
-	// CreateTSR atomically create the transaction state record (TSR) for a transaction.
-	// if the TSR already exists, it will return an error.
-	CreateTSR(txnId string, txnState config.State) (config.State, error)
+	// CreateGroupKey atomically create the transaction state record (TSR) for a transaction.
+	// if the Group Key already exists, it will return an error.
+	CreateGroupKey(key string, txnState config.State, tCommit int64) (config.State, error)
 
 	// DeleteTSR deletes the transaction state record (TSR) for a transaction.
-	DeleteTSR(txnId string) error
+	DeleteGroupKey(key string) error
 }

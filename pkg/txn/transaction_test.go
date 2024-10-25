@@ -12,8 +12,8 @@ func NewTransactionWithSetup() *Transaction {
 	mds.On("GetName").Return("memory")
 	mds.On("SetTxn", txn).Return(nil)
 	mds.On("Start").Return(nil)
-	txn.AddDatastore(mds)
-	txn.SetGlobalDatastore(mds)
+	// txn.AddDatastore(mds)
+	// txn.SetGlobalDatastore(mds)
 	return txn
 }
 

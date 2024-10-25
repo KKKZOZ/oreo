@@ -45,7 +45,7 @@ func NewTransactionWithSetup() *trxn.Transaction {
 		Password: "@ljy123456",
 	})
 	client := NewClient(ComponentAddrList)
-	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource())
+	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
@@ -956,14 +956,14 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 
 	concurrentCount := 1000
 	client := NewClient(ComponentAddrList)
-	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource())
+	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
 
 	for i := 1; i <= concurrentCount; i++ {
 		go func(id int) {
-			txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource())
+			txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 			rds := redis.NewRedisDatastore("redis1", conn)
 			txn.AddDatastore(rds)
 			txn.SetGlobalDatastore(rds)

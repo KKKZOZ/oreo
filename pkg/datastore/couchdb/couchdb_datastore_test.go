@@ -1884,7 +1884,7 @@ func TestTSROperations(t *testing.T) {
 	t.Run("test WriteTSR", func(t *testing.T) {
 		conn := NewDefaultConnection()
 		cds := NewCouchDBDatastore("couchdb", conn)
-		ds := cds.(trxn.TSRMaintainer)
+		ds := cds.(trxn.GroupKeyMaintainer)
 		conn.Delete("txn-1")
 
 		_, err := ds.CreateTSR("txn-1", config.COMMITTED)
@@ -1894,7 +1894,7 @@ func TestTSROperations(t *testing.T) {
 	t.Run("test DeleteTSR", func(t *testing.T) {
 		conn := NewDefaultConnection()
 		cds := NewCouchDBDatastore("couchdb", conn)
-		ds := cds.(trxn.TSRMaintainer)
+		ds := cds.(trxn.GroupKeyMaintainer)
 
 		err := ds.DeleteTSR("txn-1")
 		assert.NoError(t, err)
@@ -1903,7 +1903,7 @@ func TestTSROperations(t *testing.T) {
 	t.Run("test ReadTSR", func(t *testing.T) {
 		conn := NewDefaultConnection()
 		cds := NewCouchDBDatastore("couchdb", conn)
-		ds := cds.(trxn.TSRMaintainer)
+		ds := cds.(trxn.GroupKeyMaintainer)
 
 		ds.DeleteTSR("txn-1")
 

@@ -2,6 +2,7 @@ package integration
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
-	"github.com/oreo-dtx-lab/oreo/pkg/factory"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
@@ -436,7 +436,8 @@ func TestRedis_TxnAbort(t *testing.T) {
 	preTxn.Start()
 	expected := testutil.NewDefaultPerson()
 	preTxn.Write(REDIS, "John", expected)
-	preTxn.Commit()
+	err := preTxn.Commit()
+	assert.Nil(t, err)
 
 	txn := NewTransactionWithSetup(REDIS)
 	var person testutil.Person
@@ -509,22 +510,11 @@ func TestRedis_TxnAbortCausedByWriteConflict(t *testing.T) {
 
 func TestRedis_ConcurrentTransaction(t *testing.T) {
 
-	// Create a new redis datastore instance
-	redisDst1 := redis.NewRedisDatastore("redis1", NewConnectionWithSetup(REDIS))
-
-	txnFactory, err := factory.NewTransactionFactory(&factory.TransactionConfig{
-		DatastoreList:    []txn.Datastorer{redisDst1},
-		GlobalDatastore:  redisDst1,
-		TimeOracleSource: txn.LOCAL,
-		LockerSource:     txn.LOCAL,
-	})
-	assert.NoError(t, err)
-
-	preTxn := txnFactory.NewTransaction()
+	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	person := testutil.NewDefaultPerson()
 	preTxn.Write(REDIS, "John", person)
-	err = preTxn.Commit()
+	err := preTxn.Commit()
 	assert.NoError(t, err)
 
 	resChan := make(chan bool)
@@ -546,6 +536,7 @@ func TestRedis_ConcurrentTransaction(t *testing.T) {
 			time.Sleep(1000 * time.Millisecond)
 			err = txn.Commit()
 			if err != nil {
+				fmt.Printf("txn commit err: %s\n", err)
 				resChan <- false
 			} else {
 				resChan <- true

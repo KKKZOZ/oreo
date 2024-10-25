@@ -18,9 +18,9 @@ type Datastorer interface {
 	Delete(key string) error
 
 	// Prepare executes the prepare phase of transaction commit.
-	// It first marks the records in the writeCache with T_commit, TxnId, and TxnState,
-	// then it performs `conditionalUpdate` in a global order.
-	Prepare() error
+	// In Oreo, it will return TCommit as well
+
+	Prepare() (int64, error)
 
 	// Commit executes the commit phase of transaction commit.
 	// It updates the records in the writeCache to the COMMITTED state

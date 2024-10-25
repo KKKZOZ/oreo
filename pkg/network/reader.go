@@ -1,6 +1,7 @@
 package network
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -21,7 +22,6 @@ type Reader struct {
 }
 
 func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer) *Reader {
-	// conn.Connect()
 	return &Reader{
 		connMap:     connMap,
 		itemFactory: itemFactory,
@@ -94,9 +94,9 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		return item, txn.Normal, nil
 	}
 	if item.TxnState() == config.PREPARED {
-		state, err := r.readTSR(cfg.GlobalName, item.TxnId())
+		groupKey, err := r.readGroupKey(cfg.GlobalName, item.TxnId())
 		if err == nil {
-			switch state {
+			switch groupKey.TxnState {
 			// if TSR exists and the TSR is in COMMITTED state
 			// roll forward the record
 			case config.COMMITTED:
@@ -115,7 +115,7 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		if item.TLease().Before(time.Now()) {
 			// the corresponding transaction is considered ABORTED
 			// TODO: we can retry here
-			err := r.writeTSR(cfg.GlobalName, item.TxnId(), config.ABORTED)
+			_, err := r.createGroupKey(cfg.GlobalName, item.TxnId(), config.ABORTED, 0)
 			if err != nil {
 				return nil, txn.Normal, err
 			}
@@ -223,25 +223,49 @@ func (r *Reader) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 	return preItem, nil
 }
 
-func (r *Reader) readTSR(dsName string, txnId string) (config.State, error) {
-	var txnState config.State
-	state, err := r.connMap[dsName].Get(txnId)
+func (r *Reader) readGroupKey(dsName string, txnId string) (txn.GroupKey, error) {
+
+	groupKeyStr, err := r.connMap[dsName].Get(txnId)
 	if err != nil {
-		return txnState, err
+		return txn.GroupKey{}, err
 	}
-	txnState = config.State(util.ToInt(state))
-	return txnState, nil
+	var keyItem txn.GroupKeyItem
+	err = json.Unmarshal([]byte(groupKeyStr), &keyItem)
+
+	if err != nil {
+		return txn.GroupKey{}, err
+	}
+	groupKey := txn.GroupKey{
+		Key:          txnId,
+		GroupKeyItem: keyItem,
+	}
+	return groupKey, nil
+
 }
 
-func (r *Reader) writeTSR(dsName string, txnId string, txnState config.State) error {
-	return r.connMap[dsName].Put(txnId, util.ToString(txnState))
-}
+// func (r *Reader) writeGroupKey(dsName string, txnId string, txnState config.State) error {
+// 	return r.connMap[dsName].Put(txnId, util.ToString(txnState))
+// }
 
-func (r *Reader) createTSR(dsName string, txnId string, txnState config.State) (config.State, error) {
-	oldValue, err := r.connMap[dsName].AtomicCreate(txnId, util.ToString(txnState))
+func (r *Reader) createGroupKey(dsName string, txnId string, txnState config.State, tCommit int64) (config.State, error) {
+	groupKeyItem := txn.GroupKeyItem{
+		TxnState: txnState,
+		TCommit:  tCommit,
+	}
+	groupKeyStr, err := json.Marshal(groupKeyItem)
+	if err != nil {
+		return -1, errors.Join(errors.New("GroupKey marshal failed"), err)
+	}
+
+	existValue, err := r.connMap[dsName].AtomicCreate(txnId, util.ToString(groupKeyStr))
 	if err != nil {
 		if err.Error() == "key exists" {
-			oldState := config.State(util.ToInt(oldValue))
+			existKeyItem := txn.GroupKeyItem{}
+			err := json.Unmarshal([]byte(existValue), &existKeyItem)
+			if err != nil {
+				return -1, err
+			}
+			oldState := config.State(existKeyItem.TxnState)
 			return oldState, errors.New("key exists")
 		} else {
 			return -1, err

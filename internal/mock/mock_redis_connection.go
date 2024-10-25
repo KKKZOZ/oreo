@@ -28,7 +28,8 @@ type MockRedisConnection struct {
 func NewMockRedisConnection(address string, port int, limit int,
 	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockRedisConnection {
 	conn := redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address: fmt.Sprintf("%s:%d", address, port),
+		Address:  fmt.Sprintf("%s:%d", address, port),
+		Password: "password",
 	})
 	return &MockRedisConnection{
 		RedisConnection: conn,

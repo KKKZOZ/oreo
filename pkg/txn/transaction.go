@@ -47,15 +47,15 @@ type Transaction struct {
 	// TxnCommitTime is the timestamp when the transaction was committed.
 	TxnCommitTime int64
 
-	// tsrMaintainer is used to maintain the TSR (Transaction Status Record)
-	// tsrMaintainer is responsible for handling and updating the status of transactions.
-	tsrMaintainer TSRMaintainer
+	// groupKeyMaintainer is used to maintain the Group Key
+	// groupKeyMaintainer is responsible for handling and updating the status of transactions.
+	groupKeyMaintainer GroupKeyMaintainer
 	// dataStoreMap is a map of transaction-specific datastores.
 	dataStoreMap map[string]Datastorer
 	// timeSource represents the source of time for the transaction.
 	timeSource timesource.TimeSourcer
 	// oracleURL is the URL of the oracle service used by the transaction.
-	oracleURL string
+	// oracleURL string
 	// locker is used for transaction-level locking.
 	locker locker.Locker
 
@@ -130,7 +130,7 @@ func (t *Transaction) Start() error {
 	}
 
 	// check nessary datastores are added
-	if t.tsrMaintainer == nil {
+	if t.groupKeyMaintainer == nil {
 		return errors.New("global datastore not set")
 	}
 	if len(t.dataStoreMap) == 0 {
@@ -180,7 +180,7 @@ func (t *Transaction) AddDatastores(dss ...Datastorer) error {
 // SetGlobalDatastore sets the global datastore for the transaction.
 // It takes a Datastore parameter and assigns it to the globalDataStore field of the Transaction struct.
 func (t *Transaction) SetGlobalDatastore(ds Datastorer) {
-	t.tsrMaintainer = ds.(TSRMaintainer)
+	t.groupKeyMaintainer = ds.(GroupKeyMaintainer)
 }
 
 // Read reads the value associated with the given key from the specified datastore.
@@ -250,44 +250,30 @@ func (t *Transaction) Commit() error {
 		return err
 	}
 
-	// Two special cases
-
-	// Case 1: If the transaction is read-only,
-	// we can skip the prepare and commit phases.
 	if t.isReadOnly {
 		Log.Infow("transaction is read-only, Commit() complete", "txnId", t.TxnId)
 		return nil
 	}
 
-	t.TxnCommitTime, err = t.getTime("commit")
-	if err != nil {
-		return err
+	if config.Debug.CherryGarciaMode {
+		return t.commitInCherryGarcia()
+	} else {
+		return t.commitInOreo()
 	}
-	// note: one phase commit needs t.TxnCommitTime
-	// so we initialize it above
+}
 
-	// Case 2: If the write count is 1,
-	// we can do one phase commit
-	// TODO:
-	// if t.writeCount == 1 {
-	// 	return t.OnePhaseCommit()
-	// }
-
-	// Or, we go through the normal process
-	// ------------------- Prepare phase ----------------------------
-
+func (t *Transaction) commitInCherryGarcia() error {
 	success := true
 	var cause error
 	mu := sync.Mutex{}
 
-	prepareDatastore := func(ds Datastorer) {
-
+	prepareDatastoreFunc := func(ds Datastorer) {
 		defer func() {
 			msg := fmt.Sprintf("%s prepare phase ends", ds.GetName())
 			Log.Debugw(msg, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 		}()
-
-		err := ds.Prepare()
+		// Cherry Garcia's prepare stage will not return the TCommit
+		_, err := ds.Prepare()
 		if err != nil {
 			mu.Lock()
 			success, cause = false, err
@@ -300,82 +286,26 @@ func (t *Transaction) Commit() error {
 		}
 	}
 
-	Log.Infow("Starting to make ds.Prepare()", "txnId", t.TxnId, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
-	if config.Config.ConcurrentOptimizationLevel == config.PARALLELIZE_ON_PREPARE {
-		var wg = sync.WaitGroup{}
-		for _, ds := range t.dataStoreMap {
-			wg.Add(1)
-			go func(ds Datastorer) {
-				defer wg.Done()
-				prepareDatastore(ds)
-			}(ds)
-		}
-		wg.Wait()
-	} else {
-		// TODO: nondeterministic order, get it right
-		for _, ds := range t.dataStoreMap {
-			prepareDatastore(ds)
-		}
+	for _, ds := range t.dataStoreMap {
+		prepareDatastoreFunc(ds)
 	}
 
 	if !success {
-		// Log.Errorw("prepare phase failed, aborting transaction", "txnId", t.TxnId, "cause", cause.(*errors.Error).ErrorStack())
-		if stackError, ok := err.(*errors.Error); ok {
-			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", stackError.ErrorStack())
-		}
-		go t.Abort()
+		t.Abort()
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
 	Log.Infow("finishes prepare phase", "txnId", t.TxnId, "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 
-	// ------------------- Commit phase ----------------------------
-	// The sync point
-
-	// txnState, err := t.GetTSRState(t.TxnId)
-	// if err == nil && txnState == config.ABORTED {
-	// 	Log.Errorw("transaction is aborted by other transaction, aborting", "txnId", t.TxnId)
-	// 	go t.Abort()
-	// 	return errors.New("transaction is aborted by other transaction")
-	// }
-	// err = t.WriteTSR(t.TxnId, config.COMMITTED)
-	// if err != nil {
-	// 	go t.Abort()
-	// 	return err
-	// }
-	_, err = t.CreateTSR(t.TxnId, config.COMMITTED)
-	// if there is already a TSR,
-	// it means the transaction is aborted by other transaction
+	_, err := t.CreateGroupKey(t.TxnId, config.COMMITTED, t.TxnCommitTime)
 	if err != nil {
-		// fmt.Printf("Error: %v\n", err.Error())
-		go t.Abort()
+		t.Abort()
 		return errors.New("transaction is aborted by other transaction")
 	}
-	Log.Debugw("TSR created", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+	Log.Debugw("GroypKey created", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 
-	if config.Config.AsyncLevel == config.AsyncLevelTwo {
-		go func() {
-			Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
-			var wg = sync.WaitGroup{}
-			for _, ds := range t.dataStoreMap {
-				// TODO: Retry helper
-				wg.Add(1)
-				go func(ds Datastorer) {
-					defer wg.Done()
-					ds.Commit()
-				}(ds)
-			}
-			wg.Wait()
-
-			Log.Infow("Deleting TSR", "txnId", t.TxnId)
-			t.DeleteTSR()
-		}()
-		return nil
-	}
-	Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
-		// TODO: Retry helper
 		wg.Add(1)
 		go func(ds Datastorer) {
 			defer wg.Done()
@@ -384,18 +314,80 @@ func (t *Transaction) Commit() error {
 	}
 	wg.Wait()
 
-	if config.Config.AsyncLevel == config.AsyncLevelOne {
-		go func() {
-			Log.Infow("Deleting TSR", "txnId", t.TxnId)
-			t.DeleteTSR()
+	go func() {
+		t.DeleteGroupKey()
+	}()
+	return nil
+}
+
+func (t *Transaction) commitInOreo() error {
+	tCommit := int64(0)
+	success := true
+	var cause error
+	mu := sync.Mutex{}
+	prepareDatastoreFunc := func(ds Datastorer) {
+		defer func() {
+			msg := fmt.Sprintf("%s prepare phase ends", ds.GetName())
+			Log.Debugw(msg, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 		}()
-		return nil
+		ts, err := ds.Prepare()
+		if err != nil {
+			mu.Lock()
+			success, cause = false, err
+			tCommit = max(tCommit, ts)
+			mu.Unlock()
+			if stackError, ok := err.(*errors.Error); ok {
+				errMsg := fmt.Sprintf("prepare phase failed: %v", stackError.ErrorStack())
+				Log.Errorw(errMsg, "txnId", t.TxnId, "ds", ds.GetName())
+			}
+			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
+		}
 	}
 
-	Log.Infow("Deleting TSR", "txnId", t.TxnId)
-	t.DeleteTSR()
-	Log.Infow("Successfully Commit()", "txnId", t.TxnId)
+	Log.Infow("Starting to make ds.Prepare()", "txnId", t.TxnId, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+
+	var wg = sync.WaitGroup{}
+	for _, ds := range t.dataStoreMap {
+		wg.Add(1)
+		go func(ds Datastorer) {
+			defer wg.Done()
+			prepareDatastoreFunc(ds)
+		}(ds)
+	}
+	wg.Wait()
+
+	if !success {
+		go t.Abort()
+		return errors.New("prepare phase failed: " + cause.Error())
+	}
+
+	Log.Infow("finishes prepare phase", "txnId", t.TxnId, "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+
+	var err error
+	t.TxnCommitTime = tCommit
+
+	_, err = t.CreateGroupKey(t.TxnId, config.COMMITTED, t.TxnCommitTime)
+	if err != nil {
+		go t.Abort()
+		return errors.New("transaction is aborted by other transaction")
+	}
+	Log.Debugw("GroupKey created", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+
+	go func() {
+		Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
+		var wg = sync.WaitGroup{}
+		for _, ds := range t.dataStoreMap {
+			wg.Add(1)
+			go func(ds Datastorer) {
+				defer wg.Done()
+				ds.Commit()
+			}(ds)
+		}
+		wg.Wait()
+		t.DeleteGroupKey()
+	}()
 	return nil
+
 }
 
 func (t *Transaction) OnePhaseCommit() error {
@@ -426,7 +418,7 @@ func (t *Transaction) Abort() error {
 		hasCommitted = true
 	}
 	Log.Infow("aborting transaction", "txnId", t.TxnId, "hasCommitted", hasCommitted)
-	t.WriteTSR(t.TxnId, config.ABORTED)
+	t.CreateGroupKey(t.TxnId, config.ABORTED, 0)
 	for _, ds := range t.dataStoreMap {
 		err := ds.Abort(hasCommitted)
 		if err != nil {
@@ -436,8 +428,8 @@ func (t *Transaction) Abort() error {
 	return nil
 }
 
-func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
-	return t.tsrMaintainer.WriteTSR(txnId, txnState)
+func (t *Transaction) WriteGroupKey(txnId string, txnState config.State, tCommit int64) error {
+	return t.groupKeyMaintainer.WriteGroupKey(txnId, txnState, tCommit)
 }
 
 // SetTSR writes the Transaction State Record (TSR) for the given transaction ID and state.
@@ -445,37 +437,28 @@ func (t *Transaction) WriteTSR(txnId string, txnState config.State) error {
 // The txnId parameter specifies the ID of the transaction.
 // The txnState parameter specifies the state of the transaction.
 // Returns an error if there was a problem writing the TSR.
-func (t *Transaction) CreateTSR(txnId string, txnState config.State) (config.State, error) {
-	return t.tsrMaintainer.CreateTSR(txnId, txnState)
+func (t *Transaction) CreateGroupKey(txnId string, txnState config.State, tCommit int64) (config.State, error) {
+	return t.groupKeyMaintainer.CreateGroupKey(txnId, txnState, tCommit)
 }
 
 // DeleteTSR deletes the Transaction Status Record (TSR) associated with the Transaction.
 // It calls the DeleteTSR method of the tsrMaintainer to perform the deletion.
 // It returns an error if the deletion operation fails.
-func (t *Transaction) DeleteTSR() error {
-	return t.tsrMaintainer.DeleteTSR(t.TxnId)
+func (t *Transaction) DeleteGroupKey() error {
+	return t.groupKeyMaintainer.DeleteGroupKey(t.TxnId)
 }
 
-func (t *Transaction) GetTSRState(txnId string) (config.State, error) {
-	return t.tsrMaintainer.ReadTSR(txnId)
+func (t *Transaction) GetGroupKey(txnId string) (GroupKey, error) {
+	return t.groupKeyMaintainer.ReadGroupKey(txnId)
 }
 
 // getTime returns the current time based on the time source configured in the Transaction.
-// If the time source is set to LOCAL, it returns the current local time.
-// If the time source is set to GLOBAL, it retrieves the time from the specified time URL.
-// It returns the parsed time value and any error encountered during the process.
 func (t *Transaction) getTime(mode string) (int64, error) {
-	// startTime := time.Now()
-	// defer func() {
-	// 	msg := fmt.Sprintf("GetTime request latency: %v", time.Since(startTime))
-	// 	Log.Debugw(msg, "Topic", "LowSpeed")
-	// }()
-	if config.Debug.DebugMode && mode == "start" {
+	if config.Debug.DebugMode {
 		// simulate the latency of the HTTP request
 		// used in benchmark
-		time.Sleep(config.Debug.HTTPAdditionalLatency)
+		time.Sleep(config.Debug.TimeOracleAdditionalLatency)
 	}
-
 	return t.timeSource.GetTime(mode)
 }
 
@@ -484,7 +467,7 @@ func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDat
 		return nil, Normal, errors.New("not a remote transaction")
 	}
 
-	globalName := t.tsrMaintainer.(Datastorer).GetName()
+	globalName := t.groupKeyMaintainer.(Datastorer).GetName()
 
 	return t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
 		GlobalName:                  globalName,
@@ -495,15 +478,14 @@ func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDat
 }
 
 func (t *Transaction) RemoteValidate(dsName string, key string, item DataItem) error {
-	// TODO: Handle dsName
 	panic("not implemented")
 }
 
-func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem, validationMap map[string]PredicateInfo) (map[string]string, error) {
+func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem, validationMap map[string]PredicateInfo) (map[string]string, int64, error) {
 	if !t.isRemote {
-		return nil, errors.New("not a remote transaction")
+		return nil, 0, errors.New("not a remote transaction")
 	}
-	globalName := t.tsrMaintainer.(Datastorer).GetName()
+	globalName := t.groupKeyMaintainer.(Datastorer).GetName()
 
 	cfg := RecordConfig{
 		GlobalName:                  globalName,
@@ -511,7 +493,7 @@ func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem, validati
 		ReadStrategy:                config.Config.ReadStrategy,
 		ConcurrentOptimizationLevel: config.Config.ConcurrentOptimizationLevel,
 	}
-	return t.client.Prepare(dsName, itemList, t.TxnStartTime, t.TxnCommitTime,
+	return t.client.Prepare(dsName, itemList, t.TxnStartTime,
 		cfg, validationMap)
 }
 
@@ -519,7 +501,7 @@ func (t *Transaction) RemoteCommit(dsName string, infoList []CommitInfo) error {
 	if !t.isRemote {
 		return errors.New("not a remote transaction")
 	}
-	return t.client.Commit(dsName, infoList)
+	return t.client.Commit(dsName, infoList, t.TxnCommitTime)
 }
 
 func (t *Transaction) RemoteAbort(dsName string, keyList []string) error {

@@ -3,6 +3,7 @@ package txn
 
 import (
 	"cmp"
+	"encoding/json"
 	"log"
 	"slices"
 	"strings"
@@ -18,7 +19,7 @@ import (
 )
 
 var _ Datastorer = (*Datastore)(nil)
-var _ TSRMaintainer = (*Datastore)(nil)
+var _ GroupKeyMaintainer = (*Datastore)(nil)
 
 const (
 	EMPTY         string = ""
@@ -227,9 +228,9 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 	}
 
 	if item.TxnState() == config.PREPARED {
-		state, err := r.Txn.GetTSRState(item.TxnId())
+		groupKey, err := r.Txn.GetGroupKey(item.TxnId())
 		if err == nil {
-			switch state {
+			switch groupKey.TxnState {
 			// if TSR exists and the TSR is in COMMITTED state
 			// roll forward the record
 			case config.COMMITTED:
@@ -246,10 +247,7 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		// that is, item's TLease < current time
 		// we should roll back the record
 		if item.TLease().Before(time.Now()) {
-			// the corresponding transaction is considered ABORTED
-			// TODO: we can retry here
-
-			curState, err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
+			curState, err := r.Txn.CreateGroupKey(item.TxnId(), config.ABORTED, 0)
 			if err != nil {
 				if err.Error() == "key exists" {
 					if curState == config.COMMITTED {
@@ -262,11 +260,6 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 					return nil, err
 				}
 			}
-
-			// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
-			// if err != nil {
-			// 	return nil, err
-			// }
 			return rollbackFunc()
 		}
 
@@ -568,7 +561,7 @@ func (r *Datastore) rollbackFromConn(key string, txnId string) error {
 	}
 
 	if item.TLease().Before(time.Now()) {
-		curState, err := r.Txn.CreateTSR(item.TxnId(), config.ABORTED)
+		curState, err := r.Txn.CreateGroupKey(item.TxnId(), config.ABORTED, 0)
 		if err != nil {
 			if err.Error() == "key exists" {
 				if curState == config.COMMITTED {
@@ -581,11 +574,6 @@ func (r *Datastore) rollbackFromConn(key string, txnId string) error {
 				return err
 			}
 		}
-
-		// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
-		// if err != nil {
-		// 	return err
-		// }
 		_, err = r.rollback(item)
 		return err
 	}
@@ -608,7 +596,8 @@ func (r *Datastore) validate() error {
 			continue
 		}
 		eg.Go(func() error {
-			curState, err := r.Txn.tsrMaintainer.ReadTSR(txnId)
+			groupKey, err := r.ReadGroupKey(txnId)
+			// curState, err := r.Txn.tsrMaintainer.ReadTSR(txnId)
 			if err != nil {
 				if config.Config.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
@@ -623,7 +612,7 @@ func (r *Datastore) validate() error {
 				}
 				return errors.New("validation failed due to unknown status")
 			}
-			if curState != pred.State {
+			if groupKey.TxnState != pred.State {
 				return errors.New("validation failed due to false assumption")
 			} else {
 				return nil
@@ -635,13 +624,14 @@ func (r *Datastore) validate() error {
 }
 
 // Prepare prepares the Datastore for commit.
-func (r *Datastore) Prepare() error {
+func (r *Datastore) Prepare() (int64, error) {
 
 	items := make([]DataItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
 		items = append(items, v)
 	}
 
+	// Only return TCommit for remote mode
 	if r.Txn.isRemote {
 		// for those whose version is clear, update their metadata
 		for _, item := range items {
@@ -649,28 +639,28 @@ func (r *Datastore) Prepare() error {
 				dbItem, _ := r.readCache.Get(item.Key())
 				newItem, err := r.updateMetadata(item, dbItem)
 				if err != nil {
-					return err
+					return 0, errors.Errorf("UpdateMetadata failed: %v", err)
 				}
 				r.writeCache[item.Key()] = newItem
 			}
 		}
 
 		validationMap := r.validationSet.Items()
-		verMap, err := r.Txn.RemotePrepare(r.Name, items, validationMap)
+		verMap, tCommit, err := r.Txn.RemotePrepare(r.Name, items, validationMap)
 		logger.Log.Debugw("Remote prepare Result",
 			"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err, "Latency", time.Since(r.Txn.debugStart), "Topic", "CheckPoint")
 		if err != nil {
-			return errors.Join(errors.New("Remote prepare failed"), err)
+			return 0, errors.Join(errors.New("Remote prepare failed"), err)
 		}
 		for k, v := range verMap {
 			r.writeCache[k].SetVersion(v)
 		}
-		return nil
+		return tCommit, nil
 	}
 
 	err := r.validate()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if config.Config.ConcurrentOptimizationLevel < config.PARALLELIZE_ON_UPDATE {
@@ -682,10 +672,10 @@ func (r *Datastore) Prepare() error {
 		)
 		for _, item := range items {
 			if err := r.conditionalUpdate(item); err != nil {
-				return err
+				return 0, err
 			}
 		}
-		return nil
+		return 0, nil
 	}
 
 	var eg errgroup.Group
@@ -696,7 +686,7 @@ func (r *Datastore) Prepare() error {
 			return r.conditionalUpdate(it)
 		})
 	}
-	return eg.Wait()
+	return 0, eg.Wait()
 }
 
 // Commit updates the state of records in the data store to COMMITTED.
@@ -901,46 +891,78 @@ func (r *Datastore) SetSerializer(se serializer.Serializer) {
 
 // ReadTSR reads the transaction state from the Redis datastore.
 // It takes a transaction ID as input and returns the corresponding state and an error, if any.
-func (r *Datastore) ReadTSR(txnId string) (config.State, error) {
+func (r *Datastore) ReadGroupKey(key string) (GroupKey, error) {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	var txnState config.State
-	state, err := r.conn.Get(txnId)
+	groupKeyStr, err := r.conn.Get(key)
 	if err != nil {
-		return txnState, err
+		return GroupKey{}, err
 	}
-	txnState = config.State(util.ToInt(state))
-	return txnState, nil
+
+	var keyItem GroupKeyItem
+	err = json.Unmarshal([]byte(groupKeyStr), &keyItem)
+
+	if err != nil {
+		return GroupKey{}, err
+	}
+	groupKey := GroupKey{
+		Key:          key,
+		GroupKeyItem: keyItem,
+	}
+	return groupKey, nil
 }
 
 // WriteTSR writes the transaction state (txnState) associated with the given transaction ID (txnId) to the Redis datastore.
 // It returns an error if the write operation fails.
-func (r *Datastore) WriteTSR(txnId string, txnState config.State) error {
+func (r *Datastore) WriteGroupKey(key string, txnState config.State, tCommit int64) error {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	return r.conn.Put(txnId, util.ToString(txnState))
+	groupKeyItem := GroupKeyItem{
+		TxnState: txnState,
+		TCommit:  tCommit,
+	}
+	groupKeyStr, err := json.Marshal(groupKeyItem)
+	if err != nil {
+		return err
+	}
+
+	return r.conn.Put(key, string(groupKeyStr))
 }
 
 // CreateTSR creates a new transaction state record in the Datastore.
 // If the transaction ID already exists in the Datastore, it returns the old state and an error.
 // If an error occurs during the creation process, it returns -1 and the error.
 // Otherwise, it returns -1 and nil.
-func (r *Datastore) CreateTSR(txnId string, txnState config.State) (config.State, error) {
+func (r *Datastore) CreateGroupKey(key string, txnState config.State, tCommit int64) (config.State, error) {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
+	groupKeyItem := GroupKeyItem{
+		TxnState: txnState,
+		TCommit:  tCommit,
+	}
+	groupKeyStr, err := json.Marshal(groupKeyItem)
 
-	oldValue, err := r.conn.AtomicCreate(txnId, util.ToString(txnState))
+	if err != nil {
+		return -1, errors.Join(errors.New("GroupKey marshal failed"), err)
+	}
+
+	existValue, err := r.conn.AtomicCreate(key, util.ToString(groupKeyStr))
 	if err != nil {
 		if err.Error() == "key exists" {
-			oldState := config.State(util.ToInt(oldValue))
+			existKeyItem := GroupKeyItem{}
+			err := json.Unmarshal([]byte(existValue), &existKeyItem)
+			if err != nil {
+				return -1, err
+			}
+			oldState := config.State(existKeyItem.TxnState)
 			return oldState, errors.New(KeyExists)
 		} else {
 			return -1, err
@@ -951,8 +973,8 @@ func (r *Datastore) CreateTSR(txnId string, txnState config.State) (config.State
 
 // DeleteTSR deletes a transaction with the given transaction ID from the Redis datastore.
 // It returns an error if the deletion operation fails.
-func (r *Datastore) DeleteTSR(txnId string) error {
-	return r.conn.Delete(txnId)
+func (r *Datastore) DeleteGroupKey(key string) error {
+	return r.conn.Delete(key)
 }
 
 // Copy returns a new instance of Datastore with the same name and connection.

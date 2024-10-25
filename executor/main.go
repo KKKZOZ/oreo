@@ -19,6 +19,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/network"
 	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
+	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
@@ -39,11 +40,11 @@ type Server struct {
 	committer network.Committer
 }
 
-func NewServer(port int, connMap map[string]txn.Connector, factory txn.DataItemFactory) *Server {
+func NewServer(port int, connMap map[string]txn.Connector, factory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Server {
 	return &Server{
 		port:      port,
 		reader:    *network.NewReader(connMap, factory, serializer.NewJSONSerializer()),
-		committer: *network.NewCommitter(connMap, serializer.NewJSONSerializer(), factory),
+		committer: *network.NewCommitter(connMap, serializer.NewJSONSerializer(), factory, timeSource),
 	}
 }
 
@@ -151,19 +152,19 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	verMap, err := s.committer.Prepare(req.DsName, req.ItemList,
-		req.StartTime, req.CommitTime,
-		req.Config, req.ValidationMap)
-	var resp network.Response[map[string]string]
+	verMap, tCommit, err := s.committer.Prepare(req.DsName, req.ItemList,
+		req.StartTime, req.Config, req.ValidationMap)
+	var resp network.PrepareResponse
 	if err != nil {
-		resp = network.Response[map[string]string]{
+		resp = network.PrepareResponse{
 			Status: "Error",
 			ErrMsg: err.Error(),
 		}
 	} else {
-		resp = network.Response[map[string]string]{
-			Status: "OK",
-			Data:   verMap,
+		resp = network.PrepareResponse{
+			Status:  "OK",
+			VerMap:  verMap,
+			TCommit: tCommit,
 		}
 	}
 	respBytes, _ := json.Marshal(resp)
@@ -182,7 +183,7 @@ func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	err := s.committer.Commit(req.DsName, req.List)
+	err := s.committer.Commit(req.DsName, req.List, req.TCommit)
 	var resp network.Response[string]
 	if err != nil {
 		resp = network.Response[string]{
@@ -238,6 +239,7 @@ var port = 8000
 var poolSize = 60
 var traceFlag = false
 var pprofFlag = false
+var timeOracleUrl = ""
 var redisAddr1 = ""
 var mongoAddr1 = ""
 var mongoAddr2 = ""
@@ -249,31 +251,15 @@ var cg = false
 var Log *zap.SugaredLogger
 
 func main() {
-	flag.IntVar(&port, "p", 8000, "Server Port")
-	flag.IntVar(&poolSize, "s", 60, "Pool Size")
-	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
-	flag.BoolVar(&pprofFlag, "pprof", false, "Enable pprof")
-	flag.StringVar(&workloadType, "w", "ycsb", "Workload Type")
-	flag.StringVar(&redisAddr1, "redis1", "", "Redis Address")
-	flag.StringVar(&mongoAddr1, "mongo1", "", "Mongo Address")
-	flag.StringVar(&mongoAddr2, "mongo2", "", "Mongo Address")
-	flag.StringVar(&kvRocksAddr, "kvrocks", "", "KVRocks Address")
-	flag.StringVar(&couchAddr, "couch", "", "Couch Address")
-	flag.BoolVar(&cg, "cg", false, "Enable Cherry Garcia Mode")
-	flag.Parse()
-	newLogger()
+	parseFlag()
 
 	if pprofFlag {
-		// runtime.SetCPUProfileRate(1000)
-
 		cpuFile, err := os.Create("executor_profile.prof")
 		if err != nil {
 			fmt.Println("无法创建 CPU profile 文件:", err)
 			return
 		}
 		defer cpuFile.Close()
-
-		// 开始 CPU profile
 		if err := pprof.StartCPUProfile(cpuFile); err != nil {
 			fmt.Println("无法启动 CPU profile:", err)
 			return
@@ -297,6 +283,44 @@ func main() {
 		config.Debug.CherryGarciaMode = true
 	}
 
+	connMap := getConnMap()
+
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	oracle := timesource.NewGlobalTimeSource(timeOracleUrl)
+	server := NewServer(port, connMap, &redis.RedisItemFactory{}, oracle)
+	go server.Run()
+
+	<-sigs
+
+	Log.Info("Shutting down server")
+
+}
+
+func parseFlag() {
+	flag.IntVar(&port, "p", 8000, "Server Port")
+	flag.IntVar(&poolSize, "s", 60, "Pool Size")
+	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
+	flag.BoolVar(&pprofFlag, "pprof", false, "Enable pprof")
+	flag.StringVar(&workloadType, "w", "ycsb", "Workload Type")
+	flag.StringVar(&timeOracleUrl, "timeurl", "", "Time Oracle URL")
+	flag.StringVar(&redisAddr1, "redis1", "", "Redis Address")
+	flag.StringVar(&mongoAddr1, "mongo1", "", "Mongo Address")
+	flag.StringVar(&mongoAddr2, "mongo2", "", "Mongo Address")
+	flag.StringVar(&kvRocksAddr, "kvrocks", "", "KVRocks Address")
+	flag.StringVar(&couchAddr, "couch", "", "Couch Address")
+	flag.BoolVar(&cg, "cg", false, "Enable Cherry Garcia Mode")
+	flag.Parse()
+
+	if timeOracleUrl == "" {
+		Log.Fatal("Time Oracle URL must be specified")
+	}
+
+	newLogger()
+}
+
+func getConnMap() map[string]txn.Connector {
 	connMap := make(map[string]txn.Connector)
 	switch workloadType {
 	case "iot":
@@ -350,16 +374,7 @@ func main() {
 			connMap["mongo2"] = mongoConn2
 		}
 	}
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	server := NewServer(port, connMap, &redis.RedisItemFactory{})
-	go server.Run()
-
-	<-sigs
-
-	Log.Info("Shutting down server")
-
+	return connMap
 }
 
 func newLogger() {
