@@ -210,16 +210,16 @@ func (c *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64)
 	}
 }
 
-func (c *Client) Abort(dsName string, keyList []string, txnId string) error {
+func (c *Client) Abort(dsName string, keyList []string, groupKeyList string) error {
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
 	data := AbortRequest{
-		DsName:  dsName,
-		KeyList: keyList,
-		TxnId:   txnId,
+		DsName:       dsName,
+		KeyList:      keyList,
+		GroupKeyList: groupKeyList,
 	}
 	json_data, _ := json.Marshal(data)
 

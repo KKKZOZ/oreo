@@ -5,7 +5,6 @@ import (
 
 	"github.com/oreo-dtx-lab/oreo/internal/mock"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
-	"github.com/oreo-dtx-lab/oreo/pkg/datastore/memory"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -58,10 +57,10 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 func NewTransactionWithSetup(dsType string) *txn.Transaction {
 	txn := txn.NewTransaction()
 	if dsType == "memory" {
-		conn := memory.NewMemoryConnection("localhost", 8321)
-		mds := memory.NewMemoryDatastore("memory", conn)
-		txn.AddDatastore(mds)
-		txn.SetGlobalDatastore(mds)
+		// conn := memory.NewMemoryConnection("localhost", 8321)
+		// mds := memory.NewMemoryDatastore("memory", conn)
+		// txn.AddDatastore(mds)
+		// txn.SetGlobalDatastore(mds)
 	}
 	if dsType == "redis" {
 		conn := redis.NewRedisConnection(&redis.ConnectionOptions{

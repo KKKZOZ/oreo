@@ -213,7 +213,7 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	err := s.committer.Abort(req.DsName, req.KeyList, req.TxnId)
+	err := s.committer.Abort(req.DsName, req.KeyList, req.GroupKeyList)
 	var resp network.Response[string]
 	if err != nil {
 		resp = network.Response[string]{

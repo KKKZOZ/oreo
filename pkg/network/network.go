@@ -58,7 +58,8 @@ type CommitRequest struct {
 type AbortRequest struct {
 	DsName  string
 	KeyList []string
-	TxnId   string
+	// TxnId   string
+	GroupKeyList string
 }
 
 func (r *ReadResponse) UnmarshalJSON(data []byte) error {

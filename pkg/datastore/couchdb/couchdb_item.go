@@ -12,30 +12,30 @@ import (
 var _ txn.DataItem = (*CouchDBItem)(nil)
 
 type CouchDBItem struct {
-	CKey       string       `json:"Key"`
-	CValue     string       `json:"Value"`
-	CTxnId     string       `json:"TxnId"`
-	CTxnState  config.State `json:"State"`
-	CTValid    int64        `json:"TValid"`
-	CTLease    time.Time    `json:"TLease"`
-	CPrev      string       `json:"Prev"`
-	CLinkedLen int          `json:"LinkedLen"`
-	CIsDeleted bool         `json:"IsDeleted"`
-	CVersion   string       `json:"_rev,omitempty"`
+	CKey          string       `json:"Key"`
+	CValue        string       `json:"Value"`
+	CGroupKeyList string       `json:"GroupKeyList"`
+	CTxnState     config.State `json:"State"`
+	CTValid       int64        `json:"TValid"`
+	CTLease       time.Time    `json:"TLease"`
+	CPrev         string       `json:"Prev"`
+	CLinkedLen    int          `json:"LinkedLen"`
+	CIsDeleted    bool         `json:"IsDeleted"`
+	CVersion      string       `json:"_rev,omitempty"`
 }
 
 func NewCouchDBItem(options txn.ItemOptions) *CouchDBItem {
 	return &CouchDBItem{
-		CKey:       options.Key,
-		CValue:     options.Value,
-		CTxnId:     options.TxnId,
-		CTxnState:  options.TxnState,
-		CTValid:    options.TValid,
-		CTLease:    options.TLease,
-		CPrev:      options.Prev,
-		CLinkedLen: options.LinkedLen,
-		CIsDeleted: options.IsDeleted,
-		CVersion:   options.Version,
+		CKey:          options.Key,
+		CValue:        options.Value,
+		CGroupKeyList: options.GroupKeyList,
+		CTxnState:     options.TxnState,
+		CTValid:       options.TValid,
+		CTLease:       options.TLease,
+		CPrev:         options.Prev,
+		CLinkedLen:    options.LinkedLen,
+		CIsDeleted:    options.IsDeleted,
+		CVersion:      options.Version,
 	}
 }
 
@@ -51,8 +51,12 @@ func (c *CouchDBItem) SetValue(value string) {
 	c.CValue = value
 }
 
-func (c *CouchDBItem) TxnId() string {
-	return c.CTxnId
+func (c *CouchDBItem) GroupKeyList() string {
+	return c.CGroupKeyList
+}
+
+func (c *CouchDBItem) SetGroupKeyList(groupKeyList string) {
+	c.CGroupKeyList = groupKeyList
 }
 
 func (c *CouchDBItem) TxnState() config.State {
@@ -123,7 +127,7 @@ func (c *CouchDBItem) Equal(other txn.DataItem) bool {
 	// Compare properties.
 	return c.Key() == otherItem.Key() &&
 		c.Value() == otherItem.Value() &&
-		c.TxnId() == otherItem.TxnId() &&
+		c.GroupKeyList() == otherItem.GroupKeyList() &&
 		c.TxnState() == otherItem.TxnState() &&
 		c.TValid() == otherItem.TValid() &&
 		c.TLease().Equal(otherItem.TLease()) &&
@@ -141,7 +145,7 @@ func (c *CouchDBItem) String() string {
 	return fmt.Sprintf(`CouchDBItem{
     Key:       %s,
     Value:     %s,
-    TxnId:     %s,
+    GroupKeyList:     %s,
     TxnState:  %s,
     TValid:    %v,
     TLease:    %s,
@@ -149,7 +153,7 @@ func (c *CouchDBItem) String() string {
 	LinkedLen: %d,
     IsDeleted: %v,
     Version:   %s,
-}`, c.CKey, c.CValue, c.CTxnId, util.ToString(c.CTxnState),
+}`, c.CKey, c.CValue, c.CGroupKeyList, util.ToString(c.CTxnState),
 		c.CTValid, c.CTLease.Format(time.RFC3339),
 		c.CPrev, c.CLinkedLen, c.CIsDeleted, c.CVersion)
 }

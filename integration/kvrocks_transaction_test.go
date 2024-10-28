@@ -572,24 +572,24 @@ func TestKvrocks_ConcurrentTransaction(t *testing.T) {
 // the redis item has been updated to the committed state.
 func TestKvrocks_SimpleExpiredRead(t *testing.T) {
 	tarMemItem := redis.NewRedisItem(txn.ItemOptions{
-		Key:      "item1",
-		Value:    util.ToJSONString(testutil.NewTestItem("item1")),
-		TxnId:    "TestRedis_SimpleExpiredRead1",
-		TxnState: config.COMMITTED,
-		TValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		TLease:   time.Now().Add(-9 * time.Second),
-		Version:  "1",
+		Key:          "item1",
+		Value:        util.ToJSONString(testutil.NewTestItem("item1")),
+		GroupKeyList: "TestRedis_SimpleExpiredRead1",
+		TxnState:     config.COMMITTED,
+		TValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		TLease:       time.Now().Add(-9 * time.Second),
+		Version:      "1",
 	})
 
 	curMemItem := redis.NewRedisItem(txn.ItemOptions{
-		Key:      "item1",
-		Value:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		TxnId:    "TestRedis_SimpleExpiredRead2",
-		TxnState: config.PREPARED,
-		TValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-		TLease:   time.Now().Add(-4 * time.Second),
-		Prev:     util.ToJSONString(tarMemItem),
-		Version:  "2",
+		Key:          "item1",
+		Value:        util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		GroupKeyList: "TestRedis_SimpleExpiredRead2",
+		TxnState:     config.PREPARED,
+		TValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		TLease:       time.Now().Add(-4 * time.Second),
+		Prev:         util.ToJSONString(tarMemItem),
+		Version:      "2",
 	})
 
 	conn := NewConnectionWithSetup(KVROCKS)
@@ -1026,25 +1026,25 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 		conn := NewConnectionWithSetup(KVROCKS)
 
 		redisItem1 := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:     "TestRedis_RollbackConflict1",
-			RTxnState:  config.COMMITTED,
-			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RLinkedLen: 1,
-			RVersion:   "1",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RGroupKeyList: "TestRedis_RollbackConflict1",
+			RTxnState:     config.COMMITTED,
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-4 * time.Second),
+			RLinkedLen:    1,
+			RVersion:      "1",
 		}
 		redisItem2 := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			RTxnId:     "TestRedis_RollbackConflict2",
-			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RPrev:      util.ToJSONString(redisItem1),
-			RLinkedLen: 2,
-			RVersion:   "2",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			RGroupKeyList: "TestRedis_RollbackConflict2",
+			RTxnState:     config.PREPARED,
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-4 * time.Second),
+			RPrev:         util.ToJSONString(redisItem1),
+			RLinkedLen:    2,
+			RVersion:      "2",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1089,15 +1089,15 @@ func TestKvrocks_RollbackConflict(t *testing.T) {
 		conn := NewConnectionWithSetup(KVROCKS)
 
 		redisItem2 := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			RTxnId:     "TestRedis_RollbackConflict2-emptyField",
-			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RPrev:      "",
-			RLinkedLen: 1,
-			RVersion:   "1",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			RGroupKeyList: "TestRedis_RollbackConflict2-emptyField",
+			RTxnState:     config.PREPARED,
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-4 * time.Second),
+			RPrev:         "",
+			RLinkedLen:    1,
+			RVersion:      "1",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1146,24 +1146,24 @@ func TestKvrocks_RollForwardConflict(t *testing.T) {
 	conn := NewConnectionWithSetup(KVROCKS)
 
 	redisItem1 := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		RTxnId:    "TestKvrocks_RollForwardConflict2",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-4 * time.Second),
-		RVersion:  "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		RGroupKeyList: "TestKvrocks_RollForwardConflict2",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-4 * time.Second),
+		RVersion:      "1",
 	}
 	redisItem2 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-		RTxnId:     "TestKvrocks_RollForwardConflict2",
-		RTxnState:  config.PREPARED,
-		RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-		RTLease:    time.Now().Add(-4 * time.Second),
-		RPrev:      util.ToJSONString(redisItem1),
-		RLinkedLen: 2,
-		RVersion:   "2",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-broken")),
+		RGroupKeyList: "TestKvrocks_RollForwardConflict2",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-4 * time.Second),
+		RPrev:         util.ToJSONString(redisItem1),
+		RLinkedLen:    2,
+		RVersion:      "2",
 	}
 	conn.PutItem("item1", redisItem2)
 	conn.Put("TestKvrocks_RollForwardConflict2", config.COMMITTED)
@@ -1506,13 +1506,13 @@ func TestKvrocks_DeleteTimingProblems(t *testing.T) {
 	t.Run("the item has an empty Prev field", func(t *testing.T) {
 		testConn := NewConnectionWithSetup(KVROCKS)
 		dbItem := &redis.RedisItem{
-			RKey:      "item1",
-			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:    "TestRedis_DeleteTimingProblems",
-			RTxnState: config.COMMITTED,
-			RTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-			RTLease:   time.Now().Add(-4 * time.Second),
-			RVersion:  "1",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RGroupKeyList: "TestRedis_DeleteTimingProblems",
+			RTxnState:     config.COMMITTED,
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-4 * time.Second),
+			RVersion:      "1",
 		}
 		testConn.PutItem("item1", dbItem)
 

@@ -120,21 +120,18 @@ func main() {
 		cfg.Debug.CherryGarciaMode = true
 		cfg.Debug.DebugMode = true
 		cfg.Debug.ConnAdditionalLatency = config.Latency
-		cfg.Debug.TimeOracleAdditionalLatency = config.Latency
 		cfg.Config.ConcurrentOptimizationLevel = 0
 		cfg.Config.AsyncLevel = 2
 	case "native":
 		fmt.Printf("Running under Native Mode\n")
 		cfg.Debug.DebugMode = true
 		cfg.Debug.ConnAdditionalLatency = config.Latency
-		cfg.Debug.TimeOracleAdditionalLatency = config.Latency
 	case "oreo":
 		fmt.Printf("Running under Oreo Mode\n")
 		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.DebugMode = true
 		cfg.Debug.HTTPAdditionalLatency = config.Latency
 		cfg.Debug.ConnAdditionalLatency = 0
-		cfg.Debug.TimeOracleAdditionalLatency = config.Latency
 		cfg.Config.ConcurrentOptimizationLevel = 2
 		cfg.Config.AsyncLevel = 2
 	}
