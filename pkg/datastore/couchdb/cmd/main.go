@@ -12,12 +12,12 @@ import (
 func main() {
 
 	couchItem := couchdb.NewCouchDBItem(txn.ItemOptions{
-		Key:     "item1",
-		Value:   "value1",
-		TxnId:   "txn1",
-		TValid:  time.Now().UnixMicro(),
-		TLease:  time.Now(),
-		Version: "1",
+		Key:          "item1",
+		Value:        "value1",
+		GroupKeyList: "txn1",
+		TValid:       time.Now().UnixMicro(),
+		TLease:       time.Now(),
+		Version:      "1",
 	})
 
 	conn := couchdb.NewCouchDBConnection(nil)

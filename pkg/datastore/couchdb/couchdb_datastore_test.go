@@ -61,12 +61,12 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "123123",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "123123",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
 		// CVersion:  "2",
 	}
 
@@ -106,13 +106,13 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "TestSimpleReadWhenCommittedFindEmpty",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(+10 * time.Second),
-		CTLease:   time.Now().Add(+5 * time.Second),
-		CVersion:  "2",
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "TestSimpleReadWhenCommittedFindEmpty",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(+10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(+5 * time.Second),
+		CVersion:      "2",
 	}
 
 	key := "John"
@@ -152,21 +152,21 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		Age:  31,
 	}
 	preRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "99",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "99",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
 		// CVersion:  "1",
 	}
 	curRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(curPerson),
-		CTxnId:    "100",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(10 * time.Second),
-		CTLease:   time.Now().Add(5 * time.Second),
+		CKey:          "John",
+		CValue:        util.ToJSONString(curPerson),
+		CGroupKeyList: "100",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(5 * time.Second),
 		// CVersion:  "2",
 		CPrev: util.ToJSONString(preRedisItem),
 	}
@@ -213,23 +213,23 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		Age:  31,
 	}
 	preRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "99",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(10 * time.Second),
-		CTLease:   time.Now().Add(5 * time.Second),
-		CVersion:  "1",
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "99",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(5 * time.Second),
+		CVersion:      "1",
 	}
 	curRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(curPerson),
-		CTxnId:    "100",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(20 * time.Second),
-		CTLease:   time.Now().Add(15 * time.Second),
-		CVersion:  "2",
-		CPrev:     util.ToJSONString(preRedisItem),
+		CKey:          "John",
+		CValue:        util.ToJSONString(curPerson),
+		CGroupKeyList: "100",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(20 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(15 * time.Second),
+		CVersion:      "2",
+		CPrev:         util.ToJSONString(preRedisItem),
 	}
 
 	key := "John"
@@ -265,12 +265,12 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "100",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now(),
-		CTLease:   time.Now(),
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "100",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().UnixMicro(),
+		CTLease:       time.Now(),
 		// CVersion:  "2",
 	}
 
@@ -315,23 +315,23 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 
 	// initialize the redis database
 	tarMemItem := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		CTxnId:    "99",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-9 * time.Second),
-		CVersion:  "1",
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		CGroupKeyList: "99",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-9 * time.Second),
+		CVersion:      "1",
 	}
 
 	curMemItem := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		CTxnId:    "TestSimpleReadWhenPreparedWithTSRInABORTED",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(-5 * time.Second),
-		CTLease:   time.Now().Add(-4 * time.Second),
-		CPrev:     util.ToJSONString(tarMemItem),
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		CGroupKeyList: "TestSimpleReadWhenPreparedWithTSRInABORTED",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-4 * time.Second),
+		CPrev:         util.ToJSONString(tarMemItem),
 		// CVersion:  "2",
 	}
 
@@ -377,13 +377,13 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "100",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
-		CVersion:  "2",
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "100",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
+		CVersion:      "2",
 	}
 
 	expectedStr := util.ToJSONString(expectedRedisItem)
@@ -394,12 +394,12 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 	}
 
 	curRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(curPerson),
-		CTxnId:    "101",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(-3 * time.Second),
-		CTLease:   time.Now().Add(-1 * time.Second),
+		CKey:          "John",
+		CValue:        util.ToJSONString(curPerson),
+		CGroupKeyList: "101",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-1 * time.Second),
 		// CVersion:  "3",
 		CPrev: expectedStr,
 	}
@@ -429,25 +429,25 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 
 	dbItem1 := &CouchDBItem{
-		CKey:       "item1",
-		CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
-		CTxnId:     "TestSimpleReadWhenPrepareNotExpired1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-2 * time.Second),
-		CTLease:    time.Now().Add(-1 * time.Second),
-		CLinkedLen: 1,
-		CVersion:   "1",
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		CGroupKeyList: "TestSimpleReadWhenPrepareNotExpired1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-1 * time.Second),
+		CLinkedLen:    1,
+		CVersion:      "1",
 	}
 
 	dbItem2 := &CouchDBItem{
-		CKey:       "item1",
-		CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
-		CTxnId:     "TestSimpleReadWhenPrepareNotExpired2",
-		CTxnState:  config.PREPARED,
-		CTValid:    time.Now().Add(1 * time.Second),
-		CTLease:    time.Now().Add(2 * time.Second),
-		CPrev:      util.ToJSONString(dbItem1),
-		CLinkedLen: 2,
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+		CGroupKeyList: "TestSimpleReadWhenPrepareNotExpired2",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(1 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(2 * time.Second),
+		CPrev:         util.ToJSONString(dbItem1),
+		CLinkedLen:    2,
 		// CVersion:   "2",
 	}
 
@@ -486,7 +486,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 		CKey:       "item2",
 		CValue:     util.ToJSONString(testutil.NewTestItem("item2-db")),
 		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-2 * time.Second),
+		CTValid:    time.Now().Add(-2 * time.Second).UnixMicro(),
 		CTLease:    time.Now().Add(-1 * time.Second),
 		CLinkedLen: 1,
 		CVersion:   "1",
@@ -622,13 +622,13 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "123123",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
-		CVersion:  "2",
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "123123",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
+		CVersion:      "2",
 	}
 
 	key := "John"
@@ -683,13 +683,13 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "123123",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
-		CVersion:  "2",
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "123123",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
+		CVersion:      "2",
 	}
 
 	key := "John"
@@ -743,13 +743,13 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "123123",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
-		CVersion:  "2",
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "123123",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
+		CVersion:      "2",
 	}
 
 	key := "John"
@@ -789,12 +789,12 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "123123",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "123123",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
 		// CVersion:  "2",
 	}
 
@@ -883,12 +883,12 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "123123",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "123123",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
 		// CVersion:  "2",
 	}
 
@@ -945,13 +945,13 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &CouchDBItem{
-		CKey:      "John",
-		CValue:    util.ToJSONString(expected),
-		CTxnId:    "123123",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-5 * time.Second),
-		CVersion:  "2",
+		CKey:          "John",
+		CValue:        util.ToJSONString(expected),
+		CGroupKeyList: "123123",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-5 * time.Second),
+		CVersion:      "2",
 	}
 
 	key := "John"
@@ -1114,37 +1114,37 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 
 	item1_1 := testutil.NewTestItem("item1_1")
 	memItem1_1 := &CouchDBItem{
-		CKey:       "item1",
-		CValue:     util.ToJSONString(item1_1),
-		CTxnId:     "txn1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-10 * time.Second),
-		CTLease:    time.Now().Add(-9 * time.Second),
-		CVersion:   "1",
-		CLinkedLen: 1,
+		CKey:          "item1",
+		CValue:        util.ToJSONString(item1_1),
+		CGroupKeyList: "txn1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-9 * time.Second),
+		CVersion:      "1",
+		CLinkedLen:    1,
 	}
 
 	item1_2 := testutil.NewTestItem("item1_2")
 	memItem1_2 := &CouchDBItem{
-		CKey:       "item1",
-		CValue:     util.ToJSONString(item1_2),
-		CTxnId:     "txn2",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(5 * time.Second),
-		CTLease:    time.Now().Add(6 * time.Second),
-		CVersion:   "2",
-		CPrev:      util.ToJSONString(memItem1_1),
-		CLinkedLen: 2,
+		CKey:          "item1",
+		CValue:        util.ToJSONString(item1_2),
+		CGroupKeyList: "txn2",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(5 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(6 * time.Second),
+		CVersion:      "2",
+		CPrev:         util.ToJSONString(memItem1_1),
+		CLinkedLen:    2,
 	}
 
 	item1_3 := testutil.NewTestItem("item1_3")
 	memItem1_3 := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(item1_3),
-		CTxnId:    "txn3",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(10 * time.Second),
-		CTLease:   time.Now().Add(11 * time.Second),
+		CKey:          "item1",
+		CValue:        util.ToJSONString(item1_3),
+		CGroupKeyList: "txn3",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(11 * time.Second),
 		// CVersion:   "3",
 		CPrev:      util.ToJSONString(memItem1_2),
 		CLinkedLen: 3,
@@ -1314,25 +1314,25 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &CouchDBItem{
-			CKey:       "item1",
-			CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
-			CTxnId:     "99",
-			CTxnState:  config.COMMITTED,
-			CTValid:    time.Now().Add(-10 * time.Second),
-			CTLease:    time.Now().Add(-9 * time.Second),
-			CLinkedLen: 1,
+			CKey:          "item1",
+			CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+			CGroupKeyList: "99",
+			CTxnState:     config.COMMITTED,
+			CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-9 * time.Second),
+			CLinkedLen:    1,
 			// CVersion:   "1",
 		}
 
 		curItem := &CouchDBItem{
-			CKey:       "item1",
-			CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			CTxnId:     "100",
-			CTxnState:  config.PREPARED,
-			CTValid:    time.Now().Add(-5 * time.Second),
-			CTLease:    time.Now().Add(-4 * time.Second),
-			CPrev:      util.ToJSONString(tarItem),
-			CLinkedLen: 2,
+			CKey:          "item1",
+			CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			CGroupKeyList: "100",
+			CTxnState:     config.PREPARED,
+			CTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-4 * time.Second),
+			CPrev:         util.ToJSONString(tarItem),
+			CLinkedLen:    2,
 			// CVersion:   "2",
 		}
 
@@ -1374,12 +1374,12 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &CouchDBItem{
-			CKey:      "item1",
-			CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			CTxnId:    "99",
-			CTxnState: config.PREPARED,
-			CTValid:   time.Now().Add(-10 * time.Second),
-			CTLease:   time.Now().Add(-9 * time.Second),
+			CKey:          "item1",
+			CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			CGroupKeyList: "99",
+			CTxnState:     config.PREPARED,
+			CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-9 * time.Second),
 			// CVersion:  "1",
 		}
 
@@ -1428,24 +1428,24 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &CouchDBItem{
-			CKey:       "item2",
-			CValue:     util.ToJSONString(testutil.NewTestItem("item2-pre2")),
-			CTxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
-			CTxnState:  config.COMMITTED,
-			CTValid:    time.Now().Add(-10 * time.Second),
-			CTLease:    time.Now().Add(-9 * time.Second),
-			CLinkedLen: 1,
-			CVersion:   "1",
+			CKey:          "item2",
+			CValue:        util.ToJSONString(testutil.NewTestItem("item2-pre2")),
+			CGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
+			CTxnState:     config.COMMITTED,
+			CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-9 * time.Second),
+			CLinkedLen:    1,
+			CVersion:      "1",
 		}
 
 		curItem := &CouchDBItem{
-			CKey:       "item2",
-			CValue:     util.ToJSONString(testutil.NewTestItem("item2-pre")),
-			CTxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
-			CTxnState:  config.PREPARED,
-			CTValid:    time.Now().Add(-5 * time.Second),
-			CTLease:    time.Now().Add(-4 * time.Second),
-			CLinkedLen: 2,
+			CKey:          "item2",
+			CValue:        util.ToJSONString(testutil.NewTestItem("item2-pre")),
+			CGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			CTxnState:     config.PREPARED,
+			CTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-4 * time.Second),
+			CLinkedLen:    2,
 			// CVersion:   "2",
 			CPrev: util.ToJSONString(tarItem),
 		}
@@ -1493,12 +1493,12 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &CouchDBItem{
-			CKey:      "item1",
-			CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			CTxnId:    "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
-			CTxnState: config.PREPARED,
-			CTValid:   time.Now().Add(-10 * time.Second),
-			CTLease:   time.Now().Add(-9 * time.Second),
+			CKey:          "item1",
+			CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			CGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			CTxnState:     config.PREPARED,
+			CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-9 * time.Second),
 			// CVersion:  "1",
 		}
 
@@ -1546,12 +1546,12 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	tarItem := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		CTxnId:    "TestDirectWriteOnPreparingRecord",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(2 * time.Second),
-		CTLease:   time.Now().Add(1 * time.Second),
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		CGroupKeyList: "TestDirectWriteOnPreparingRecord",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(2 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(1 * time.Second),
 		// CVersion:  "1",
 	}
 
@@ -1570,13 +1570,13 @@ func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	dbItem1 := &CouchDBItem{
-		CKey:       "item1",
-		CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
-		CTxnId:     "TestDirectWriteOnInvisibleRecord1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(3 * time.Second),
-		CTLease:    time.Now().Add(4 * time.Second),
-		CLinkedLen: 1,
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		CGroupKeyList: "TestDirectWriteOnInvisibleRecord1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(4 * time.Second),
+		CLinkedLen:    1,
 		// CVersion:   "2",
 	}
 	conn.Delete(dbItem1.Key())
@@ -1605,22 +1605,22 @@ func TestDirectWriteOnDeletedRecord(t *testing.T) {
 func TestRollbackWhenReading(t *testing.T) {
 
 	item1Pre := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		CTxnId:    "TestRollback",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-9 * time.Second),
-		CVersion:  "1",
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		CGroupKeyList: "TestRollback",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-9 * time.Second),
+		CVersion:      "1",
 	}
 
 	item1 := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		CTxnId:    "TestRollback",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(-5 * time.Second),
-		CTLease:   time.Now().Add(-4 * time.Second),
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		CGroupKeyList: "TestRollback",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-4 * time.Second),
 		// CVersion:  "2",
 	}
 
@@ -1673,22 +1673,22 @@ func TestRollbackWhenReading(t *testing.T) {
 
 func TestRollbackWhenWriting(t *testing.T) {
 	item1Pre := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		CTxnId:    "TestRollback",
-		CTxnState: config.COMMITTED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-9 * time.Second),
-		CVersion:  "1",
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		CGroupKeyList: "TestRollback",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-9 * time.Second),
+		CVersion:      "1",
 	}
 
 	item1 := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		CTxnId:    "TestRollback",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(-5 * time.Second),
-		CTLease:   time.Now().Add(-4 * time.Second),
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		CGroupKeyList: "TestRollback",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-4 * time.Second),
 		// CVersion:  "2",
 	}
 
@@ -1773,12 +1773,12 @@ func TestRollForwardWhenReading(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	tarItem := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		CTxnId:    "TestRollForward",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-9 * time.Second),
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		CGroupKeyList: "TestRollForward",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-9 * time.Second),
 		// CVersion:  "1",
 	}
 
@@ -1809,12 +1809,12 @@ func TestRollForwardWhenWriting(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	tarItem := &CouchDBItem{
-		CKey:      "item1",
-		CValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		CTxnId:    "TestRollForward",
-		CTxnState: config.PREPARED,
-		CTValid:   time.Now().Add(-10 * time.Second),
-		CTLease:   time.Now().Add(-9 * time.Second),
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		CGroupKeyList: "TestRollForward",
+		CTxnState:     config.PREPARED,
+		CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-9 * time.Second),
 		// CVersion:  "1",
 	}
 
@@ -1851,14 +1851,14 @@ func TestItemVersionUpdate(t *testing.T) {
 	t.Run("item version ++ after updated", func(t *testing.T) {
 		conn := NewDefaultConnection()
 		dbItem := &CouchDBItem{
-			CKey:       "item1",
-			CValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			CTxnId:     "TestItemVersionUpdate",
-			CTxnState:  config.COMMITTED,
-			CTValid:    time.Now().Add(-10 * time.Second),
-			CTLease:    time.Now().Add(-9 * time.Second),
-			CLinkedLen: 1,
-			CVersion:   "1",
+			CKey:          "item1",
+			CValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			CGroupKeyList: "TestItemVersionUpdate",
+			CTxnState:     config.COMMITTED,
+			CTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-9 * time.Second),
+			CLinkedLen:    1,
+			CVersion:      "1",
 		}
 		conn.PutItem(dbItem.Key(), dbItem)
 

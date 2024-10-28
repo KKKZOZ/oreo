@@ -3,6 +3,7 @@ package network
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,19 +42,20 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 	}
 
 	var eg errgroup.Group
-	for tId, predicate := range validationMap {
-		txnId := tId
+	for gkl, predicate := range validationMap {
+		gk := gkl
 		pred := predicate
 		if pred.ItemKey == "" {
 			return errors.New("validation failed due to predicate item's empty key")
 		}
 		eg.Go(func() error {
-			groupKey, err := c.reader.readGroupKey(cfg.GlobalName, txnId)
+			urlList := strings.Split(gk, ",")
+			groupKey, err := c.reader.getGroupKey(urlList)
 			if err != nil {
-				if cfg.ReadStrategy == config.AssumeAbort {
+				if config.Config.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
 						key := pred.ItemKey
-						err := c.rollbackFromConn(dsName, key, txnId, cfg.GlobalName)
+						err := c.rollbackFromConn(dsName, key)
 						if err != nil {
 							return errors.Join(errors.New("validation failed in AA mode"), err)
 						} else {
@@ -63,10 +65,10 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 				}
 				return errors.New("validation failed due to unknown status")
 			}
-			if groupKey.TxnState != pred.State {
-				return errors.New("validation failed due to false assumption")
-			} else {
+			if txn.AtLeastOneAborted(groupKey) {
 				return nil
+			} else {
+				return errors.New("validation failed due to false assumption")
 			}
 		})
 	}
@@ -90,10 +92,6 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	var mu sync.Mutex
 	var eg errgroup.Group
 	versionMap := make(map[string]string)
-
-	// if cfg.ConcurrentOptimizationLevel == 0 {
-	// 	eg.SetLimit(1)
-	// }
 
 	for _, it := range itemList {
 		item := it
@@ -141,10 +139,21 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 		return nil, 0, errors.New("GetTime error: " + err.Error())
 	}
 
-	return versionMap, tCommit, err
+	// create the corresponding group key
+	if len(itemList) > 0 {
+		txnId := strings.Split(itemList[0].GroupKeyList(), ":")[1]
+		url := dsName + ":" + txnId
+		err = c.reader.createSingleGroupKey(url, config.COMMITTED)
+		if err != nil {
+			return nil, tCommit, fmt.Errorf("failed to create the group key: %v", err)
+		}
+		return versionMap, tCommit, nil
+	}
+
+	return versionMap, tCommit, nil
 }
 
-func (c *Committer) Abort(dsName string, keyList []string, txnId string) error {
+func (c *Committer) Abort(dsName string, keyList []string, groupKeyList string) error {
 	var eg errgroup.Group
 	for _, k := range keyList {
 		key := k
@@ -153,7 +162,7 @@ func (c *Committer) Abort(dsName string, keyList []string, txnId string) error {
 			if err != nil {
 				return err
 			}
-			if item.TxnId() == txnId {
+			if item.GroupKeyList() == groupKeyList {
 				_, err = c.rollback(dsName, item)
 				return err
 			} else {
@@ -304,7 +313,7 @@ func (c *Committer) rollback(dsName string, item txn.DataItem) (txn.DataItem, er
 	return newItem, err
 }
 
-func (c *Committer) rollbackFromConn(dsName string, key string, txnId string, globalName string) error {
+func (c *Committer) rollbackFromConn(dsName string, key string) error {
 
 	item, err := c.connMap[dsName].GetItem(key)
 	if err != nil {
@@ -314,30 +323,16 @@ func (c *Committer) rollbackFromConn(dsName string, key string, txnId string, gl
 	if item.TxnState() != config.PREPARED {
 		return errors.New("rollback failed due to wrong state")
 	}
-	if item.TxnId() != txnId {
-		// fmt.Printf("item: %v   txnId: %v\n",item,txnId)
-		return errors.New("rollback failed due to wrong txnId")
-	}
+	// if item.TxnId() != txnId {
+	// 	// fmt.Printf("item: %v   txnId: %v\n",item,txnId)
+	// 	return errors.New("rollback failed due to wrong txnId")
+	// }
 
 	if item.TLease().Before(time.Now()) {
-		curState, err := c.reader.createGroupKey(globalName, item.TxnId(), config.ABORTED, 0)
-		if err != nil {
-			if err.Error() == "key exists" {
-				if curState == config.COMMITTED {
-					return errors.New("rollback failed because the corresponding transaction has committed")
-				}
-				// if curState == config.ABORTED
-				// it means the transaction has been rolled back
-				// so we can safely rollback the record
-			} else {
-				return err
-			}
+		successNum := c.reader.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED)
+		if successNum == 0 {
+			return fmt.Errorf("failed to rollback the record because none of the group keys are created")
 		}
-
-		// err := r.Txn.WriteTSR(item.TxnId(), config.ABORTED)
-		// if err != nil {
-		// 	return err
-		// }
 		_, err = c.rollback(dsName, item)
 		return err
 	}

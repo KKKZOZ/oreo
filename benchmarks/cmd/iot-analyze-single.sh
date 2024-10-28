@@ -22,7 +22,7 @@ verbose_echo() {
 thread=$1
 executor_port=8001
 timeoracle_port=8010
-thread_load=10
+thread_load=1
 tar_dir=iot
 
 
@@ -70,11 +70,11 @@ fi
 # verbose_echo "Running IOT native"
 # go run . -d native -wl iot -wc ./workloads/iot.yaml -m run -ps native -t "$thread" > "$tar_dir/iot-native.txt"
 
-# verbose_echo "Running IOT Cherry Garcia"
-# go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -ps cg -t "$thread" > "$tar_dir/iot-cg.txt"
+verbose_echo "Running IOT Cherry Garcia"
+go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -ps cg -t "$thread" > "$tar_dir/iot-cg.txt"
 
-verbose_echo "Running IOT oreo"
-go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -remote -t "$thread" > "$tar_dir/iot-oreo.txt"
+# verbose_echo "Running IOT oreo"
+# go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -remote -t "$thread" > "$tar_dir/iot-oreo.txt"
 
 native=$(sed -n '21p' "$tar_dir/iot-native.txt" | grep -E -o '[0-9.]+(ms|s)' | sed 's/\(ms\|s\)$//') 
 cg=$(sed -n '21p' "$tar_dir/iot-cg.txt" | grep -E -o '[0-9.]+(ms|s)' | sed 's/\(ms\|s\)$//') 

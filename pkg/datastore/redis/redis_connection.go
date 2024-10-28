@@ -47,7 +47,7 @@ const AtomicCreateItemScript = `
 if redis.call('EXISTS', KEYS[1]) == 0 then
 	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
 	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
-	redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
+	redis.call('HSET', KEYS[1], 'GroupKeyList', ARGV[4])
 	redis.call('HSET', KEYS[1], 'TxnState', ARGV[5])
 	redis.call('HSET', KEYS[1], 'TValid', ARGV[6])
 	redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
@@ -65,7 +65,7 @@ const ConditionalUpdateScript = `
 if redis.call('HGET', KEYS[1], 'Version') == ARGV[1] then
 	redis.call('HSET', KEYS[1], 'Key', ARGV[2])
 	redis.call('HSET', KEYS[1], 'Value', ARGV[3])
-	redis.call('HSET', KEYS[1], 'TxnId', ARGV[4])
+	redis.call('HSET', KEYS[1], 'GroupKeyList', ARGV[4])
 	redis.call('HSET', KEYS[1], 'TxnState', ARGV[5])
 	redis.call('HSET', KEYS[1], 'TValid', ARGV[6])
 	redis.call('HSET', KEYS[1], 'TLease', ARGV[7])
@@ -217,7 +217,7 @@ func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error
 	_, err := r.rdb.Pipelined(ctx, func(rdb redis.Pipeliner) error {
 		rdb.HSet(ctx, key, "Key", value.Key())
 		rdb.HSet(ctx, key, "Value", value.Value())
-		rdb.HSet(ctx, key, "TxnId", value.TxnId())
+		rdb.HSet(ctx, key, "GroupKeyList", value.GroupKeyList())
 		rdb.HSet(ctx, key, "TxnState", value.TxnState())
 		rdb.HSet(ctx, key, "TValid", value.TValid())
 		rdb.HSet(ctx, key, "TLease", value.TLease().Format(time.RFC3339Nano))
@@ -256,7 +256,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		newVer := util.AddToString(value.Version(), 1)
 
 		_, err := r.rdb.EvalSha(ctx, r.atomicCreateItemSHA, []string{value.Key()}, value.Version(), value.Key(),
-			value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
+			value.Value(), value.GroupKeyList(), value.TxnState(), value.TValid(), value.TLease(),
 			newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 		if err != nil {
 			if err.Error() == "version mismatch" {
@@ -272,7 +272,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	newVer := util.AddToString(value.Version(), 1)
 
 	_, err := r.rdb.EvalSha(ctx, r.conditionalUpdateSHA, []string{value.Key()}, value.Version(), value.Key(),
-		value.Value(), value.TxnId(), value.TxnState(), value.TValid(), value.TLease(),
+		value.Value(), value.GroupKeyList(), value.TxnState(), value.TValid(), value.TLease(),
 		newVer, value.Prev(), value.LinkedLen(), value.IsDeleted()).Result()
 	if err != nil {
 		if err.Error() == "version mismatch" {
@@ -318,7 +318,8 @@ func (r *RedisConnection) AtomicCreate(name string, value any) (string, error) {
 	}
 
 	ctx := context.Background()
-	_, err := r.rdb.EvalSha(ctx, r.atomicCreateSHA, []string{name}, name, value).Result()
+	_, err := r.rdb.
+		EvalSha(ctx, r.atomicCreateSHA, []string{name}, name, value).Result()
 	if err != nil {
 		if err.Error() == "already exists" {
 			old, err := r.Get(name)
