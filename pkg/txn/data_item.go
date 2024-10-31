@@ -12,7 +12,8 @@ import (
 )
 
 type TxnItem interface {
-	TxnId() string
+	GroupKeyList() string
+	SetGroupKeyList(string)
 
 	TxnState() config.State
 	SetTxnState(config.State)

@@ -2,7 +2,7 @@
 recordcount: 10000
 
 # Total number of operations to be performed
-operationcount: 1000
+operationcount: 10000
 
 # Number of operations in each transaction group
 txnoperationgroup: 6
@@ -21,6 +21,6 @@ mongo1proportion: 0.5 # Proportion of operations on MongoDB instance 1
 mongo2proportion: 0 # Proportion of operations on MongoDB instance 2
 couchdbproportion: 0 # Proportion of operations on CouchDB
 
-task1proportion: 1.0 # Proportion of operations on task 1
-task2proportion: 0 # Proportion of operations on task 2
+task1proportion: 0 # Proportion of operations on task 1
+task2proportion: 1.0 # Proportion of operations on task 2
 task3proportion: 0 # Proportion of operations on task 3

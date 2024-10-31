@@ -63,13 +63,13 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "123123",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "123123",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -105,13 +105,13 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "TestSimpleReadWhenCommittedFindEmpty",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(+10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(+5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "TestSimpleReadWhenCommittedFindEmpty",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(+10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(+5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -145,23 +145,23 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		Age:  31,
 	}
 	preRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "99",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "1",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "99",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "1",
 	}
 	curRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(curPerson),
-		RTxnId:    "100",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(5 * time.Second),
-		RVersion:  "2",
-		RPrev:     util.ToJSONString(preRedisItem),
+		RKey:          "John",
+		RValue:        util.ToJSONString(curPerson),
+		RGroupKeyList: "100",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(5 * time.Second),
+		RVersion:      "2",
+		RPrev:         util.ToJSONString(preRedisItem),
 	}
 
 	key := "John"
@@ -200,23 +200,23 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		Age:  31,
 	}
 	preRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "99",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(5 * time.Second),
-		RVersion:  "1",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "99",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(5 * time.Second),
+		RVersion:      "1",
 	}
 	curRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(curPerson),
-		RTxnId:    "100",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(20 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(15 * time.Second),
-		RVersion:  "2",
-		RPrev:     util.ToJSONString(preRedisItem),
+		RKey:          "John",
+		RValue:        util.ToJSONString(curPerson),
+		RGroupKeyList: "100",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(20 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(15 * time.Second),
+		RVersion:      "2",
+		RPrev:         util.ToJSONString(preRedisItem),
 	}
 
 	key := "John"
@@ -248,13 +248,13 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "100",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().UnixMicro(),
-		RTLease:   time.Now(),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "100",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().UnixMicro(),
+		RTLease:       time.Now(),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -292,24 +292,24 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 
 	// initialize the redis database
 	tarMemItem := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		RTxnId:    "99",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		RGroupKeyList: "99",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-9 * time.Second),
+		RVersion:      "1",
 	}
 
 	curMemItem := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		RTxnId:    "TestSimpleReadWhenPreparedWithTSRInABORTED",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-4 * time.Second),
-		RPrev:     util.ToJSONString(tarMemItem),
-		RVersion:  "2",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		RGroupKeyList: "TestSimpleReadWhenPreparedWithTSRInABORTED",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-4 * time.Second),
+		RPrev:         util.ToJSONString(tarMemItem),
+		RVersion:      "2",
 	}
 
 	key := "item1"
@@ -349,13 +349,13 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "100",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "100",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	expectedStr := util.ToJSONString(expectedRedisItem)
@@ -366,14 +366,14 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 	}
 
 	curRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(curPerson),
-		RTxnId:    "101",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-3 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-1 * time.Second),
-		RVersion:  "3",
-		RPrev:     expectedStr,
+		RKey:          "John",
+		RValue:        util.ToJSONString(curPerson),
+		RGroupKeyList: "101",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-1 * time.Second),
+		RVersion:      "3",
+		RPrev:         expectedStr,
 	}
 
 	key := "John"
@@ -400,26 +400,26 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 
 	dbItem1 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
-		RTxnId:     "TestSimpleReadWhenPrepareNotExpired1",
-		RTxnState:  config.COMMITTED,
-		RTValid:    time.Now().Add(-2 * time.Second).UnixMicro(),
-		RTLease:    time.Now().Add(-1 * time.Second),
-		RLinkedLen: 1,
-		RVersion:   "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		RGroupKeyList: "TestSimpleReadWhenPrepareNotExpired1",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-1 * time.Second),
+		RLinkedLen:    1,
+		RVersion:      "1",
 	}
 
 	dbItem2 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
-		RTxnId:     "TestSimpleReadWhenPrepareNotExpired2",
-		RTxnState:  config.PREPARED,
-		RTValid:    time.Now().Add(1 * time.Second).UnixMicro(),
-		RTLease:    time.Now().Add(2 * time.Second),
-		RPrev:      util.ToJSONString(dbItem1),
-		RLinkedLen: 2,
-		RVersion:   "2",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+		RGroupKeyList: "TestSimpleReadWhenPrepareNotExpired2",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(1 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(2 * time.Second),
+		RPrev:         util.ToJSONString(dbItem1),
+		RLinkedLen:    2,
+		RVersion:      "2",
 	}
 
 	t.Run("when the item has a valid Prev field", func(t *testing.T) {
@@ -581,13 +581,13 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "123123",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "123123",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -638,13 +638,13 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "123123",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "123123",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -694,13 +694,13 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "123123",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "123123",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -735,13 +735,13 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "123123",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "123123",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -824,13 +824,13 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "123123",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "123123",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -881,13 +881,13 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &redis.RedisItem{
-		RKey:      "John",
-		RValue:    util.ToJSONString(expected),
-		RTxnId:    "123123",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-5 * time.Second),
-		RVersion:  "2",
+		RKey:          "John",
+		RValue:        util.ToJSONString(expected),
+		RGroupKeyList: "123123",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-5 * time.Second),
+		RVersion:      "2",
 	}
 
 	key := "John"
@@ -1065,40 +1065,40 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 
 	item1_1 := testutil.NewTestItem("item1_1")
 	memItem1_1 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(item1_1),
-		RTxnId:     "txn1",
-		RTxnState:  config.COMMITTED,
-		RTValid:    time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:    time.Now().Add(-9 * time.Second),
-		RVersion:   "1",
-		RLinkedLen: 1,
+		RKey:          "item1",
+		RValue:        util.ToJSONString(item1_1),
+		RGroupKeyList: "txn1",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-9 * time.Second),
+		RVersion:      "1",
+		RLinkedLen:    1,
 	}
 
 	item1_2 := testutil.NewTestItem("item1_2")
 	memItem1_2 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(item1_2),
-		RTxnId:     "txn2",
-		RTxnState:  config.COMMITTED,
-		RTValid:    time.Now().Add(5 * time.Second).UnixMicro(),
-		RTLease:    time.Now().Add(6 * time.Second),
-		RVersion:   "2",
-		RPrev:      util.ToJSONString(memItem1_1),
-		RLinkedLen: 2,
+		RKey:          "item1",
+		RValue:        util.ToJSONString(item1_2),
+		RGroupKeyList: "txn2",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(5 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(6 * time.Second),
+		RVersion:      "2",
+		RPrev:         util.ToJSONString(memItem1_1),
+		RLinkedLen:    2,
 	}
 
 	item1_3 := testutil.NewTestItem("item1_3")
 	memItem1_3 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(item1_3),
-		RTxnId:     "txn3",
-		RTxnState:  config.COMMITTED,
-		RTValid:    time.Now().Add(10 * time.Second).UnixMicro(),
-		RTLease:    time.Now().Add(11 * time.Second),
-		RVersion:   "3",
-		RPrev:      util.ToJSONString(memItem1_2),
-		RLinkedLen: 3,
+		RKey:          "item1",
+		RValue:        util.ToJSONString(item1_3),
+		RGroupKeyList: "txn3",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(11 * time.Second),
+		RVersion:      "3",
+		RPrev:         util.ToJSONString(memItem1_2),
+		RLinkedLen:    3,
 	}
 
 	t.Run("read will fail due to MaxRecordLength=2", func(t *testing.T) {
@@ -1262,26 +1262,26 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 
 		tarItem := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
-			RTxnId:     "99",
-			RTxnState:  config.COMMITTED,
-			RTValid:    time.Now().Add(-10 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-9 * time.Second),
-			RLinkedLen: 1,
-			RVersion:   "1",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+			RGroupKeyList: "99",
+			RTxnState:     config.COMMITTED,
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-9 * time.Second),
+			RLinkedLen:    1,
+			RVersion:      "1",
 		}
 
 		curItem := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:     "100",
-			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RPrev:      util.ToJSONString(tarItem),
-			RLinkedLen: 2,
-			RVersion:   "2",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RGroupKeyList: "100",
+			RTxnState:     config.PREPARED,
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-4 * time.Second),
+			RPrev:         util.ToJSONString(tarItem),
+			RLinkedLen:    2,
+			RVersion:      "2",
 		}
 
 		conn.PutItem(tarItem.Key(), curItem)
@@ -1316,13 +1316,13 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 
 		tarItem := &redis.RedisItem{
-			RKey:      "item1",
-			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:    "99",
-			RTxnState: config.PREPARED,
-			RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-			RTLease:   time.Now().Add(-9 * time.Second),
-			RVersion:  "1",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RGroupKeyList: "99",
+			RTxnState:     config.PREPARED,
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-9 * time.Second),
+			RVersion:      "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1364,26 +1364,26 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 
 		tarItem := &redis.RedisItem{
-			RKey:       "item2",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item2-pre2")),
-			RTxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
-			RTxnState:  config.COMMITTED,
-			RTValid:    time.Now().Add(-10 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-9 * time.Second),
-			RLinkedLen: 1,
-			RVersion:   "1",
+			RKey:          "item2",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item2-pre2")),
+			RGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
+			RTxnState:     config.COMMITTED,
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-9 * time.Second),
+			RLinkedLen:    1,
+			RVersion:      "1",
 		}
 
 		curItem := &redis.RedisItem{
-			RKey:       "item2",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item2-pre")),
-			RTxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
-			RTxnState:  config.PREPARED,
-			RTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-4 * time.Second),
-			RLinkedLen: 2,
-			RVersion:   "2",
-			RPrev:      util.ToJSONString(tarItem),
+			RKey:          "item2",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item2-pre")),
+			RGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			RTxnState:     config.PREPARED,
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-4 * time.Second),
+			RLinkedLen:    2,
+			RVersion:      "2",
+			RPrev:         util.ToJSONString(tarItem),
 		}
 
 		conn.PutItem(curItem.Key(), curItem)
@@ -1423,13 +1423,13 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 
 		tarItem := &redis.RedisItem{
-			RKey:      "item1",
-			RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:    "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
-			RTxnState: config.PREPARED,
-			RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-			RTLease:   time.Now().Add(-9 * time.Second),
-			RVersion:  "1",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			RTxnState:     config.PREPARED,
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-9 * time.Second),
+			RVersion:      "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1470,13 +1470,13 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 	conn := NewDefaultRedisConnection()
 
 	tarItem := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		RTxnId:    "TestDirectWriteOnPreparingRecord",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(2 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(1 * time.Second),
-		RVersion:  "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		RGroupKeyList: "TestDirectWriteOnPreparingRecord",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(2 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(1 * time.Second),
+		RVersion:      "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1494,14 +1494,14 @@ func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 	conn := NewDefaultRedisConnection()
 
 	dbItem1 := &redis.RedisItem{
-		RKey:       "item1",
-		RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
-		RTxnId:     "TestDirectWriteOnInvisibleRecord1",
-		RTxnState:  config.COMMITTED,
-		RTValid:    time.Now().Add(3 * time.Second).UnixMicro(),
-		RTLease:    time.Now().Add(4 * time.Second),
-		RLinkedLen: 1,
-		RVersion:   "2",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		RGroupKeyList: "TestDirectWriteOnInvisibleRecord1",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(3 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(4 * time.Second),
+		RLinkedLen:    1,
+		RVersion:      "2",
 	}
 	conn.PutItem(dbItem1.Key(), dbItem1)
 
@@ -1528,23 +1528,23 @@ func TestDirectWriteOnDeletedRecord(t *testing.T) {
 func TestRollbackWhenReading(t *testing.T) {
 
 	item1Pre := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		RTxnId:    "TestRollback",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		RGroupKeyList: "TestRollback",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-9 * time.Second),
+		RVersion:      "1",
 	}
 
 	item1 := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		RTxnId:    "TestRollback",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-4 * time.Second),
-		RVersion:  "2",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		RGroupKeyList: "TestRollback",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-4 * time.Second),
+		RVersion:      "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when reading", func(t *testing.T) {
@@ -1593,23 +1593,23 @@ func TestRollbackWhenReading(t *testing.T) {
 
 func TestRollbackWhenWriting(t *testing.T) {
 	item1Pre := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		RTxnId:    "TestRollback",
-		RTxnState: config.COMMITTED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		RGroupKeyList: "TestRollback",
+		RTxnState:     config.COMMITTED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-9 * time.Second),
+		RVersion:      "1",
 	}
 
 	item1 := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		RTxnId:    "TestRollback",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-4 * time.Second),
-		RVersion:  "2",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		RGroupKeyList: "TestRollback",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-4 * time.Second),
+		RVersion:      "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when writing", func(t *testing.T) {
@@ -1681,13 +1681,13 @@ func TestRollForwardWhenReading(t *testing.T) {
 	conn := NewDefaultRedisConnection()
 
 	tarItem := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		RTxnId:    "TestRollForward",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		RGroupKeyList: "TestRollForward",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-9 * time.Second),
+		RVersion:      "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1714,13 +1714,13 @@ func TestRollForwardWhenWriting(t *testing.T) {
 	conn := NewDefaultRedisConnection()
 
 	tarItem := &redis.RedisItem{
-		RKey:      "item1",
-		RValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		RTxnId:    "TestRollForward",
-		RTxnState: config.PREPARED,
-		RTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		RTLease:   time.Now().Add(-9 * time.Second),
-		RVersion:  "1",
+		RKey:          "item1",
+		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		RGroupKeyList: "TestRollForward",
+		RTxnState:     config.PREPARED,
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		RTLease:       time.Now().Add(-9 * time.Second),
+		RVersion:      "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1748,14 +1748,14 @@ func TestItemVersionUpdate(t *testing.T) {
 	t.Run("item version ++ after updated", func(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 		dbItem := &redis.RedisItem{
-			RKey:       "item1",
-			RValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			RTxnId:     "TestItemVersionUpdate",
-			RTxnState:  config.COMMITTED,
-			RTValid:    time.Now().Add(-10 * time.Second).UnixMicro(),
-			RTLease:    time.Now().Add(-9 * time.Second),
-			RLinkedLen: 1,
-			RVersion:   "1",
+			RKey:          "item1",
+			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			RGroupKeyList: "TestItemVersionUpdate",
+			RTxnState:     config.COMMITTED,
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+			RTLease:       time.Now().Add(-9 * time.Second),
+			RLinkedLen:    1,
+			RVersion:      "1",
 		}
 		conn.PutItem(dbItem.Key(), dbItem)
 

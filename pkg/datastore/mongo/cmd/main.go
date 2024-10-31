@@ -33,15 +33,15 @@ func main() {
 
 	now := time.Now()
 	mongoItem := &mong.MongoItem{
-		MKey:       "test_key",
-		MValue:     "test_value",
-		MTxnId:     "1",
-		MTxnState:  1,
-		MTValid:    now.Add(-3 * time.Second).UnixMicro(),
-		MTLease:    now.Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          "test_key",
+		MValue:        "test_value",
+		MGroupKeyList: "1",
+		MTxnState:     1,
+		MTValid:       now.Add(-3 * time.Second).UnixMicro(),
+		MTLease:       now.Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 
 	keyFilter := bson.D{{Key: "TxnId", Value: "1"}}

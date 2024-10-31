@@ -26,15 +26,15 @@ func main() {
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
 	expectedItem := red.NewRedisItem(txn.ItemOptions{
-		Key:       key,
-		Value:     util.ToJSONString(expectedValue),
-		TxnId:     "1",
-		TxnState:  config.COMMITTED,
-		TValid:    time.Now().Add(-3 * time.Second).UnixMicro(),
-		TLease:    time.Now().Add(-2 * time.Second),
-		Prev:      "",
-		IsDeleted: false,
-		Version:   "2",
+		Key:          key,
+		Value:        util.ToJSONString(expectedValue),
+		GroupKeyList: "1",
+		TxnState:     config.COMMITTED,
+		TValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		TLease:       time.Now().Add(-2 * time.Second),
+		Prev:         "",
+		IsDeleted:    false,
+		Version:      "2",
 	})
 	_, err := conn.PutItem(key, expectedItem)
 	if err != nil {

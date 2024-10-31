@@ -15,30 +15,30 @@ import (
 var _ txn.DataItem = (*MongoItem)(nil)
 
 type MongoItem struct {
-	MKey       string       `bson:"_id" json:"Key"`
-	MValue     string       `bson:"Value" json:"Value"`
-	MTxnId     string       `bson:"TxnId" json:"TxnId"`
-	MTxnState  config.State `bson:"TxnState" json:"TxnState"`
-	MTValid    int64        `bson:"TValid" json:"TValid"`
-	MTLease    time.Time    `bson:"TLease" json:"TLease"`
-	MPrev      string       `bson:"Prev" json:"Prev"`
-	MLinkedLen int          `bson:"LinkedLen" json:"LinkedLen"`
-	MIsDeleted bool         `bson:"IsDeleted" json:"IsDeleted"`
-	MVersion   string       `bson:"Version" json:"Version"`
+	MKey          string       `bson:"_id" json:"Key"`
+	MValue        string       `bson:"Value" json:"Value"`
+	MGroupKeyList string       `bson:"GroupKeyList" json:"GroupKeyList"`
+	MTxnState     config.State `bson:"TxnState" json:"TxnState"`
+	MTValid       int64        `bson:"TValid" json:"TValid"`
+	MTLease       time.Time    `bson:"TLease" json:"TLease"`
+	MPrev         string       `bson:"Prev" json:"Prev"`
+	MLinkedLen    int          `bson:"LinkedLen" json:"LinkedLen"`
+	MIsDeleted    bool         `bson:"IsDeleted" json:"IsDeleted"`
+	MVersion      string       `bson:"Version" json:"Version"`
 }
 
 func NewMongoItem(options txn.ItemOptions) *MongoItem {
 	return &MongoItem{
-		MKey:       options.Key,
-		MValue:     options.Value,
-		MTxnId:     options.TxnId,
-		MTxnState:  options.TxnState,
-		MTValid:    options.TValid,
-		MTLease:    options.TLease,
-		MPrev:      options.Prev,
-		MLinkedLen: options.LinkedLen,
-		MIsDeleted: options.IsDeleted,
-		MVersion:   options.Version,
+		MKey:          options.Key,
+		MValue:        options.Value,
+		MGroupKeyList: options.GroupKeyList,
+		MTxnState:     options.TxnState,
+		MTValid:       options.TValid,
+		MTLease:       options.TLease,
+		MPrev:         options.Prev,
+		MLinkedLen:    options.LinkedLen,
+		MIsDeleted:    options.IsDeleted,
+		MVersion:      options.Version,
 	}
 }
 
@@ -54,8 +54,12 @@ func (m *MongoItem) SetValue(value string) {
 	m.MValue = value
 }
 
-func (m *MongoItem) TxnId() string {
-	return m.MTxnId
+func (m *MongoItem) GroupKeyList() string {
+	return m.MGroupKeyList
+}
+
+func (m *MongoItem) SetGroupKeyList(groupKeyList string) {
+	m.MGroupKeyList = groupKeyList
 }
 
 func (m *MongoItem) TxnState() config.State {
@@ -126,14 +130,14 @@ func (r MongoItem) String() string {
 	LinkedLen: %d,
     IsDeleted: %v,
     Version:   %s,
-}`, r.MKey, r.MValue, r.MTxnId, util.ToString(r.MTxnState),
+}`, r.MKey, r.MValue, r.MGroupKeyList, util.ToString(r.MTxnState),
 		r.MTValid, r.MTLease.Format(time.RFC3339),
 		r.MPrev, r.MLinkedLen, r.MIsDeleted, r.MVersion)
 }
 
 func (r *MongoItem) Empty() bool {
 	return r.MKey == "" && r.MValue == "" &&
-		r.MTxnId == "" && r.MTxnState == config.State(0) &&
+		r.MGroupKeyList == "" && r.MTxnState == config.State(0) &&
 		r.MTValid == 0 && r.MTLease.IsZero() &&
 		r.MPrev == "" && r.MLinkedLen == 0 &&
 		!r.MIsDeleted && r.MVersion == ""
@@ -142,7 +146,7 @@ func (r *MongoItem) Empty() bool {
 func (r *MongoItem) Equal(other txn.DataItem) bool {
 	return r.MKey == other.Key() &&
 		r.MValue == other.Value() &&
-		r.MTxnId == other.TxnId() &&
+		r.MGroupKeyList == other.GroupKeyList() &&
 		r.MTxnState == other.TxnState() &&
 		r.MTValid == other.TValid() &&
 		r.MTLease.Equal(other.TLease()) &&
@@ -158,16 +162,16 @@ func (mi MongoItem) MarshalBinary() (data []byte, err error) {
 
 func (mi MongoItem) MarshalBSONValue() (bsontype.Type, []byte, error) {
 	m := bson.M{
-		"Key":       mi.MKey,
-		"Value":     mi.MValue,
-		"TxnId":     mi.MTxnId,
-		"TxnState":  mi.MTxnState,
-		"TValid":    mi.MTValid,
-		"TLease":    mi.MTLease.Format(time.RFC3339Nano),
-		"Prev":      mi.MPrev,
-		"LinkedLen": mi.MLinkedLen,
-		"IsDeleted": mi.MIsDeleted,
-		"Version":   mi.MVersion,
+		"Key":          mi.MKey,
+		"Value":        mi.MValue,
+		"GroupKeyList": mi.MGroupKeyList,
+		"TxnState":     mi.MTxnState,
+		"TValid":       mi.MTValid,
+		"TLease":       mi.MTLease.Format(time.RFC3339Nano),
+		"Prev":         mi.MPrev,
+		"LinkedLen":    mi.MLinkedLen,
+		"IsDeleted":    mi.MIsDeleted,
+		"Version":      mi.MVersion,
 	}
 	return bson.MarshalValue(m)
 }
@@ -186,8 +190,8 @@ func (mi *MongoItem) UnmarshalBSONValue(t bsontype.Type, raw []byte) error {
 	if value, ok := m["Value"]; ok {
 		mi.MValue = value.(string)
 	}
-	if value, ok := m["TxnId"]; ok {
-		mi.MTxnId = value.(string)
+	if value, ok := m["GroupKeyList"]; ok {
+		mi.MGroupKeyList = value.(string)
 	}
 	if value, ok := m["TxnState"]; ok {
 		mi.MTxnState = config.State(value.(int32))

@@ -41,4 +41,7 @@ type Datastorer interface {
 	SetTxn(txn *Transaction)
 
 	Copy() Datastorer
+
+	// GetConn returns the connection of the data store.
+	GetConn() Connector
 }

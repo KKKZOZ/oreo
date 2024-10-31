@@ -183,7 +183,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	update := bson.D{
 		{Key: "$set", Value: bson.D{
 			{Key: "Value", Value: value.Value()},
-			{Key: "TxnId", Value: value.TxnId()},
+			{Key: "GroupKeyList", Value: value.GroupKeyList()},
 			{Key: "TxnState", Value: value.TxnState()},
 			{Key: "TValid", Value: value.TValid()},
 			{Key: "TLease", Value: value.TLease().Format(time.RFC3339Nano)},
@@ -298,7 +298,7 @@ func (m *MongoConnection) atomicCreateMongoItem(key string, value txn.DataItem) 
 			_, err := m.coll.InsertOne(context.Background(), bson.D{
 				{Key: "_id", Value: key},
 				{Key: "Value", Value: value.Value()},
-				{Key: "TxnId", Value: value.TxnId()},
+				{Key: "GroupKeyList", Value: value.GroupKeyList()},
 				{Key: "TxnState", Value: value.TxnState()},
 				{Key: "TValid", Value: value.TValid()},
 				{Key: "TLease", Value: value.TLease().Format(time.RFC3339Nano)},
