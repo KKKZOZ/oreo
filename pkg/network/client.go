@@ -142,6 +142,7 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 	req.Header.Set("Content-Type", "application/json")
 
 	debugMsg := fmt.Sprintf("HttpClient.Do(Prepare) in %v", dsName)
+	logger.Log.Debugw("Before "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	resp, err := HttpClient.Do(req)
 	logger.Log.Debugw("After "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	if err != nil {

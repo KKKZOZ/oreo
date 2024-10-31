@@ -246,7 +246,7 @@ func (r *RedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
-	logger.Log.Debugw("Start  ConditionalUpdate", "DataItem", value, "doCreate", doCreate, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
+	// logger.Log.Debugw("Start  ConditionalUpdate", "DataItem", value, "doCreate", doCreate, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	defer func() {
 		logger.Log.Debugw("End    ConditionalUpdate", "key", key, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	}()

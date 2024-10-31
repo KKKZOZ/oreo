@@ -285,6 +285,8 @@ func (t *Transaction) commitInCherryGarcia() error {
 		return fmt.Errorf("failed to get time: %v", err)
 	}
 
+	Log.Debugw("Finish obtaining commit time", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+
 	success := true
 	var cause error
 	mu := sync.Mutex{}
@@ -324,7 +326,7 @@ func (t *Transaction) commitInCherryGarcia() error {
 		t.Abort()
 		return fmt.Errorf("transaction is aborted by other transaction when creating group keys, successNum: %d, len(t.GroupKeyUrls): %d", successNum, len(t.GroupKeyUrls))
 	}
-	Log.Debugw("GroypKey created", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+	Log.Debugw("GroupKey created", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
@@ -368,7 +370,7 @@ func (t *Transaction) commitInOreo() error {
 		}
 	}
 
-	Log.Infow("Starting to make ds.Prepare()", "txnId", t.TxnId, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
+	Log.Infow("Starting to call ds.Prepare()", "txnId", t.TxnId, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 
 	var wg = sync.WaitGroup{}
 	for _, ds := range t.dataStoreMap {
@@ -389,15 +391,8 @@ func (t *Transaction) commitInOreo() error {
 
 	t.TxnCommitTime = tCommit
 
-	// successNum := t.CreateGroupKeyFromUrls(t.GroupKeyUrls, config.COMMITTED)
-	// if successNum != len(t.GroupKeyUrls) {
-	// 	go t.Abort()
-	// 	return fmt.Errorf("transaction is aborted by other transaction when creating group keys, successNum: %d, len(t.GroupKeyUrls): %d", successNum, len(t.GroupKeyUrls))
-	// }
-	// Log.Debugw("GroupKey created", "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
-
 	go func() {
-		Log.Infow("Starting to make ds.Commit()", "txnId", t.TxnId)
+		Log.Infow("Starting to call ds.Commit()", "txnId", t.TxnId)
 		var wg = sync.WaitGroup{}
 		for _, ds := range t.dataStoreMap {
 			wg.Add(1)
@@ -456,30 +451,30 @@ func (t *Transaction) Abort() error {
 // }
 
 func (t *Transaction) CreateGroupKeyFromItem(item DataItem, txnState config.State) int {
-	if config.Debug.DebugMode {
-		time.Sleep(config.GetMaxDebugLatency())
-	}
+	// if config.Debug.DebugMode {
+	// 	time.Sleep(config.GetMaxDebugLatency())
+	// }
 	return t.groupKeyMaintainer.CreateGroupKeyList(item, txnState)
 }
 
 func (t *Transaction) CreateGroupKeyFromUrls(urls []string, txnState config.State) int {
-	if config.Debug.DebugMode {
-		time.Sleep(config.GetMaxDebugLatency())
-	}
+	// if config.Debug.DebugMode {
+	// 	time.Sleep(config.GetMaxDebugLatency())
+	// }
 	return t.groupKeyMaintainer.CreateGroupKey(urls, txnState)
 }
 
 func (t *Transaction) DeleteGroupKeyListFromItem(item DataItem) error {
-	if config.Debug.DebugMode {
-		time.Sleep(config.GetMaxDebugLatency())
-	}
+	// if config.Debug.DebugMode {
+	// 	time.Sleep(config.GetMaxDebugLatency())
+	// }
 	return t.groupKeyMaintainer.DeleteGroupKeyList(item)
 }
 
 func (t *Transaction) DeleteGroupKeyFromUrls(urls []string) error {
-	if config.Debug.DebugMode {
-		time.Sleep(config.GetMaxDebugLatency())
-	}
+	// if config.Debug.DebugMode {
+	// 	time.Sleep(config.GetMaxDebugLatency())
+	// }
 	return t.groupKeyMaintainer.DeleteGroupKey(urls)
 }
 
@@ -491,9 +486,9 @@ func (t *Transaction) GetGroupKeyFromItem(item DataItem) ([]GroupKey, error) {
 }
 
 func (t *Transaction) GetGroupKeyFromUrls(urls []string) ([]GroupKey, error) {
-	if config.Debug.DebugMode {
-		time.Sleep(config.GetMaxDebugLatency())
-	}
+	// if config.Debug.DebugMode {
+	// 	time.Sleep(config.GetMaxDebugLatency())
+	// }
 	return t.groupKeyMaintainer.GetGroupKey(urls)
 }
 
@@ -550,6 +545,7 @@ func (t *Transaction) RemoteCommit(dsName string, infoList []CommitInfo) error {
 	if !t.isRemote {
 		return errors.New("not a remote transaction")
 	}
+	Log.Debugw("RemoteCommit", "infoList", infoList, "t.TxnCommitTime", t.TxnCommitTime)
 	return t.client.Commit(dsName, infoList, t.TxnCommitTime)
 }
 

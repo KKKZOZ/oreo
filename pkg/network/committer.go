@@ -143,7 +143,7 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	if len(itemList) > 0 {
 		txnId := strings.Split(itemList[0].GroupKeyList(), ":")[1]
 		url := dsName + ":" + txnId
-		err = c.reader.createSingleGroupKey(url, config.COMMITTED)
+		err = c.reader.createSingleGroupKey(url, config.COMMITTED, tCommit)
 		if err != nil {
 			return nil, tCommit, fmt.Errorf("failed to create the group key: %v", err)
 		}
@@ -329,7 +329,7 @@ func (c *Committer) rollbackFromConn(dsName string, key string) error {
 	// }
 
 	if item.TLease().Before(time.Now()) {
-		successNum := c.reader.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED)
+		successNum := c.reader.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED, 0)
 		if successNum == 0 {
 			return fmt.Errorf("failed to rollback the record because none of the group keys are created")
 		}
