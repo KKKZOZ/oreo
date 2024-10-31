@@ -58,8 +58,6 @@ type debug struct {
 	HTTPAdditionalLatency time.Duration
 
 	ConnAdditionalLatency time.Duration
-
-	TimeOracleAdditionalLatency time.Duration
 }
 
 type config struct {
@@ -109,11 +107,18 @@ var Config = config{
 }
 
 var Debug = debug{
-	DebugMode:                   false,
-	CherryGarciaMode:            false,
-	HTTPAdditionalLatency:       0,
-	ConnAdditionalLatency:       0,
-	TimeOracleAdditionalLatency: 0,
+	DebugMode:             false,
+	CherryGarciaMode:      false,
+	HTTPAdditionalLatency: 0,
+	ConnAdditionalLatency: 0,
+}
+
+func GetMaxDebugLatency() time.Duration {
+	if Debug.HTTPAdditionalLatency > Debug.ConnAdditionalLatency {
+		return Debug.HTTPAdditionalLatency
+	} else {
+		return Debug.ConnAdditionalLatency
+	}
 }
 
 type State int

@@ -562,24 +562,24 @@ func TestMongo_ConcurrentTransaction(t *testing.T) {
 // the redis item has been updated to the committed state.
 func TestMongo_SimpleExpiredRead(t *testing.T) {
 	tarMemItem := &mongo.MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		MTxnId:    "TestMongo_SimpleExpiredRead1",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second).UnixMicro(),
-		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		MGroupKeyList: "TestMongo_SimpleExpiredRead1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
+		MTLease:       time.Now().Add(-9 * time.Second),
+		MVersion:      "1",
 	}
 
 	curMemItem := &mongo.MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		MTxnId:    "TestMongo_SimpleExpiredRead2",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-		MTLease:   time.Now().Add(-4 * time.Second),
-		MPrev:     util.ToJSONString(tarMemItem),
-		MVersion:  "2",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		MGroupKeyList: "TestMongo_SimpleExpiredRead2",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		MTLease:       time.Now().Add(-4 * time.Second),
+		MPrev:         util.ToJSONString(tarMemItem),
+		MVersion:      "2",
 	}
 
 	conn := NewConnectionWithSetup(MONGO)
@@ -1012,25 +1012,25 @@ func TestMongo_RollbackConflict(t *testing.T) {
 		conn := NewConnectionWithSetup(MONGO)
 
 		redisItem1 := &mongo.MongoItem{
-			MKey:       "item1",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			MTxnId:     "TestMongo_RollbackConflict1",
-			MTxnState:  config.COMMITTED,
-			MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			MTLease:    time.Now().Add(-4 * time.Second),
-			MLinkedLen: 1,
-			MVersion:   "1",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			MGroupKeyList: "TestMongo_RollbackConflict1",
+			MTxnState:     config.COMMITTED,
+			MTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			MTLease:       time.Now().Add(-4 * time.Second),
+			MLinkedLen:    1,
+			MVersion:      "1",
 		}
 		redisItem2 := &mongo.MongoItem{
-			MKey:       "item1",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			MTxnId:     "TestMongo_RollbackConflict2",
-			MTxnState:  config.PREPARED,
-			MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			MTLease:    time.Now().Add(-4 * time.Second),
-			MPrev:      util.ToJSONString(redisItem1),
-			MLinkedLen: 2,
-			MVersion:   "2",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			MGroupKeyList: "TestMongo_RollbackConflict2",
+			MTxnState:     config.PREPARED,
+			MTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			MTLease:       time.Now().Add(-4 * time.Second),
+			MPrev:         util.ToJSONString(redisItem1),
+			MLinkedLen:    2,
+			MVersion:      "2",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1075,15 +1075,15 @@ func TestMongo_RollbackConflict(t *testing.T) {
 		conn := NewConnectionWithSetup(MONGO)
 
 		redisItem2 := &mongo.MongoItem{
-			MKey:       "item1",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-			MTxnId:     "TestMongo_RollbackConflict2-emptyField",
-			MTxnState:  config.PREPARED,
-			MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-			MTLease:    time.Now().Add(-4 * time.Second),
-			MPrev:      "",
-			MLinkedLen: 1,
-			MVersion:   "1",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-broken")),
+			MGroupKeyList: "TestMongo_RollbackConflict2-emptyField",
+			MTxnState:     config.PREPARED,
+			MTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			MTLease:       time.Now().Add(-4 * time.Second),
+			MPrev:         "",
+			MLinkedLen:    1,
+			MVersion:      "1",
 		}
 		conn.PutItem("item1", redisItem2)
 
@@ -1132,24 +1132,24 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 	conn := NewConnectionWithSetup(MONGO)
 
 	redisItem1 := &mongo.MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		MTxnId:    "TestMongo_RollForwardConflict1",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-		MTLease:   time.Now().Add(-4 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		MGroupKeyList: "TestMongo_RollForwardConflict1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		MTLease:       time.Now().Add(-4 * time.Second),
+		MVersion:      "1",
 	}
 	redisItem2 := &mongo.MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(testutil.NewTestItem("item1-broken")),
-		MTxnId:     "TestMongo_RollForwardConflict2",
-		MTxnState:  config.PREPARED,
-		MTValid:    time.Now().Add(-5 * time.Second).UnixMicro(),
-		MTLease:    time.Now().Add(-4 * time.Second),
-		MPrev:      util.ToJSONString(redisItem1),
-		MLinkedLen: 2,
-		MVersion:   "2",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-broken")),
+		MGroupKeyList: "TestMongo_RollForwardConflict2",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+		MTLease:       time.Now().Add(-4 * time.Second),
+		MPrev:         util.ToJSONString(redisItem1),
+		MLinkedLen:    2,
+		MVersion:      "2",
 	}
 	conn.PutItem("item1", redisItem2)
 	conn.Put("TestMongo_RollForwardConflict2", config.COMMITTED)
@@ -1487,13 +1487,13 @@ func TestMongo_DeleteTimingProblems(t *testing.T) {
 	t.Run("the item has an empty Prev field", func(t *testing.T) {
 		testConn := NewConnectionWithSetup(MONGO)
 		dbItem := &mongo.MongoItem{
-			MKey:      "item1",
-			MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			MTxnId:    "TestMongo_DeleteTimingProblems",
-			MTxnState: config.COMMITTED,
-			MTValid:   time.Now().Add(-5 * time.Second).UnixMicro(),
-			MTLease:   time.Now().Add(-4 * time.Second),
-			MVersion:  "1",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			MGroupKeyList: "TestMongo_DeleteTimingProblems",
+			MTxnState:     config.COMMITTED,
+			MTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
+			MTLease:       time.Now().Add(-4 * time.Second),
+			MVersion:      "1",
 		}
 		testConn.PutItem("item1", dbItem)
 

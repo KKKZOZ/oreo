@@ -81,15 +81,15 @@ func TestMongoConnectionPutItemAndGetItem(t *testing.T) {
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
 	expectedItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(expectedValue),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(expectedValue),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 
 	_, err = conn.PutItem(key, expectedItem)
@@ -110,15 +110,15 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
 	olderItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(olderPerson),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(olderPerson),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 
 	_, err := conn.PutItem(key, olderItem)
@@ -127,15 +127,15 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(newerPerson),
-		MTxnId:     "2",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-1 * time.Second),
-		MTLease:    time.Now().Add(1 * time.Second),
-		MPrev:      util.ToJSONString(olderItem),
-		MIsDeleted: false,
-		MVersion:   "3",
+		MKey:          key,
+		MValue:        util.ToJSONString(newerPerson),
+		MGroupKeyList: "2",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-1 * time.Second),
+		MTLease:       time.Now().Add(1 * time.Second),
+		MPrev:         util.ToJSONString(olderItem),
+		MIsDeleted:    false,
+		MVersion:      "3",
 	}
 
 	_, err = conn.PutItem(key, newerItem)
@@ -155,15 +155,15 @@ func TestMongoConnection_DeleteItem(t *testing.T) {
 	key := "test_key_for_delete"
 	person := testutil.NewDefaultPerson()
 	item := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(person),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(person),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 	_, err := conn.PutItem(key, item)
 	assert.NoError(t, err)
@@ -205,15 +205,15 @@ func TestMongoConnection_ConditionalUpdateSuccess(t *testing.T) {
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
 	olderItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(olderPerson),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(olderPerson),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
@@ -221,15 +221,15 @@ func TestMongoConnection_ConditionalUpdateSuccess(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(newerPerson),
-		MTxnId:     "2",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-2 * time.Second),
-		MTLease:    time.Now().Add(-1 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(newerPerson),
+		MGroupKeyList: "2",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-2 * time.Second),
+		MTLease:       time.Now().Add(-1 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 
 	_, err = conn.ConditionalUpdate(key, newerItem, false)
@@ -253,15 +253,15 @@ func TestMongoConnection_ConditionalUpdateFail(t *testing.T) {
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
 	olderItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(olderPerson),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(olderPerson),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 	_, err := conn.PutItem(key, olderItem)
 	assert.NoError(t, err)
@@ -269,15 +269,15 @@ func TestMongoConnection_ConditionalUpdateFail(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(olderPerson),
-		MTxnId:     "2",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-2 * time.Second),
-		MTLease:    time.Now().Add(-1 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "3",
+		MKey:          key,
+		MValue:        util.ToJSONString(olderPerson),
+		MGroupKeyList: "2",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-2 * time.Second),
+		MTLease:       time.Now().Add(-1 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "3",
 	}
 
 	_, err = conn.ConditionalUpdate(key, newerItem, false)
@@ -299,15 +299,15 @@ func TestMongoConnection_ConditionalUpdateNonExist(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(newerPerson),
-		MTxnId:     "2",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-2 * time.Second),
-		MTLease:    time.Now().Add(-1 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "1",
+		MKey:          key,
+		MValue:        util.ToJSONString(newerPerson),
+		MGroupKeyList: "2",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-2 * time.Second),
+		MTLease:       time.Now().Add(-1 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "1",
 	}
 
 	_, err := conn.ConditionalUpdate(key, newerItem, true)
@@ -330,15 +330,15 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 		key := "test_key"
 		olderPerson := testutil.NewDefaultPerson()
 		olderItem := &MongoItem{
-			MKey:       key,
-			MValue:     util.ToJSONString(olderPerson),
-			MTxnId:     "1",
-			MTxnState:  config.COMMITTED,
-			MTValid:    time.Now().Add(-3 * time.Second),
-			MTLease:    time.Now().Add(-2 * time.Second),
-			MPrev:      "",
-			MIsDeleted: false,
-			MVersion:   "2",
+			MKey:          key,
+			MValue:        util.ToJSONString(olderPerson),
+			MGroupKeyList: "1",
+			MTxnState:     config.COMMITTED,
+			MTValid:       time.Now().Add(-3 * time.Second),
+			MTLease:       time.Now().Add(-2 * time.Second),
+			MPrev:         "",
+			MIsDeleted:    false,
+			MVersion:      "2",
 		}
 		_, err := conn.PutItem(key, olderItem)
 		assert.NoError(t, err)
@@ -351,15 +351,15 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 				newerPerson := testutil.NewDefaultPerson()
 				newerPerson.Name = "newer"
 				newerItem := &MongoItem{
-					MKey:       key,
-					MValue:     util.ToJSONString(newerPerson),
-					MTxnId:     strconv.Itoa(id),
-					MTxnState:  config.COMMITTED,
-					MTValid:    time.Now().Add(-2 * time.Second),
-					MTLease:    time.Now().Add(-1 * time.Second),
-					MPrev:      "",
-					MIsDeleted: false,
-					MVersion:   "2",
+					MKey:          key,
+					MValue:        util.ToJSONString(newerPerson),
+					MGroupKeyList: strconv.Itoa(id),
+					MTxnState:     config.COMMITTED,
+					MTValid:       time.Now().Add(-2 * time.Second),
+					MTLease:       time.Now().Add(-1 * time.Second),
+					MPrev:         "",
+					MIsDeleted:    false,
+					MVersion:      "2",
 				}
 
 				_, err = conn.ConditionalUpdate(key, newerItem, false)
@@ -401,15 +401,15 @@ func TestMongoConnection_ConditionalUpdateConcurrently(t *testing.T) {
 				newerPerson := testutil.NewDefaultPerson()
 				newerPerson.Name = "newer"
 				newerItem := &MongoItem{
-					MKey:       key,
-					MValue:     util.ToJSONString(newerPerson),
-					MTxnId:     strconv.Itoa(id),
-					MTxnState:  config.COMMITTED,
-					MTValid:    time.Now().Add(-2 * time.Second),
-					MTLease:    time.Now().Add(-1 * time.Second),
-					MPrev:      "",
-					MIsDeleted: false,
-					MVersion:   "2",
+					MKey:          key,
+					MValue:        util.ToJSONString(newerPerson),
+					MGroupKeyList: strconv.Itoa(id),
+					MTxnState:     config.COMMITTED,
+					MTValid:       time.Now().Add(-2 * time.Second),
+					MTLease:       time.Now().Add(-1 * time.Second),
+					MPrev:         "",
+					MIsDeleted:    false,
+					MVersion:      "2",
 				}
 
 				_, err := conn.ConditionalUpdate(key, newerItem, true)
@@ -460,15 +460,15 @@ func TestMongoConnection_PutAndGet(t *testing.T) {
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
 	item := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(person),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(person),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 	bs, err := se.Serialize(item)
 	assert.NoError(t, err)
@@ -493,15 +493,15 @@ func TestMongoConnection_ReplaceAndGet(t *testing.T) {
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
 	item := &MongoItem{
-		MKey:       key,
-		MValue:     util.ToJSONString(person),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MVersion:   "2",
+		MKey:          key,
+		MValue:        util.ToJSONString(person),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MVersion:      "2",
 	}
 	bs, err := se.Serialize(item)
 	assert.NoError(t, err)
@@ -545,7 +545,7 @@ func TestMongoConnection_GetNoExist(t *testing.T) {
 // 	item := trxn.DataItem{
 // 		MKey:       key,
 // 		MValue:     util.ToJSONString(person),
-// 		MTxnId:     "1",
+// 		MGroupKeyList:     "1",
 // 		MTxnState:  config.COMMITTED,
 // 		MTValid:    time.Now().Add(-3 * time.Second),
 // 		MTLease:    time.Now().Add(-2 * time.Second),
@@ -581,28 +581,28 @@ func TestMongoConnection_DeleteTwice(t *testing.T) {
 func TestMongoConnection_ConditionalUpdateDoCreate(t *testing.T) {
 
 	dbItem := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(testutil.NewTestItem("item1-db")),
-		MTxnId:     "1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-3 * time.Second),
-		MTLease:    time.Now().Add(-2 * time.Second),
-		MPrev:      "",
-		MIsDeleted: false,
-		MLinkedLen: 1,
-		MVersion:   "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-db")),
+		MGroupKeyList: "1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-2 * time.Second),
+		MPrev:         "",
+		MIsDeleted:    false,
+		MLinkedLen:    1,
+		MVersion:      "1",
 	}
 
 	cacheItem := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(testutil.NewTestItem("item1-cache")),
-		MTxnId:     "2",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-2 * time.Second),
-		MTLease:    time.Now().Add(-1 * time.Second),
-		MPrev:      util.ToJSONString(dbItem),
-		MLinkedLen: 2,
-		MVersion:   "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-cache")),
+		MGroupKeyList: "2",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-2 * time.Second),
+		MTLease:       time.Now().Add(-1 * time.Second),
+		MPrev:         util.ToJSONString(dbItem),
+		MLinkedLen:    2,
+		MVersion:      "1",
 	}
 
 	t.Run("there is no item and doCreate is true ", func(t *testing.T) {

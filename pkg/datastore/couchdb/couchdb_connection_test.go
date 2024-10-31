@@ -81,14 +81,14 @@ func TestMongoConnectionPutItemAndGetItem(t *testing.T) {
 	key := "test_key"
 	expectedValue := testutil.NewDefaultPerson()
 	expectedItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(expectedValue),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
+		CKey:          key,
+		CValue:        util.ToJSONString(expectedValue),
+		CGroupKeyList: "1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-2 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
 		// CVersion:   "1-ba601809ae3e3beb2e05af59242beb43",
 	}
 
@@ -113,14 +113,14 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
 	olderItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(olderPerson),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
+		CKey:          key,
+		CValue:        util.ToJSONString(olderPerson),
+		CGroupKeyList: "1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-2 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
 		// CVersion:   "2-asd",
 	}
 
@@ -130,15 +130,15 @@ func TestMongoConnectionReplaceAndGetItem(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(newerPerson),
-		CTxnId:     "2",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-1 * time.Second),
-		CTLease:    time.Now().Add(1 * time.Second),
-		CPrev:      util.ToJSONString(olderItem),
-		CIsDeleted: false,
-		CVersion:   rev,
+		CKey:          key,
+		CValue:        util.ToJSONString(newerPerson),
+		CGroupKeyList: "2",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-1 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(1 * time.Second),
+		CPrev:         util.ToJSONString(olderItem),
+		CIsDeleted:    false,
+		CVersion:      rev,
 	}
 
 	rev, err = conn.PutItem(key, newerItem)
@@ -159,14 +159,14 @@ func TestCouchDBConnection_DeleteItem(t *testing.T) {
 	key := "test_key_for_delete"
 	person := testutil.NewDefaultPerson()
 	item := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(person),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
+		CKey:          key,
+		CValue:        util.ToJSONString(person),
+		CGroupKeyList: "1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-2 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
 		// CVersion:   "2",
 	}
 	_, err := conn.PutItem(key, item)
@@ -210,14 +210,14 @@ func TestCouchDBConnection_ConditionalUpdateSuccess(t *testing.T) {
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
 	olderItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(olderPerson),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
+		CKey:          key,
+		CValue:        util.ToJSONString(olderPerson),
+		CGroupKeyList: "1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-2 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
 		// CVersion:   "2",
 	}
 	rev, err := conn.PutItem(key, olderItem)
@@ -226,15 +226,15 @@ func TestCouchDBConnection_ConditionalUpdateSuccess(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(newerPerson),
-		CTxnId:     "2",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-2 * time.Second),
-		CTLease:    time.Now().Add(-1 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
-		CVersion:   rev,
+		CKey:          key,
+		CValue:        util.ToJSONString(newerPerson),
+		CGroupKeyList: "2",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-1 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
+		CVersion:      rev,
 	}
 
 	rev, err = conn.ConditionalUpdate(key, newerItem, false)
@@ -258,14 +258,14 @@ func TestCouchDBConnection_ConditionalUpdateFail(t *testing.T) {
 	key := "test_key"
 	olderPerson := testutil.NewDefaultPerson()
 	olderItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(olderPerson),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
+		CKey:          key,
+		CValue:        util.ToJSONString(olderPerson),
+		CGroupKeyList: "1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-2 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
 		// CVersion:   "2",
 	}
 	rev, err := conn.PutItem(key, olderItem)
@@ -275,15 +275,15 @@ func TestCouchDBConnection_ConditionalUpdateFail(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(olderPerson),
-		CTxnId:     "2",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-2 * time.Second),
-		CTLease:    time.Now().Add(-1 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
-		CVersion:   "3",
+		CKey:          key,
+		CValue:        util.ToJSONString(olderPerson),
+		CGroupKeyList: "2",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-1 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
+		CVersion:      "3",
 	}
 
 	_, err = conn.ConditionalUpdate(key, newerItem, false)
@@ -305,14 +305,14 @@ func TestCouchDBConnection_ConditionalUpdateNonExist(t *testing.T) {
 	newerPerson := testutil.NewDefaultPerson()
 	newerPerson.Name = "newer"
 	newerItem := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(newerPerson),
-		CTxnId:     "2",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-2 * time.Second),
-		CTLease:    time.Now().Add(-1 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
+		CKey:          key,
+		CValue:        util.ToJSONString(newerPerson),
+		CGroupKeyList: "2",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-1 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
 		// CVersion:   "1",
 	}
 
@@ -338,14 +338,14 @@ func TestCouchDBConnection_ConditionalUpdateConcurrently(t *testing.T) {
 		key := "test_key"
 		olderPerson := testutil.NewDefaultPerson()
 		olderItem := &CouchDBItem{
-			CKey:       key,
-			CValue:     util.ToJSONString(olderPerson),
-			CTxnId:     "1",
-			CTxnState:  config.COMMITTED,
-			CTValid:    time.Now().Add(-3 * time.Second),
-			CTLease:    time.Now().Add(-2 * time.Second),
-			CPrev:      "",
-			CIsDeleted: false,
+			CKey:          key,
+			CValue:        util.ToJSONString(olderPerson),
+			CGroupKeyList: "1",
+			CTxnState:     config.COMMITTED,
+			CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+			CTLease:       time.Now().Add(-2 * time.Second),
+			CPrev:         "",
+			CIsDeleted:    false,
 			// CVersion:   "2",
 		}
 		rev, err := conn.PutItem(key, olderItem)
@@ -359,15 +359,15 @@ func TestCouchDBConnection_ConditionalUpdateConcurrently(t *testing.T) {
 				newerPerson := testutil.NewDefaultPerson()
 				newerPerson.Name = "newer"
 				newerItem := &CouchDBItem{
-					CKey:       key,
-					CValue:     util.ToJSONString(newerPerson),
-					CTxnId:     strconv.Itoa(id),
-					CTxnState:  config.COMMITTED,
-					CTValid:    time.Now().Add(-2 * time.Second),
-					CTLease:    time.Now().Add(-1 * time.Second),
-					CPrev:      "",
-					CIsDeleted: false,
-					CVersion:   rev,
+					CKey:          key,
+					CValue:        util.ToJSONString(newerPerson),
+					CGroupKeyList: strconv.Itoa(id),
+					CTxnState:     config.COMMITTED,
+					CTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+					CTLease:       time.Now().Add(-1 * time.Second),
+					CPrev:         "",
+					CIsDeleted:    false,
+					CVersion:      rev,
 				}
 
 				_, err = conn.ConditionalUpdate(key, newerItem, false)
@@ -408,14 +408,14 @@ func TestCouchDBConnection_ConditionalUpdateConcurrently(t *testing.T) {
 				newerPerson := testutil.NewDefaultPerson()
 				newerPerson.Name = "newer"
 				newerItem := &CouchDBItem{
-					CKey:       key,
-					CValue:     util.ToJSONString(newerPerson),
-					CTxnId:     strconv.Itoa(id),
-					CTxnState:  config.COMMITTED,
-					CTValid:    time.Now().Add(-2 * time.Second),
-					CTLease:    time.Now().Add(-1 * time.Second),
-					CPrev:      "",
-					CIsDeleted: false,
+					CKey:          key,
+					CValue:        util.ToJSONString(newerPerson),
+					CGroupKeyList: strconv.Itoa(id),
+					CTxnState:     config.COMMITTED,
+					CTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+					CTLease:       time.Now().Add(-1 * time.Second),
+					CPrev:         "",
+					CIsDeleted:    false,
 					// CVersion:   "2",
 				}
 
@@ -469,14 +469,14 @@ func TestCouchDBConnection_PutAndGet(t *testing.T) {
 	key := "test_key"
 	person := testutil.NewDefaultPerson()
 	item := &CouchDBItem{
-		CKey:       key,
-		CValue:     util.ToJSONString(person),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
+		CKey:          key,
+		CValue:        util.ToJSONString(person),
+		CGroupKeyList: "1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-2 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
 		// CVersion:   "2",
 	}
 	bs, err := se.Serialize(item)
@@ -506,7 +506,7 @@ func TestCouchDBConnection_PutAndGet(t *testing.T) {
 // 	item := &CouchDBItem{
 // 		CKey:       key,
 // 		CValue:     util.ToJSONString(person),
-// 		CTxnId:     "1",
+// 		CGroupKeyList:     "1",
 // 		CTxnState:  config.COMMITTED,
 // 		CTValid:    time.Now().Add(-3 * time.Second),
 // 		CTLease:    time.Now().Add(-2 * time.Second),
@@ -556,7 +556,7 @@ func TestCouchDBConnection_GetNoExist(t *testing.T) {
 // 	item := trxn.DataItem{
 // 		CKey:       key,
 // 		CValue:     util.ToJSONString(person),
-// 		CTxnId:     "1",
+// 		CGroupKeyList:     "1",
 // 		CTxnState:  config.COMMITTED,
 // 		CTValid:    time.Now().Add(-3 * time.Second),
 // 		CTLease:    time.Now().Add(-2 * time.Second),
@@ -592,27 +592,27 @@ func TestCouchDBConnection_DeleteTwice(t *testing.T) {
 func TestCouchDBConnection_ConditionalUpdateDoCreate(t *testing.T) {
 
 	dbItem := &CouchDBItem{
-		CKey:       "item1",
-		CValue:     util.ToJSONString(testutil.NewTestItem("item1-db")),
-		CTxnId:     "1",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-3 * time.Second),
-		CTLease:    time.Now().Add(-2 * time.Second),
-		CPrev:      "",
-		CIsDeleted: false,
-		CLinkedLen: 1,
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-db")),
+		CGroupKeyList: "1",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-2 * time.Second),
+		CPrev:         "",
+		CIsDeleted:    false,
+		CLinkedLen:    1,
 		// CVersion:   "1",
 	}
 
 	cacheItem := &CouchDBItem{
-		CKey:       "item1",
-		CValue:     util.ToJSONString(testutil.NewTestItem("item1-cache")),
-		CTxnId:     "2",
-		CTxnState:  config.COMMITTED,
-		CTValid:    time.Now().Add(-2 * time.Second),
-		CTLease:    time.Now().Add(-1 * time.Second),
-		CPrev:      util.ToJSONString(dbItem),
-		CLinkedLen: 2,
+		CKey:          "item1",
+		CValue:        util.ToJSONString(testutil.NewTestItem("item1-cache")),
+		CGroupKeyList: "2",
+		CTxnState:     config.COMMITTED,
+		CTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
+		CTLease:       time.Now().Add(-1 * time.Second),
+		CPrev:         util.ToJSONString(dbItem),
+		CLinkedLen:    2,
 		// CVersion:   "1",
 	}
 

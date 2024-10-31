@@ -7,16 +7,16 @@ import (
 )
 
 type ItemOptions struct {
-	Key       string
-	Value     string
-	TxnId     string
-	TxnState  config.State
-	TValid    int64
-	TLease    time.Time
-	Prev      string
-	LinkedLen int
-	IsDeleted bool
-	Version   string
+	Key          string
+	Value        string
+	GroupKeyList string
+	TxnState     config.State
+	TValid       int64
+	TLease       time.Time
+	Prev         string
+	LinkedLen    int
+	IsDeleted    bool
+	Version      string
 }
 
 type DataItemFactory interface {

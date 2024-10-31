@@ -3,12 +3,17 @@ package network
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
 	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -19,6 +24,7 @@ type Reader struct {
 	connMap     map[string]txn.Connector
 	itemFactory txn.DataItemFactory
 	se          serializer.Serializer
+	cacher      *Cacher
 }
 
 func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer) *Reader {
@@ -26,6 +32,7 @@ func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory
 		connMap:     connMap,
 		itemFactory: itemFactory,
 		se:          se,
+		cacher:      NewCacher(),
 	}
 }
 
@@ -94,17 +101,20 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		return item, txn.Normal, nil
 	}
 	if item.TxnState() == config.PREPARED {
-		groupKey, err := r.readGroupKey(cfg.GlobalName, item.TxnId())
+		groupKeyList, err := r.getGroupKey(strings.Split(item.GroupKeyList(), ","))
 		if err == nil {
-			switch groupKey.TxnState {
-			// if TSR exists and the TSR is in COMMITTED state
-			// roll forward the record
-			case config.COMMITTED:
+			if txn.CommittedForAll(groupKeyList) {
+				// if all the group keys are in COMMITTED state
+				if item.TValid() == 0 {
+					tCommit := int64(0)
+					for _, gk := range groupKeyList {
+						tCommit = max(tCommit, gk.TCommit)
+					}
+					item.SetTValid(tCommit)
+				}
 				return rollforwardFunc()
-			// if TSR exists and the TSR is in ABORTED state
-			// we should roll back the record
-			// because the transaction that modified the record has been aborted
-			case config.ABORTED:
+			} else {
+				// or at least one of the group keys is in ABORTED state
 				return rollbackFunc()
 			}
 		}
@@ -113,11 +123,9 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		// that is, item's TLease < current time
 		// we should roll back the record
 		if item.TLease().Before(time.Now()) {
-			// the corresponding transaction is considered ABORTED
-			// TODO: we can retry here
-			_, err := r.createGroupKey(cfg.GlobalName, item.TxnId(), config.ABORTED, 0)
-			if err != nil {
-				return nil, txn.Normal, err
+			successNum := r.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED, 0)
+			if successNum == 0 {
+				return nil, txn.Normal, errors.New("failed to rollback the record because none of the group keys are created")
 			}
 			return rollbackFunc()
 		}
@@ -223,56 +231,147 @@ func (r *Reader) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 	return preItem, nil
 }
 
-func (r *Reader) readGroupKey(dsName string, txnId string) (txn.GroupKey, error) {
+// func (r *Reader) readGroupKey(dsName string, txnId string) (txn.GroupKey, error) {
 
-	groupKeyStr, err := r.connMap[dsName].Get(txnId)
+// 	groupKeyStr, err := r.connMap[dsName].Get(txnId)
+// 	if err != nil {
+// 		return txn.GroupKey{}, err
+// 	}
+// 	var keyItem txn.GroupKeyItem
+// 	err = json.Unmarshal([]byte(groupKeyStr), &keyItem)
+
+// 	if err != nil {
+// 		return txn.GroupKey{}, err
+// 	}
+// 	groupKey := txn.GroupKey{
+// 		Key:          txnId,
+// 		GroupKeyItem: keyItem,
+// 	}
+// 	return groupKey, nil
+
+// }
+
+func (r *Reader) getGroupKey(urls []string) ([]txn.GroupKey, error) {
+	groupKeys := make([]txn.GroupKey, len(urls))
+	var mu sync.Mutex
+	var eg errgroup.Group
+	for _, urll := range urls {
+		url := urll
+		eg.Go(func() error {
+			groupKey, err := r.getSingleGroupKey(url)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			groupKeys = append(groupKeys, groupKey)
+			mu.Unlock()
+			return nil
+		})
+	}
+	err := eg.Wait()
+	// This means at least one of the group key is not found
+	if err != nil {
+		return nil, err
+	}
+	logger.Log.Debugf("Cache: %v\n", r.cacher.Statistic())
+
+	return groupKeys, nil
+}
+
+func (r *Reader) getSingleGroupKey(url string) (txn.GroupKey, error) {
+	cacheItem, ok := r.cacher.Get(url)
+	if ok {
+		gk := txn.NewGroupKey(url, cacheItem.TxnState, cacheItem.TCommit)
+		return *gk, nil
+	}
+
+	tokens := strings.Split(url, ":")
+	conn, ok := r.connMap[tokens[0]]
+	if !ok {
+		return txn.GroupKey{}, fmt.Errorf("connector to %s is not found", tokens[0])
+	}
+	groupKeyStr, err := conn.Get(tokens[1])
 	if err != nil {
 		return txn.GroupKey{}, err
 	}
 	var keyItem txn.GroupKeyItem
 	err = json.Unmarshal([]byte(groupKeyStr), &keyItem)
-
 	if err != nil {
-		return txn.GroupKey{}, err
+		return txn.GroupKey{}, fmt.Errorf("failed to unmarshal group key item %s", groupKeyStr)
 	}
-	groupKey := txn.GroupKey{
-		Key:          txnId,
-		GroupKeyItem: keyItem,
-	}
-	return groupKey, nil
-
+	r.cacher.Set(url, keyItem)
+	return *txn.NewGroupKey(url, keyItem.TxnState, keyItem.TCommit), nil
 }
 
-// func (r *Reader) writeGroupKey(dsName string, txnId string, txnState config.State) error {
-// 	return r.connMap[dsName].Put(txnId, util.ToString(txnState))
-// }
-
-func (r *Reader) createGroupKey(dsName string, txnId string, txnState config.State, tCommit int64) (config.State, error) {
-	groupKeyItem := txn.GroupKeyItem{
-		TxnState: txnState,
-		TCommit:  tCommit,
-	}
-	groupKeyStr, err := json.Marshal(groupKeyItem)
-	if err != nil {
-		return -1, errors.Join(errors.New("GroupKey marshal failed"), err)
-	}
-
-	existValue, err := r.connMap[dsName].AtomicCreate(txnId, util.ToString(groupKeyStr))
-	if err != nil {
-		if err.Error() == "key exists" {
-			existKeyItem := txn.GroupKeyItem{}
-			err := json.Unmarshal([]byte(existValue), &existKeyItem)
+func (r *Reader) createGroupKey(urls []string, state config.State, tCommit int64) int {
+	resChan := make(chan error, len(urls))
+	for _, urll := range urls {
+		url := urll
+		go func() {
+			err := r.createSingleGroupKey(url, state, tCommit)
 			if err != nil {
-				return -1, err
+				resChan <- err
+				return
 			}
-			oldState := config.State(existKeyItem.TxnState)
-			return oldState, errors.New("key exists")
-		} else {
-			return -1, err
+			r.cacher.Set(url, txn.NewGroupKeyItem(state, tCommit))
+			resChan <- nil
+		}()
+	}
+	okInTotal := len(urls)
+	for i := 0; i < len(urls); i++ {
+		err := <-resChan
+		if err != nil {
+			okInTotal--
 		}
 	}
-	return -1, nil
+	return okInTotal
 }
+
+func (r *Reader) createSingleGroupKey(url string, state config.State, tCommit int64) error {
+	tokens := strings.Split(url, ":")
+	conn, ok := r.connMap[tokens[0]]
+	if !ok {
+		return fmt.Errorf("connector to %s is not found", tokens[0])
+	}
+
+	groupKey := txn.NewGroupKey(url, state, tCommit)
+	groupKeyStr, err := json.Marshal(groupKey)
+	if err != nil {
+		return fmt.Errorf("failed to marshal group key item %s", groupKey)
+	}
+	_, err = conn.AtomicCreate(url, util.ToString(groupKeyStr))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// func (r *Reader) createGroupKey(dsName string, txnId string, txnState config.State, tCommit int64) (config.State, error) {
+// 	groupKeyItem := txn.GroupKeyItem{
+// 		TxnState: txnState,
+// 		TCommit:  tCommit,
+// 	}
+// 	groupKeyStr, err := json.Marshal(groupKeyItem)
+// 	if err != nil {
+// 		return -1, errors.Join(errors.New("GroupKey marshal failed"), err)
+// 	}
+
+// 	existValue, err := r.connMap[dsName].AtomicCreate(txnId, util.ToString(groupKeyStr))
+// 	if err != nil {
+// 		if err.Error() == "key exists" {
+// 			existKeyItem := txn.GroupKeyItem{}
+// 			err := json.Unmarshal([]byte(existValue), &existKeyItem)
+// 			if err != nil {
+// 				return -1, err
+// 			}
+// 			oldState := config.State(existKeyItem.TxnState)
+// 			return oldState, errors.New("key exists")
+// 		} else {
+// 			return -1, err
+// 		}
+// 	}
+// 	return -1, nil
+// }
 
 // treatAsCommitted treats a DataItem as committed, finds a corresponding version
 // according to its timestamp, and performs the given logic function on it.

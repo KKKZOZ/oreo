@@ -65,13 +65,13 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "123123",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "123123",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -110,13 +110,13 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "TestSimpleReadWhenCommittedFindEmpty",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(+10 * time.Second),
-		MTLease:   time.Now().Add(+5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "TestSimpleReadWhenCommittedFindEmpty",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(+10 * time.Second),
+		MTLease:       time.Now().Add(+5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -155,23 +155,23 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 		Age:  31,
 	}
 	preRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "99",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "1",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "99",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "1",
 	}
 	curRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(curPerson),
-		MTxnId:    "100",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(10 * time.Second),
-		MTLease:   time.Now().Add(5 * time.Second),
-		MVersion:  "2",
-		MPrev:     util.ToJSONString(preRedisItem),
+		MKey:          "John",
+		MValue:        util.ToJSONString(curPerson),
+		MGroupKeyList: "100",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(10 * time.Second),
+		MTLease:       time.Now().Add(5 * time.Second),
+		MVersion:      "2",
+		MPrev:         util.ToJSONString(preRedisItem),
 	}
 
 	key := "John"
@@ -214,23 +214,23 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 		Age:  31,
 	}
 	preRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "99",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(10 * time.Second),
-		MTLease:   time.Now().Add(5 * time.Second),
-		MVersion:  "1",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "99",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(10 * time.Second),
+		MTLease:       time.Now().Add(5 * time.Second),
+		MVersion:      "1",
 	}
 	curRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(curPerson),
-		MTxnId:    "100",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(20 * time.Second),
-		MTLease:   time.Now().Add(15 * time.Second),
-		MVersion:  "2",
-		MPrev:     util.ToJSONString(preRedisItem),
+		MKey:          "John",
+		MValue:        util.ToJSONString(curPerson),
+		MGroupKeyList: "100",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(20 * time.Second),
+		MTLease:       time.Now().Add(15 * time.Second),
+		MVersion:      "2",
+		MPrev:         util.ToJSONString(preRedisItem),
 	}
 
 	key := "John"
@@ -265,13 +265,13 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "100",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now(),
-		MTLease:   time.Now(),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "100",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now(),
+		MTLease:       time.Now(),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -312,24 +312,24 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 
 	// initialize the redis database
 	tarMemItem := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		MTxnId:    "99",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		MGroupKeyList: "99",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-9 * time.Second),
+		MVersion:      "1",
 	}
 
 	curMemItem := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-prepared")),
-		MTxnId:    "TestSimpleReadWhenPreparedWithTSRInABORTED",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-5 * time.Second),
-		MTLease:   time.Now().Add(-4 * time.Second),
-		MPrev:     util.ToJSONString(tarMemItem),
-		MVersion:  "2",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-prepared")),
+		MGroupKeyList: "TestSimpleReadWhenPreparedWithTSRInABORTED",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-5 * time.Second),
+		MTLease:       time.Now().Add(-4 * time.Second),
+		MPrev:         util.ToJSONString(tarMemItem),
+		MVersion:      "2",
 	}
 
 	key := "item1"
@@ -373,13 +373,13 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "100",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "100",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	expectedStr := util.ToJSONString(expectedRedisItem)
@@ -390,14 +390,14 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 	}
 
 	curRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(curPerson),
-		MTxnId:    "101",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-3 * time.Second),
-		MTLease:   time.Now().Add(-1 * time.Second),
-		MVersion:  "3",
-		MPrev:     expectedStr,
+		MKey:          "John",
+		MValue:        util.ToJSONString(curPerson),
+		MGroupKeyList: "101",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-3 * time.Second),
+		MTLease:       time.Now().Add(-1 * time.Second),
+		MVersion:      "3",
+		MPrev:         expectedStr,
 	}
 
 	key := "John"
@@ -424,26 +424,26 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 
 	dbItem1 := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
-		MTxnId:     "TestSimpleReadWhenPrepareNotExpired1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-2 * time.Second),
-		MTLease:    time.Now().Add(-1 * time.Second),
-		MLinkedLen: 1,
-		MVersion:   "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		MGroupKeyList: "TestSimpleReadWhenPrepareNotExpired1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-2 * time.Second),
+		MTLease:       time.Now().Add(-1 * time.Second),
+		MLinkedLen:    1,
+		MVersion:      "1",
 	}
 
 	dbItem2 := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
-		MTxnId:     "TestSimpleReadWhenPrepareNotExpired2",
-		MTxnState:  config.PREPARED,
-		MTValid:    time.Now().Add(1 * time.Second),
-		MTLease:    time.Now().Add(2 * time.Second),
-		MPrev:      util.ToJSONString(dbItem1),
-		MLinkedLen: 2,
-		MVersion:   "2",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+		MGroupKeyList: "TestSimpleReadWhenPrepareNotExpired2",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(1 * time.Second),
+		MTLease:       time.Now().Add(2 * time.Second),
+		MPrev:         util.ToJSONString(dbItem1),
+		MLinkedLen:    2,
+		MVersion:      "2",
 	}
 
 	t.Run("when the item has a valid Prev field", func(t *testing.T) {
@@ -614,13 +614,13 @@ func TestSimpleReadModifyWriteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "123123",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "123123",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -675,13 +675,13 @@ func TestSimpleOverwriteAndRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "123123",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "123123",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -735,13 +735,13 @@ func TestSimpleDeleteAndRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "123123",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "123123",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -781,13 +781,13 @@ func TestSimpleDeleteTwice(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "123123",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "123123",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -874,13 +874,13 @@ func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "123123",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "123123",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -935,13 +935,13 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 		Age:  30,
 	}
 	expectedRedisItem := &MongoItem{
-		MKey:      "John",
-		MValue:    util.ToJSONString(expected),
-		MTxnId:    "123123",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-5 * time.Second),
-		MVersion:  "2",
+		MKey:          "John",
+		MValue:        util.ToJSONString(expected),
+		MGroupKeyList: "123123",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-5 * time.Second),
+		MVersion:      "2",
 	}
 
 	key := "John"
@@ -1104,40 +1104,40 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 
 	item1_1 := testutil.NewTestItem("item1_1")
 	memItem1_1 := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(item1_1),
-		MTxnId:     "txn1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(-10 * time.Second),
-		MTLease:    time.Now().Add(-9 * time.Second),
-		MVersion:   "1",
-		MLinkedLen: 1,
+		MKey:          "item1",
+		MValue:        util.ToJSONString(item1_1),
+		MGroupKeyList: "txn1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-9 * time.Second),
+		MVersion:      "1",
+		MLinkedLen:    1,
 	}
 
 	item1_2 := testutil.NewTestItem("item1_2")
 	memItem1_2 := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(item1_2),
-		MTxnId:     "txn2",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(5 * time.Second),
-		MTLease:    time.Now().Add(6 * time.Second),
-		MVersion:   "2",
-		MPrev:      util.ToJSONString(memItem1_1),
-		MLinkedLen: 2,
+		MKey:          "item1",
+		MValue:        util.ToJSONString(item1_2),
+		MGroupKeyList: "txn2",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(5 * time.Second),
+		MTLease:       time.Now().Add(6 * time.Second),
+		MVersion:      "2",
+		MPrev:         util.ToJSONString(memItem1_1),
+		MLinkedLen:    2,
 	}
 
 	item1_3 := testutil.NewTestItem("item1_3")
 	memItem1_3 := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(item1_3),
-		MTxnId:     "txn3",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(10 * time.Second),
-		MTLease:    time.Now().Add(11 * time.Second),
-		MVersion:   "3",
-		MPrev:      util.ToJSONString(memItem1_2),
-		MLinkedLen: 3,
+		MKey:          "item1",
+		MValue:        util.ToJSONString(item1_3),
+		MGroupKeyList: "txn3",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(10 * time.Second),
+		MTLease:       time.Now().Add(11 * time.Second),
+		MVersion:      "3",
+		MPrev:         util.ToJSONString(memItem1_2),
+		MLinkedLen:    3,
 	}
 
 	t.Run("read will fail due to MaxRecordLength=2", func(t *testing.T) {
@@ -1301,26 +1301,26 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &MongoItem{
-			MKey:       "item1",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre2")),
-			MTxnId:     "99",
-			MTxnState:  config.COMMITTED,
-			MTValid:    time.Now().Add(-10 * time.Second),
-			MTLease:    time.Now().Add(-9 * time.Second),
-			MLinkedLen: 1,
-			MVersion:   "1",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
+			MGroupKeyList: "99",
+			MTxnState:     config.COMMITTED,
+			MTValid:       time.Now().Add(-10 * time.Second),
+			MTLease:       time.Now().Add(-9 * time.Second),
+			MLinkedLen:    1,
+			MVersion:      "1",
 		}
 
 		curItem := &MongoItem{
-			MKey:       "item1",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			MTxnId:     "100",
-			MTxnState:  config.PREPARED,
-			MTValid:    time.Now().Add(-5 * time.Second),
-			MTLease:    time.Now().Add(-4 * time.Second),
-			MPrev:      util.ToJSONString(tarItem),
-			MLinkedLen: 2,
-			MVersion:   "2",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			MGroupKeyList: "100",
+			MTxnState:     config.PREPARED,
+			MTValid:       time.Now().Add(-5 * time.Second),
+			MTLease:       time.Now().Add(-4 * time.Second),
+			MPrev:         util.ToJSONString(tarItem),
+			MLinkedLen:    2,
+			MVersion:      "2",
 		}
 
 		conn.PutItem(tarItem.Key(), curItem)
@@ -1355,13 +1355,13 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &MongoItem{
-			MKey:      "item1",
-			MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			MTxnId:    "99",
-			MTxnState: config.PREPARED,
-			MTValid:   time.Now().Add(-10 * time.Second),
-			MTLease:   time.Now().Add(-9 * time.Second),
-			MVersion:  "1",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			MGroupKeyList: "99",
+			MTxnState:     config.PREPARED,
+			MTValid:       time.Now().Add(-10 * time.Second),
+			MTLease:       time.Now().Add(-9 * time.Second),
+			MVersion:      "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1403,26 +1403,26 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &MongoItem{
-			MKey:       "item2",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item2-pre2")),
-			MTxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
-			MTxnState:  config.COMMITTED,
-			MTValid:    time.Now().Add(-10 * time.Second),
-			MTLease:    time.Now().Add(-9 * time.Second),
-			MLinkedLen: 1,
-			MVersion:   "1",
+			MKey:          "item2",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item2-pre2")),
+			MGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
+			MTxnState:     config.COMMITTED,
+			MTValid:       time.Now().Add(-10 * time.Second),
+			MTLease:       time.Now().Add(-9 * time.Second),
+			MLinkedLen:    1,
+			MVersion:      "1",
 		}
 
 		curItem := &MongoItem{
-			MKey:       "item2",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item2-pre")),
-			MTxnId:     "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
-			MTxnState:  config.PREPARED,
-			MTValid:    time.Now().Add(-5 * time.Second),
-			MTLease:    time.Now().Add(-4 * time.Second),
-			MLinkedLen: 2,
-			MVersion:   "2",
-			MPrev:      util.ToJSONString(tarItem),
+			MKey:          "item2",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item2-pre")),
+			MGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			MTxnState:     config.PREPARED,
+			MTValid:       time.Now().Add(-5 * time.Second),
+			MTLease:       time.Now().Add(-4 * time.Second),
+			MLinkedLen:    2,
+			MVersion:      "2",
+			MPrev:         util.ToJSONString(tarItem),
 		}
 
 		conn.PutItem(curItem.Key(), curItem)
@@ -1462,13 +1462,13 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn := NewDefaultConnection()
 
 		tarItem := &MongoItem{
-			MKey:      "item1",
-			MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			MTxnId:    "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
-			MTxnState: config.PREPARED,
-			MTValid:   time.Now().Add(-10 * time.Second),
-			MTLease:   time.Now().Add(-9 * time.Second),
-			MVersion:  "1",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			MGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
+			MTxnState:     config.PREPARED,
+			MTValid:       time.Now().Add(-10 * time.Second),
+			MTLease:       time.Now().Add(-9 * time.Second),
+			MVersion:      "1",
 		}
 
 		conn.PutItem(tarItem.Key(), tarItem)
@@ -1509,13 +1509,13 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	tarItem := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		MTxnId:    "TestDirectWriteOnPreparingRecord",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(2 * time.Second),
-		MTLease:   time.Now().Add(1 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		MGroupKeyList: "TestDirectWriteOnPreparingRecord",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(2 * time.Second),
+		MTLease:       time.Now().Add(1 * time.Second),
+		MVersion:      "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1532,14 +1532,14 @@ func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	dbItem1 := &MongoItem{
-		MKey:       "item1",
-		MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre1")),
-		MTxnId:     "TestDirectWriteOnInvisibleRecord1",
-		MTxnState:  config.COMMITTED,
-		MTValid:    time.Now().Add(3 * time.Second),
-		MTLease:    time.Now().Add(4 * time.Second),
-		MLinkedLen: 1,
-		MVersion:   "2",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
+		MGroupKeyList: "TestDirectWriteOnInvisibleRecord1",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(3 * time.Second),
+		MTLease:       time.Now().Add(4 * time.Second),
+		MLinkedLen:    1,
+		MVersion:      "2",
 	}
 	conn.PutItem(dbItem1.Key(), dbItem1)
 
@@ -1565,23 +1565,23 @@ func TestDirectWriteOnDeletedRecord(t *testing.T) {
 func TestRollbackWhenReading(t *testing.T) {
 
 	item1Pre := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		MTxnId:    "TestRollback",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		MGroupKeyList: "TestRollback",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-9 * time.Second),
+		MVersion:      "1",
 	}
 
 	item1 := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		MTxnId:    "TestRollback",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-5 * time.Second),
-		MTLease:   time.Now().Add(-4 * time.Second),
-		MVersion:  "2",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		MGroupKeyList: "TestRollback",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-5 * time.Second),
+		MTLease:       time.Now().Add(-4 * time.Second),
+		MVersion:      "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when reading", func(t *testing.T) {
@@ -1630,23 +1630,23 @@ func TestRollbackWhenReading(t *testing.T) {
 
 func TestRollbackWhenWriting(t *testing.T) {
 	item1Pre := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		MTxnId:    "TestRollback",
-		MTxnState: config.COMMITTED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		MGroupKeyList: "TestRollback",
+		MTxnState:     config.COMMITTED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-9 * time.Second),
+		MVersion:      "1",
 	}
 
 	item1 := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1")),
-		MTxnId:    "TestRollback",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-5 * time.Second),
-		MTLease:   time.Now().Add(-4 * time.Second),
-		MVersion:  "2",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1")),
+		MGroupKeyList: "TestRollback",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-5 * time.Second),
+		MTLease:       time.Now().Add(-4 * time.Second),
+		MVersion:      "2",
 	}
 
 	t.Run("rollback an item with a valid Prev field when writing", func(t *testing.T) {
@@ -1718,13 +1718,13 @@ func TestRollForwardWhenReading(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	tarItem := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		MTxnId:    "TestRollForward",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		MGroupKeyList: "TestRollForward",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-9 * time.Second),
+		MVersion:      "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1751,13 +1751,13 @@ func TestRollForwardWhenWriting(t *testing.T) {
 	conn := NewDefaultConnection()
 
 	tarItem := &MongoItem{
-		MKey:      "item1",
-		MValue:    util.ToJSONString(testutil.NewTestItem("item1-pre")),
-		MTxnId:    "TestRollForward",
-		MTxnState: config.PREPARED,
-		MTValid:   time.Now().Add(-10 * time.Second),
-		MTLease:   time.Now().Add(-9 * time.Second),
-		MVersion:  "1",
+		MKey:          "item1",
+		MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+		MGroupKeyList: "TestRollForward",
+		MTxnState:     config.PREPARED,
+		MTValid:       time.Now().Add(-10 * time.Second),
+		MTLease:       time.Now().Add(-9 * time.Second),
+		MVersion:      "1",
 	}
 
 	conn.PutItem(tarItem.Key(), tarItem)
@@ -1785,14 +1785,14 @@ func TestItemVersionUpdate(t *testing.T) {
 	t.Run("item version ++ after updated", func(t *testing.T) {
 		conn := NewDefaultConnection()
 		dbItem := &MongoItem{
-			MKey:       "item1",
-			MValue:     util.ToJSONString(testutil.NewTestItem("item1-pre")),
-			MTxnId:     "TestItemVersionUpdate",
-			MTxnState:  config.COMMITTED,
-			MTValid:    time.Now().Add(-10 * time.Second),
-			MTLease:    time.Now().Add(-9 * time.Second),
-			MLinkedLen: 1,
-			MVersion:   "1",
+			MKey:          "item1",
+			MValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
+			MGroupKeyList: "TestItemVersionUpdate",
+			MTxnState:     config.COMMITTED,
+			MTValid:       time.Now().Add(-10 * time.Second),
+			MTLease:       time.Now().Add(-9 * time.Second),
+			MLinkedLen:    1,
+			MVersion:      "1",
 		}
 		conn.PutItem(dbItem.Key(), dbItem)
 
