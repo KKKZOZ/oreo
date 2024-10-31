@@ -128,6 +128,7 @@ func main() {
 		cfg.Debug.ConnAdditionalLatency = config.Latency
 	case "oreo":
 		fmt.Printf("Running under Oreo Mode\n")
+		isRemote = true
 		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.DebugMode = true
 		cfg.Debug.HTTPAdditionalLatency = config.Latency
@@ -159,6 +160,7 @@ func main() {
 	if isRemote {
 		warmUpHttpClient()
 	}
+	warmupTimeSourceClient()
 	displayBenchmarkInfo()
 
 	switch mode {
@@ -169,10 +171,9 @@ func main() {
 		cfg.Debug.ConnAdditionalLatency = 0
 		wp.DoBenchmark = false
 		if workloadType == "multi-ycsb" {
-			fmt.Printf("Not support load mode for multi-ycsb\n")
+			fmt.Printf("No support load mode for multi-ycsb\n")
 			return
 		}
-
 		fmt.Println("Start to load data")
 		client.RunLoad()
 		fmt.Println("Load finished")
@@ -184,6 +185,10 @@ func main() {
 	default:
 		panic("Invalid mode")
 	}
+
+	if mode == "load" {
+		time.Sleep(2 * time.Second)
+	}
 }
 
 func warmUpHttpClient() {
@@ -191,7 +196,7 @@ func warmUpHttpClient() {
 		url := fmt.Sprintf("http://%s/ping", addr)
 		num := min(800, threadNum+200)
 		var wg sync.WaitGroup
-		wg.Add(2 * num)
+		wg.Add(num)
 
 		for i := 0; i < num; i++ {
 			go func() {
@@ -205,23 +210,32 @@ func warmUpHttpClient() {
 					_ = resp.Body.Close()
 				}()
 			}()
-
-			timeUrl := fmt.Sprintf("%s/timestamp/common", config.TimeOracleUrl)
-			go func() {
-				defer wg.Done()
-				resp, err := timesource.HttpClient.Get(timeUrl)
-				if err != nil {
-					fmt.Printf("Error when warming up http client: %v\n", err)
-				}
-				defer func() {
-					_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
-					_ = resp.Body.Close()
-				}()
-			}()
 		}
 		wg.Wait()
 	}
 
+}
+
+func warmupTimeSourceClient() {
+	timeUrl := fmt.Sprintf("%s/timestamp/common", config.TimeOracleUrl)
+	num := 300
+	var wg sync.WaitGroup
+	wg.Add(num)
+
+	for i := 0; i < num; i++ {
+		go func() {
+			defer wg.Done()
+			resp, err := timesource.HttpClient.Get(timeUrl)
+			if err != nil {
+				fmt.Printf("Error when warming up http client: %v\n", err)
+			}
+			defer func() {
+				_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
+				_ = resp.Body.Close()
+			}()
+		}()
+	}
+	wg.Wait()
 }
 
 func createWorkload(wp *workload.WorkloadParameter) workload.Workload {

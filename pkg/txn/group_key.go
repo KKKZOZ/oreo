@@ -16,6 +16,13 @@ type GroupKeyItem struct {
 	TCommit  int64
 }
 
+func NewGroupKeyItem(txnState config.State, tCommit int64) GroupKeyItem {
+	return GroupKeyItem{
+		TxnState: txnState,
+		TCommit:  tCommit,
+	}
+}
+
 func NewGroupKey(key string, txnState config.State, tCommit int64) *GroupKey {
 	return &GroupKey{
 		Key: key,

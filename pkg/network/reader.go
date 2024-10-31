@@ -10,6 +10,7 @@ import (
 
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
 	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"golang.org/x/sync/errgroup"
@@ -23,6 +24,7 @@ type Reader struct {
 	connMap     map[string]txn.Connector
 	itemFactory txn.DataItemFactory
 	se          serializer.Serializer
+	cacher      *Cacher
 }
 
 func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer) *Reader {
@@ -30,6 +32,7 @@ func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory
 		connMap:     connMap,
 		itemFactory: itemFactory,
 		se:          se,
+		cacher:      NewCacher(),
 	}
 }
 
@@ -120,7 +123,7 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		// that is, item's TLease < current time
 		// we should roll back the record
 		if item.TLease().Before(time.Now()) {
-			successNum := r.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED)
+			successNum := r.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED, 0)
 			if successNum == 0 {
 				return nil, txn.Normal, errors.New("failed to rollback the record because none of the group keys are created")
 			}
@@ -270,11 +273,18 @@ func (r *Reader) getGroupKey(urls []string) ([]txn.GroupKey, error) {
 	if err != nil {
 		return nil, err
 	}
+	logger.Log.Debugf("Cache: %v\n", r.cacher.Statistic())
 
 	return groupKeys, nil
 }
 
 func (r *Reader) getSingleGroupKey(url string) (txn.GroupKey, error) {
+	cacheItem, ok := r.cacher.Get(url)
+	if ok {
+		gk := txn.NewGroupKey(url, cacheItem.TxnState, cacheItem.TCommit)
+		return *gk, nil
+	}
+
 	tokens := strings.Split(url, ":")
 	conn, ok := r.connMap[tokens[0]]
 	if !ok {
@@ -289,34 +299,21 @@ func (r *Reader) getSingleGroupKey(url string) (txn.GroupKey, error) {
 	if err != nil {
 		return txn.GroupKey{}, fmt.Errorf("failed to unmarshal group key item %s", groupKeyStr)
 	}
+	r.cacher.Set(url, keyItem)
 	return *txn.NewGroupKey(url, keyItem.TxnState, keyItem.TCommit), nil
 }
 
-func (r *Reader) createGroupKey(urls []string, state config.State) int {
-
+func (r *Reader) createGroupKey(urls []string, state config.State, tCommit int64) int {
 	resChan := make(chan error, len(urls))
 	for _, urll := range urls {
 		url := urll
 		go func() {
-			tokens := strings.Split(url, ":")
-			conn, ok := r.connMap[tokens[0]]
-			if !ok {
-				resChan <- fmt.Errorf("connector to %s is not found", tokens[0])
-				return
-			}
-
-			groupKey := txn.NewGroupKey(url, state, 0)
-			groupKeyStr, err := json.Marshal(groupKey)
-			if err != nil {
-				resChan <- fmt.Errorf("failed to marshal group key item %s", groupKey)
-				return
-			}
-			// CHECK: we do not need the returned value?
-			_, err = conn.AtomicCreate(url, util.ToString(groupKeyStr))
+			err := r.createSingleGroupKey(url, state, tCommit)
 			if err != nil {
 				resChan <- err
 				return
 			}
+			r.cacher.Set(url, txn.NewGroupKeyItem(state, tCommit))
 			resChan <- nil
 		}()
 	}
@@ -330,14 +327,14 @@ func (r *Reader) createGroupKey(urls []string, state config.State) int {
 	return okInTotal
 }
 
-func (r *Reader) createSingleGroupKey(url string, state config.State) error {
+func (r *Reader) createSingleGroupKey(url string, state config.State, tCommit int64) error {
 	tokens := strings.Split(url, ":")
 	conn, ok := r.connMap[tokens[0]]
 	if !ok {
 		return fmt.Errorf("connector to %s is not found", tokens[0])
 	}
 
-	groupKey := txn.NewGroupKey(url, state, 0)
+	groupKey := txn.NewGroupKey(url, state, tCommit)
 	groupKeyStr, err := json.Marshal(groupKey)
 	if err != nil {
 		return fmt.Errorf("failed to marshal group key item %s", groupKey)

@@ -436,6 +436,10 @@ func (r *Datastore) doConditionalUpdate(cacheItem DataItem, dbItem DataItem) err
 // If there is an error during the retrieval or processing, it handles the error accordingly.
 // Finally, it performs the conditional update operation with the cacheItem and the processed dbItem.
 func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
+	debugStart := time.Now()
+	defer func() {
+		logger.Log.Debugw("Datastore.conditionalUpdate() finishes", "LatencyInFunc", time.Since(debugStart))
+	}()
 
 	// if the cacheItem follows read-modified-write pattern,
 	// it already has a valid version, we can skip the read step.
@@ -577,7 +581,9 @@ func (r *Datastore) validate() error {
 
 	var eg errgroup.Group
 	set := r.validationSet.Items()
-	for gk, pred := range set {
+	for gkk, predd := range set {
+		gk := gkk
+		pred := predd
 		if pred.ItemKey == "" {
 			log.Fatalf("item's key is empty")
 			continue
@@ -622,6 +628,10 @@ func (r *Datastore) Prepare() (int64, error) {
 	items := make([]DataItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
 		items = append(items, v)
+	}
+
+	if len(items) == 0 {
+		return 0, nil
 	}
 
 	// Only return TCommit for remote mode
@@ -689,7 +699,7 @@ func (r *Datastore) Prepare() (int64, error) {
 // After updating the records, it clears the write cache.
 // Returns an error if there is any issue updating the records.
 func (r *Datastore) Commit() error {
-	logger.Log.Debugw("Datastore.Commit() starts", "TxnId", r.Txn.TxnId)
+	logger.Log.Debugw("Datastore.Commit() starts", "r.Txn.isRemote", r.Txn.isRemote)
 
 	if r.Txn.isRemote {
 		infoList := make([]CommitInfo, 0, len(r.writeCache))

@@ -120,7 +120,7 @@ func (r RedisItem) String() string {
 	return fmt.Sprintf(`RedisItem{
     Key:       %s,
     Value:     %s,
-    TxnId:     %s,
+    GroupKeyList:     %s,
     TxnState:  %s,
     TValid:    %s,
     TLease:    %s,
