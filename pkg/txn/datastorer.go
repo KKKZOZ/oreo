@@ -44,4 +44,7 @@ type Datastorer interface {
 
 	// GetConn returns the connection of the data store.
 	GetConn() Connector
+
+	// GetWriteCacheSize returns the size of the writeCache.
+	GetWriteCacheSize() int
 }

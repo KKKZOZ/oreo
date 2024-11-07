@@ -140,11 +140,16 @@ func (t *Transaction) Start() error {
 	}
 	t.TxnId = config.Config.IdGenerator.GenerateId()
 	Log.Infow("starting transaction", "txnId", t.TxnId, "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
-	t.TxnStartTime, err = t.getTime("start")
-	if err != nil {
-		Log.Debugw("failed to get time", "cause", err, "Topic", "CheckPoint")
-		return err
+
+	// only get the Tstart in Oreo and Cherry Garcia mode
+	if !config.Debug.NativeMode {
+		t.TxnStartTime, err = t.getTime("start")
+		if err != nil {
+			Log.Debugw("failed to get time", "cause", err, "Topic", "CheckPoint")
+			return err
+		}
 	}
+
 	for _, ds := range t.dataStoreMap {
 		err := ds.Start()
 		if err != nil {
@@ -152,17 +157,6 @@ func (t *Transaction) Start() error {
 			return err
 		}
 	}
-	// generate groupKeyUrls
-	i := 0
-	for _, ds := range t.dataStoreMap {
-		if i == 1 && config.Debug.CherryGarciaMode {
-			break
-		}
-		url := fmt.Sprintf("%s:%s", ds.GetName(), t.TxnId)
-		t.GroupKeyUrls = append(t.GroupKeyUrls, url)
-		i++
-	}
-	Log.Debugw("GroupKeyUrls created", "GroupKeyUrls", t.GroupKeyUrls, "Topic", "CheckPoint")
 
 	return nil
 }
@@ -270,11 +264,42 @@ func (t *Transaction) Commit() error {
 		return nil
 	}
 
+	// generate groupKeyUrls
+	i := 0
+	for _, ds := range t.dataStoreMap {
+		if ds.GetWriteCacheSize() == 0 {
+			continue
+		}
+		if i == 1 && config.Debug.CherryGarciaMode {
+			break
+		}
+		url := fmt.Sprintf("%s:%s", ds.GetName(), t.TxnId)
+		t.GroupKeyUrls = append(t.GroupKeyUrls, url)
+		i++
+	}
+	Log.Debugw("GroupKeyUrls created", "GroupKeyUrls", t.GroupKeyUrls, "Topic", "CheckPoint")
+
+	if config.Debug.NativeMode {
+		return t.commitInNative()
+	}
+
 	if config.Debug.CherryGarciaMode {
 		return t.commitInCherryGarcia()
 	} else {
 		return t.commitInOreo()
 	}
+}
+
+func (t *Transaction) commitInNative() error {
+	var err error
+	for _, ds := range t.dataStoreMap {
+		_, aerr := ds.Prepare()
+		if aerr != nil {
+			err = aerr
+		}
+	}
+	return err
+
 }
 
 func (t *Transaction) commitInCherryGarcia() error {
@@ -357,17 +382,16 @@ func (t *Transaction) commitInOreo() error {
 		ts, err := ds.Prepare()
 		mu.Lock()
 		tCommit = max(tCommit, ts)
-		mu.Unlock()
 		if err != nil {
-			mu.Lock()
 			success, cause = false, err
-			mu.Unlock()
 			if stackError, ok := err.(*errors.Error); ok {
 				errMsg := fmt.Sprintf("prepare phase failed: %v", stackError.ErrorStack())
 				Log.Errorw(errMsg, "txnId", t.TxnId, "ds", ds.GetName())
 			}
 			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
 		}
+		mu.Unlock()
+
 	}
 
 	Log.Infow("Starting to call ds.Prepare()", "txnId", t.TxnId, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
@@ -383,7 +407,7 @@ func (t *Transaction) commitInOreo() error {
 	wg.Wait()
 
 	if !success {
-		go t.Abort()
+		// go t.Abort()
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
@@ -402,7 +426,7 @@ func (t *Transaction) commitInOreo() error {
 			}(ds)
 		}
 		wg.Wait()
-		t.DeleteGroupKeyFromUrls(t.GroupKeyUrls)
+		// t.DeleteGroupKeyFromUrls(t.GroupKeyUrls)
 	}()
 	return nil
 

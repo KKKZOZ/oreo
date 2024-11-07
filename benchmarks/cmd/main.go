@@ -124,6 +124,7 @@ func main() {
 		cfg.Config.AsyncLevel = 2
 	case "native":
 		fmt.Printf("Running under Native Mode\n")
+		cfg.Debug.NativeMode = true
 		cfg.Debug.DebugMode = true
 		cfg.Debug.ConnAdditionalLatency = config.Latency
 	case "oreo":
@@ -138,7 +139,7 @@ func main() {
 	}
 	cfg.Config.LeaseTime = 100 * time.Millisecond
 	cfg.Config.MaxRecordLength = 2
-	config.ZipfianConstant = 0.8
+	// config.ZipfianConstant = 0.8
 
 	switch readStrategy {
 	case "p":
@@ -284,7 +285,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 	switch dbName {
 	case "oreo":
 		wp.DBName = "oreo"
-		creator, err := OreoRealisticCreator(workloadType, isRemote)
+		creator, err := OreoRealisticCreator(workloadType, isRemote, preset)
 		if err != nil {
 			fmt.Printf("Error when creating oreo client: %v\n", err)
 			return nil

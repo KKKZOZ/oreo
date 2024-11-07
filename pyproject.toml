@@ -1,0 +1,13 @@
+[project]
+name = "oreo-tools"
+version = "0.1.0"
+
+dependencies = [
+    "pandas",
+    "matplotlib"
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+]

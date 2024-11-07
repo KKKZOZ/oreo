@@ -2,83 +2,115 @@
 
 executor_port=8001
 timeoracle_port=8010
-thread_load=20
-tar_dir=iot
+thread_load=50
+wl_type=iot
+tar_dir=$wl_type
+threads=(8 16 32 64 96)
+results_file="${wl_type}_benchmark_results.csv"
 
+# Create/overwrite results file with header
+echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99" >"$results_file"
 
-if [ $# -lt 1 ]; then
-  threads=(8 16 32 64 96)
+operation=$(rg '^operationcount' ./workloads/$wl_type.yaml | rg -o '[0-9.]+')
+
+if [ $# -eq 1 ]; then
+	verbose=false
 else
-  threads=("$1")
+	verbose=true
 fi
 
+log() {
+	[[ "${verbose}" = true ]] && echo "$@"
+}
+kill_process_on_port() {
+	local port=$1
+	local pid
+	pid=$(lsof -t -i ":$port")
+	if [ -n "$pid" ]; then
+		echo "Port $port is occupied by process $pid. Terminating this process..."
+		kill -9 "$pid"
+	fi
+}
 
-# Clear files
-# rm iot-native.txt iot-oreo.txt
-mkdir -p "$tar_dir"
+run_workload() {
+	local mode=$1 profile=$2 thread=$3 output=$4
+	log "Running $wl_type $profile thread=$thread"
+	go run . -d oreo -wl $wl_type -wc "./workloads/$wl_type.yaml" -m $mode -ps $profile -t "$thread" >"$output"
+}
 
-pid=$(lsof -t -i ":$executor_port")
-if [ -n "$pid" ]; then
-  echo "Port $executor_port is occupied by process $pid. Terminating this process..."
-  kill -9 "$pid"
-fi
+load_data() {
+	for profile in native cg oreo; do
+		log "Loading to ${wl_type} $profile"
+		run_workload "load" "$profile" "$thread_load" "/dev/null"
+	done
+	touch "${wl_type}-load"
+}
 
-pid=$(lsof -t -i ":$timeoracle_port")
-if [ -n "$pid" ]; then
-  echo "Port $timeoracle_port is occupied by process $pid. Terminating this process..."
-  kill -9 "$pid"
-fi
+get_metrics() {
+	local profile=$1 thread=$2
+	local duration
+	duration=$(rg '^Run finished' "$tar_dir/$wl_type-$profile-$thread.txt" | rg -o '[0-9.]+')
+	local duration
+	latency=$(rg '^TXN\s' "$tar_dir/$wl_type-$profile-$thread.txt" | rg -o '\s99th\(us\): [0-9]+' | cut -d' ' -f3)
+	echo "$duration $latency"
 
-echo "Starting executor"
-./executor -p "$executor_port" -w iot -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 > /dev/null 2> executor-log.log &
-executor_pid=$!
+}
 
-echo "Starting time oracle"
-./timeoracle > /dev/null &
-time_oracle_pid=$!
+print_summary() {
+	local thread=$1 native_duration=$2 cg_duration=$3 oreo_duration=$4 native_p99=$5 cg_p99=$6 oreo_p99=$7
 
+	printf "%s:\nnative:%s\ncg    :%s\noreo  :%s\n" "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}"
 
-if [ ! -f "iot-load" ]; then
+	local relative_native relative_cg
+	relative_native=$(bc <<<"scale=5;${oreo_duration} / ${native_duration}")
+	relative_cg=$(bc <<<"scale=5;${oreo_duration} / ${cg_duration}")
 
-  echo "Loading to IOT oreo"
-  ben load iot oreo "$thread_load"
+	printf "Oreo:native = %s\nOreo:cg     = %s\n" "${relative_native}" "${relative_cg}"
+	printf "native 99th: %s\ncg     99th: %s\noreo   99th: %s\n" "${native_p99}" "${cg_p99}" "${oreo_p99}"
+	echo "---------------------------------"
+}
 
-  echo "Loading to IOT native"
-  ben load iot native "$thread_load"
+main() {
+	mkdir -p "$tar_dir"
 
-  touch iot-load
-else
-  echo "Data has been already loaded"
-fi
+	kill_process_on_port "$executor_port"
+	kill_process_on_port "$timeoracle_port"
 
-for thread in "${threads[@]}"
-do
+	log "Starting executor"
+	./executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w iot -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 2>executor.log &
+	executor_pid=$!
 
-  echo "Running IOT native thread=$thread"
-  go run . -d native -wl iot -wc ./workloads/iot.yaml -m run -ps native -t "$thread" > "$tar_dir/iot-native-$thread.txt"
+	log "Starting time oracle"
+	./timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>timeoracle.log &
+	time_oracle_pid=$!
 
-  echo "Running IOT Cherry Garcia thread=$thread"
-  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -ps cg -t "$thread" > "$tar_dir/iot-cg-$thread.txt"
+	# Load data if needed
+	if [ ! -f "${wl_type}-load" ]; then
+		load_data
+	else
+		log "Data has been already loaded"
+	fi
 
-  echo "Running IOT oreo thread=$thread"
-  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -remote -t "$thread" > "$tar_dir/iot-oreo-$thread.txt"
+	for thread in "${threads[@]}"; do
 
-  native=$(sed -n '21p' "$tar_dir/iot-native-$thread.txt" | grep -E -o '[0-9.]+(ms|s)' | sed 's/\(ms\|s\)$//') 
-  cg=$(sed -n '21p' "$tar_dir/iot-cg-$thread.txt" | grep -E -o '[0-9.]+(ms|s)' | sed 's/\(ms\|s\)$//') 
-  oreo=$(sed -n '21p' "$tar_dir/iot-oreo-$thread.txt" | grep -E -o '[0-9.]+(ms|s)' | sed 's/\(ms\|s\)$//')
+		for profile in native cg oreo; do
+			output="$tar_dir/$wl_type-$profile-$thread.txt"
+			run_workload "run" "$profile" "$thread" "$output"
+		done
 
-  printf "%s:\nnative:%s\ncg:%s\noreo:%s\n" "$thread" "$native" "$cg" "$oreo"
+		read -r native_duration native_p99 <<<"$(get_metrics "native" "$thread")"
+		read -r cg_duration cg_p99 <<<"$(get_metrics "cg" "$thread")"
+		read -r oreo_duration oreo_p99 <<<"$(get_metrics "oreo" "$thread")"
 
-  relative_native=$(echo "scale=5;$oreo / $native" | bc)
-  relative_cg=$(echo "scale=5;$oreo / $cg" | bc)
+		echo "$thread,$operation,$native_duration,$cg_duration,$oreo_duration,$native_p99,$cg_p99,$oreo_p99" >>"$results_file"
 
-  printf "Oreo:native = %s\n" "$relative_native"
-  printf "Oreo:cg = %s\n" "$relative_cg"
-  echo "---------------------------------"
+		print_summary "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}" "${native_p99}" "${cg_p99}" "${oreo_p99}"
+	done
 
-done
+	log "Killing executor"
+	kill $executor_pid
+	log "Killing time oracle"
+	kill $time_oracle_pid
+}
 
-echo "Killing executor"
-kill $executor_pid
-echo "Killing time oracle"
-kill $time_oracle_pid
+main "$@"

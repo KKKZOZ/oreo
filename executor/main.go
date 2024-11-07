@@ -43,10 +43,11 @@ type Server struct {
 }
 
 func NewServer(port int, connMap map[string]txn.Connector, factory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Server {
+	reader := *network.NewReader(connMap, factory, serializer.NewJSONSerializer(), network.NewCacher())
 	return &Server{
 		port:      port,
-		reader:    *network.NewReader(connMap, factory, serializer.NewJSONSerializer()),
-		committer: *network.NewCommitter(connMap, serializer.NewJSONSerializer(), factory, timeSource),
+		reader:    reader,
+		committer: *network.NewCommitter(connMap, reader, serializer.NewJSONSerializer(), factory, timeSource),
 	}
 }
 
@@ -69,7 +70,7 @@ func (s *Server) Run() {
 	}
 
 	address := fmt.Sprintf(":%d", s.port)
-	fmt.Println(banner)
+	// fmt.Println(banner)
 	Log.Infow("Server running", "address", address)
 	log.Fatalf("Server failed: %v", fasthttp.ListenAndServe(address, router))
 }
@@ -297,6 +298,7 @@ func main() {
 	<-sigs
 
 	Log.Info("Shutting down server")
+	fmt.Printf("Cache: %v\n", server.reader.GetCacheStatistic())
 
 }
 

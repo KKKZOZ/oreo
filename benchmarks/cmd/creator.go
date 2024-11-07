@@ -111,7 +111,8 @@ func NativeRealisticCreator(workloadType string) (ycsb.DBCreator, error) {
 	panic("Unknown pattern " + workloadType)
 }
 
-func OreoRealisticCreator(workloadType string, isRemote bool) (ycsb.DBCreator, error) {
+func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb.DBCreator, error) {
+
 	if workloadType == "iot" {
 		kvConn := NewKVRocksConn()
 		mongoConn := NewMongoDBConn()
@@ -124,6 +125,7 @@ func OreoRealisticCreator(workloadType string, isRemote bool) (ycsb.DBCreator, e
 			IsRemote:            isRemote,
 			ConnMap:             connMap,
 			GlobalDatastoreName: "KVRocks",
+			Mode:                mode,
 		}, nil
 	}
 	if workloadType == "social" {
@@ -140,6 +142,7 @@ func OreoRealisticCreator(workloadType string, isRemote bool) (ycsb.DBCreator, e
 			IsRemote:            isRemote,
 			ConnMap:             connMap,
 			GlobalDatastoreName: "Redis",
+			Mode:                mode,
 		}, nil
 	}
 	if workloadType == "order" {
@@ -158,6 +161,7 @@ func OreoRealisticCreator(workloadType string, isRemote bool) (ycsb.DBCreator, e
 			IsRemote:            isRemote,
 			ConnMap:             connMap,
 			GlobalDatastoreName: "Redis",
+			Mode:                mode,
 		}, nil
 	}
 	panic("Unknown pattern " + workloadType)

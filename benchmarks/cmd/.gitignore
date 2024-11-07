@@ -1,8 +1,23 @@
+# Log and output files
 *.log
 *.txt
 *.out
 *.prof
+
+# Executables and binaries
 iot-load
 executor
 timeoracle
+
+# Python environment
 .venv/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
