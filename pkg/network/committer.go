@@ -24,11 +24,11 @@ type Committer struct {
 	timeSource  timesource.TimeSourcer
 }
 
-func NewCommitter(connMap map[string]txn.Connector, se serializer.Serializer, itemFactory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Committer {
+func NewCommitter(connMap map[string]txn.Connector, reader Reader, se serializer.Serializer, itemFactory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Committer {
 	// conn.Connect()
 	return &Committer{
 		connMap:     connMap,
-		reader:      *NewReader(connMap, itemFactory, se),
+		reader:      reader,
 		se:          se,
 		itemFactory: itemFactory,
 		timeSource:  timeSource,
@@ -141,7 +141,9 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 
 	// create the corresponding group key
 	if len(itemList) > 0 {
-		txnId := strings.Split(itemList[0].GroupKeyList(), ":")[1]
+		// txnId := strings.Split(itemList[0].GroupKeyList(), ":")[1]
+		singleGK := strings.Split(itemList[0].GroupKeyList(), ",")[0]
+		txnId := strings.Split(singleGK, ":")[1]
 		url := dsName + ":" + txnId
 		err = c.reader.createSingleGroupKey(url, config.COMMITTED, tCommit)
 		if err != nil {

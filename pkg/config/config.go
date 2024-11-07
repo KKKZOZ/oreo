@@ -55,6 +55,8 @@ type debug struct {
 
 	CherryGarciaMode bool
 
+	NativeMode bool
+
 	HTTPAdditionalLatency time.Duration
 
 	ConnAdditionalLatency time.Duration
@@ -109,6 +111,7 @@ var Config = config{
 var Debug = debug{
 	DebugMode:             false,
 	CherryGarciaMode:      false,
+	NativeMode:            false,
 	HTTPAdditionalLatency: 0,
 	ConnAdditionalLatency: 0,
 }

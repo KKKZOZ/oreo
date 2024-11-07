@@ -19,10 +19,11 @@ type OreoRealisticCreator struct {
 	ConnMap             map[string]txn.Connector
 	GlobalDatastoreName string
 	IsRemote            bool
+	Mode                string
 }
 
 func (oc *OreoRealisticCreator) Create() (ycsb.DB, error) {
-	return NewOreoRealisticDatastore(oc.ConnMap, oc.GlobalDatastoreName, oc.IsRemote), nil
+	return NewOreoRealisticDatastore(oc.ConnMap, oc.GlobalDatastoreName, oc.IsRemote, oc.Mode), nil
 }
 
 var _ ycsb.DB = (*OreoRealisticDatastore)(nil)
@@ -34,14 +35,16 @@ type OreoRealisticDatastore struct {
 	globalDatastoreName string
 	txn                 *txn.Transaction
 	isRemote            bool
+	mode                string
 }
 
-func NewOreoRealisticDatastore(connMap map[string]txn.Connector, globalDatastoreName string, isRemote bool) *OreoRealisticDatastore {
+func NewOreoRealisticDatastore(connMap map[string]txn.Connector, globalDatastoreName string, isRemote bool, mode string) *OreoRealisticDatastore {
 
 	return &OreoRealisticDatastore{
 		isRemote:            isRemote,
 		connMap:             connMap,
 		globalDatastoreName: globalDatastoreName,
+		mode:                mode,
 	}
 }
 
@@ -116,7 +119,7 @@ func (r *OreoRealisticDatastore) CleanupThread(ctx context.Context) {
 }
 
 func (r *OreoRealisticDatastore) Read(ctx context.Context, table string, key string) (string, error) {
-	key = addPrefix(key)
+	key = r.addPrefix(key)
 
 	var value string
 	err := r.txn.Read(table, key, &value)
@@ -127,20 +130,31 @@ func (r *OreoRealisticDatastore) Read(ctx context.Context, table string, key str
 }
 
 func (r *OreoRealisticDatastore) Update(ctx context.Context, table string, key string, value string) error {
-	key = addPrefix(key)
+	key = r.addPrefix(key)
 	return r.txn.Write(table, key, value)
 }
 
 func (r *OreoRealisticDatastore) Insert(ctx context.Context, table string, key string, value string) error {
-	key = addPrefix(key)
+	key = r.addPrefix(key)
 	return r.txn.Write(table, key, value)
 }
 
 func (r *OreoRealisticDatastore) Delete(ctx context.Context, table string, key string) error {
-	key = addPrefix(key)
+	key = r.addPrefix(key)
 	return r.txn.Delete(table, key)
 }
 
-func addPrefix(key string) string {
-	return "oreo-" + key
+func (r *OreoRealisticDatastore) addPrefix(key string) string {
+	prefix := ""
+	switch r.mode {
+	case "native":
+		prefix = "native-"
+	case "cg":
+		prefix = "cg-"
+	case "oreo":
+		prefix = "oreo-"
+	default:
+		panic("unknown mode in OreoRealisticDatastore")
+	}
+	return prefix + key
 }
