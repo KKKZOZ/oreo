@@ -65,7 +65,7 @@ func (g *GroupKeyMaintainer) GetSingleGroupKey(url string) (GroupKey, error) {
 	if !ok {
 		return GroupKey{}, fmt.Errorf("Connector to %s is not found", tokens[0])
 	}
-	groupKeyStr, err := conn.Get(tokens[1])
+	groupKeyStr, err := conn.Get(url)
 	if err != nil {
 		return GroupKey{}, err
 	}
@@ -179,7 +179,7 @@ func (g *GroupKeyMaintainer) DeleteGroupKey(urls []string) error {
 			if !ok {
 				return fmt.Errorf("Connector to %s is not found", tokens[0])
 			}
-			err := conn.Delete(tokens[1])
+			err := conn.Delete(url)
 			return err
 		})
 	}
