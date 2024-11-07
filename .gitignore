@@ -1,17 +1,31 @@
+# IDE and Editor files
 .idea/
 .intellij/
 *.iml
 .vscode/
-.DS_Store
-*.log
+.VSCodeCounter
 
+# OS generated files
+.DS_Store
+
+# Python files
+.venv
+.ipynb_checkpoints/
+
+# Logs and data
+*.log
+*.csv
+
+# Coverage and testing
 cover.out
 cover.html
 coverage.out
 coverage.html
-.VSCodeCounter
-design-note.md
 trace.out
 
+# Project documentation
+design-note.md
+
+# Build output and binaries
 /benchmarks/cmd/cmd
 /component/component

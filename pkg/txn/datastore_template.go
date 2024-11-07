@@ -105,33 +105,36 @@ func (r *Datastore) Read(key string, value any) error {
 	}
 
 	if r.Txn.isRemote {
-		item, readStrategy, err := r.Txn.RemoteRead(r.Name, key)
-		if err != nil {
-			return err
-		}
-		// TODO: logic for AssumeCommit and AssumeAbort
-		switch readStrategy {
-		case AssumeCommit:
-			r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
-				ItemKey: item.Key(),
-				State:   config.COMMITTED,
-			})
-		case AssumeAbort:
-			r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
-				ItemKey: item.Key(),
-				State:   config.ABORTED,
-			})
-		}
-
-		if item.IsDeleted() {
-			return errors.New(KeyNotFound)
-		}
-		r.readCache.Set(item.Key(), item)
-		return r.getValue(item, value)
+		return r.readFromRemote(key, value)
 	} else {
-		// else get if from connection
 		return r.readFromConn(key, value)
 	}
+}
+
+func (r *Datastore) readFromRemote(key string, value any) error {
+	item, readStrategy, err := r.Txn.RemoteRead(r.Name, key)
+	if err != nil {
+		return err
+	}
+	// TODO: logic for AssumeCommit and AssumeAbort
+	switch readStrategy {
+	case AssumeCommit:
+		r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
+			ItemKey: item.Key(),
+			State:   config.COMMITTED,
+		})
+	case AssumeAbort:
+		r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
+			ItemKey: item.Key(),
+			State:   config.ABORTED,
+		})
+	}
+
+	if item.IsDeleted() {
+		return errors.New(KeyNotFound)
+	}
+	r.readCache.Set(item.Key(), item)
+	return r.getValue(item, value)
 }
 
 func (r *Datastore) readFromConn(key string, value any) error {
@@ -149,6 +152,10 @@ func (r *Datastore) readFromConn(key string, value any) error {
 	resItem, err := r.basicVisibilityProcessor(item)
 	if err != nil {
 		return err
+	}
+
+	if config.Debug.NativeMode {
+		return r.getValue(resItem, value)
 	}
 
 	logicFunc := func(curItem DataItem, isFound bool) error {
@@ -216,6 +223,10 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		return item, nil
 	}
 
+	if config.Debug.NativeMode {
+		return item, nil
+	}
+
 	if item.TxnState() == config.COMMITTED {
 		return item, nil
 	}
@@ -246,7 +257,7 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		if item.TLease().Before(time.Now()) {
 			successNum := r.Txn.CreateGroupKeyFromItem(item, config.ABORTED)
 			if successNum == 0 {
-				return nil, fmt.Errorf("Failed to rollback the record because none of the group keys are created")
+				return nil, fmt.Errorf("failed to rollback the record because none of the group keys are created")
 				// if err.Error() == "key exists" {
 				// 	if curState == config.COMMITTED {
 				// 		return nil, errors.New("rollback failed because the corresponding transaction has committed")
@@ -634,31 +645,13 @@ func (r *Datastore) Prepare() (int64, error) {
 		return 0, nil
 	}
 
+	if config.Debug.NativeMode {
+		return r.prepareInNative(items)
+	}
+
 	// Only return TCommit for remote mode
 	if r.Txn.isRemote {
-		// for those whose version is clear, update their metadata
-		for _, item := range items {
-			if item.Version() != "" {
-				dbItem, _ := r.readCache.Get(item.Key())
-				newItem, err := r.updateMetadata(item, dbItem)
-				if err != nil {
-					return 0, errors.Errorf("UpdateMetadata failed: %v", err)
-				}
-				r.writeCache[item.Key()] = newItem
-			}
-		}
-
-		validationMap := r.validationSet.Items()
-		verMap, tCommit, err := r.Txn.RemotePrepare(r.Name, items, validationMap)
-		logger.Log.Debugw("Remote prepare Result",
-			"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err, "Latency", time.Since(r.Txn.debugStart), "Topic", "CheckPoint")
-		if err != nil {
-			return 0, errors.Join(errors.New("Remote prepare failed"), err)
-		}
-		for k, v := range verMap {
-			r.writeCache[k].SetVersion(v)
-		}
-		return tCommit, nil
+		return r.prepareInRemote(items)
 	}
 
 	err := r.validate()
@@ -682,7 +675,7 @@ func (r *Datastore) Prepare() (int64, error) {
 	}
 
 	var eg errgroup.Group
-	eg.SetLimit(config.Config.MaxOutstandingRequest)
+	// eg.SetLimit(config.Config.MaxOutstandingRequest)
 	for _, item := range items {
 		it := item
 		eg.Go(func() error {
@@ -690,6 +683,53 @@ func (r *Datastore) Prepare() (int64, error) {
 		})
 	}
 	return 0, eg.Wait()
+}
+
+func (r *Datastore) prepareInNative(items []DataItem) (int64, error) {
+	var err error
+	for _, itemm := range items {
+		item := itemm
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cacheItem, _ := r.readCache.Get(item.Key())
+			item, aErr := r.updateMetadata(item, cacheItem)
+			if aErr != nil {
+				err = aErr
+			}
+			r.conn.PutItem(item.Key(), item)
+		}()
+		wg.Wait()
+	}
+
+	return 0, err
+}
+
+func (r *Datastore) prepareInRemote(items []DataItem) (int64, error) {
+	// for those whose version is clear, update their metadata
+	for _, item := range items {
+		if item.Version() != "" {
+			dbItem, _ := r.readCache.Get(item.Key())
+			newItem, err := r.updateMetadata(item, dbItem)
+			if err != nil {
+				return 0, errors.Errorf("UpdateMetadata failed: %v", err)
+			}
+			r.writeCache[item.Key()] = newItem
+		}
+	}
+
+	validationMap := r.validationSet.Items()
+	verMap, tCommit, err := r.Txn.RemotePrepare(r.Name, items, validationMap)
+	logger.Log.Debugw("Remote prepare Result",
+		"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err, "Latency", time.Since(r.Txn.debugStart), "Topic", "CheckPoint")
+	if err != nil {
+		return 0, errors.Join(errors.New("Remote prepare failed"), err)
+	}
+	for k, v := range verMap {
+		r.writeCache[k].SetVersion(v)
+	}
+	return tCommit, nil
 }
 
 // Commit updates the state of records in the data store to COMMITTED.
@@ -702,17 +742,7 @@ func (r *Datastore) Commit() error {
 	logger.Log.Debugw("Datastore.Commit() starts", "r.Txn.isRemote", r.Txn.isRemote)
 
 	if r.Txn.isRemote {
-		infoList := make([]CommitInfo, 0, len(r.writeCache))
-		for _, item := range r.writeCache {
-			infoList = append(infoList, CommitInfo{Key: item.Key(), Version: item.Version()})
-		}
-
-		err := r.Txn.RemoteCommit(r.Name, infoList)
-		if err != nil {
-			logger.Log.Infow("Remote commit failed", "TxnId", r.Txn.TxnId)
-			return err
-		}
-		return err
+		return r.commitInRemote()
 	}
 
 	// update record's state to the COMMITTED state in the data store
@@ -736,6 +766,20 @@ func (r *Datastore) Commit() error {
 	logger.Log.Debugw("Datastore.Commit() finishes", "TxnId", r.Txn.TxnId)
 	r.clear()
 	return nil
+}
+
+func (r *Datastore) commitInRemote() error {
+	infoList := make([]CommitInfo, 0, len(r.writeCache))
+	for _, item := range r.writeCache {
+		infoList = append(infoList, CommitInfo{Key: item.Key(), Version: item.Version()})
+	}
+
+	err := r.Txn.RemoteCommit(r.Name, infoList)
+	if err != nil {
+		logger.Log.Infow("Remote commit failed", "TxnId", r.Txn.TxnId)
+		return err
+	}
+	return err
 }
 
 // Abort discards the changes made in the current transaction.
@@ -910,6 +954,10 @@ func (r *Datastore) Copy() Datastorer {
 
 func (r *Datastore) GetConn() Connector {
 	return r.conn
+}
+
+func (r *Datastore) GetWriteCacheSize() int {
+	return len(r.writeCache)
 }
 
 func (r *Datastore) clear() {

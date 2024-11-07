@@ -24,15 +24,15 @@ type Reader struct {
 	connMap     map[string]txn.Connector
 	itemFactory txn.DataItemFactory
 	se          serializer.Serializer
-	cacher      *Cacher
+	Cacher      *Cacher
 }
 
-func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer) *Reader {
+func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer, cacher *Cacher) *Reader {
 	return &Reader{
 		connMap:     connMap,
 		itemFactory: itemFactory,
 		se:          se,
-		cacher:      NewCacher(),
+		Cacher:      cacher,
 	}
 }
 
@@ -102,6 +102,7 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 	}
 	if item.TxnState() == config.PREPARED {
 		groupKeyList, err := r.getGroupKey(strings.Split(item.GroupKeyList(), ","))
+		// fmt.Printf("groupKeyList: %v\n", groupKeyList)
 		if err == nil {
 			if txn.CommittedForAll(groupKeyList) {
 				// if all the group keys are in COMMITTED state
@@ -252,7 +253,10 @@ func (r *Reader) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 // }
 
 func (r *Reader) getGroupKey(urls []string) ([]txn.GroupKey, error) {
-	groupKeys := make([]txn.GroupKey, len(urls))
+	groupKeys := make([]txn.GroupKey, 0, len(urls)) // 长度为 0，容量为 len(urls)
+	// fmt.Printf("urls: %v\n", urls)
+	// fmt.Printf("len(urls): %v\nlen(groupKeys): %v\n", len(urls), len(groupKeys))
+
 	var mu sync.Mutex
 	var eg errgroup.Group
 	for _, urll := range urls {
@@ -269,28 +273,31 @@ func (r *Reader) getGroupKey(urls []string) ([]txn.GroupKey, error) {
 		})
 	}
 	err := eg.Wait()
+	// fmt.Printf("error: %v\n", err)
 	// This means at least one of the group key is not found
 	if err != nil {
 		return nil, err
 	}
-	logger.Log.Debugf("Cache: %v\n", r.cacher.Statistic())
-
+	logger.Log.Debugf("Cache: %v\n", r.Cacher.Statistic())
+	// fmt.Printf("getGroupKey: %v\n", groupKeys)
 	return groupKeys, nil
 }
 
 func (r *Reader) getSingleGroupKey(url string) (txn.GroupKey, error) {
-	cacheItem, ok := r.cacher.Get(url)
+	cacheItem, ok := r.Cacher.Get(url)
 	if ok {
 		gk := txn.NewGroupKey(url, cacheItem.TxnState, cacheItem.TCommit)
 		return *gk, nil
 	}
+	// fmt.Printf("Cache not found: %v\n", url)
 
 	tokens := strings.Split(url, ":")
 	conn, ok := r.connMap[tokens[0]]
 	if !ok {
 		return txn.GroupKey{}, fmt.Errorf("connector to %s is not found", tokens[0])
 	}
-	groupKeyStr, err := conn.Get(tokens[1])
+	groupKeyStr, err := conn.Get(url)
+	// fmt.Printf("conn[%v].Get(%v) error: %v\n", tokens[0], url, err)
 	if err != nil {
 		return txn.GroupKey{}, err
 	}
@@ -299,7 +306,7 @@ func (r *Reader) getSingleGroupKey(url string) (txn.GroupKey, error) {
 	if err != nil {
 		return txn.GroupKey{}, fmt.Errorf("failed to unmarshal group key item %s", groupKeyStr)
 	}
-	r.cacher.Set(url, keyItem)
+	r.Cacher.Set(url, keyItem)
 	return *txn.NewGroupKey(url, keyItem.TxnState, keyItem.TCommit), nil
 }
 
@@ -313,7 +320,6 @@ func (r *Reader) createGroupKey(urls []string, state config.State, tCommit int64
 				resChan <- err
 				return
 			}
-			r.cacher.Set(url, txn.NewGroupKeyItem(state, tCommit))
 			resChan <- nil
 		}()
 	}
@@ -343,6 +349,7 @@ func (r *Reader) createSingleGroupKey(url string, state config.State, tCommit in
 	if err != nil {
 		return err
 	}
+	r.Cacher.Set(url, txn.NewGroupKeyItem(state, tCommit))
 	return nil
 }
 
@@ -402,4 +409,8 @@ func (r *Reader) treatAsCommitted(item txn.DataItem,
 		curItem = preItem
 	}
 	return nil, errors.New("key not found")
+}
+
+func (r *Reader) GetCacheStatistic() string {
+	return r.Cacher.Statistic()
 }

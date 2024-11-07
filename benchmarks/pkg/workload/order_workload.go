@@ -54,7 +54,7 @@ func (wl *OrderWorkload) ProductBrowsing(ctx context.Context, db ycsb.Transactio
 
 func (wl *OrderWorkload) OrderPlacement(ctx context.Context, db ycsb.TransactionDB) {
 
-	orderNum := 2
+	orderNum := 1
 	session_id := wl.NextKeyName()
 	db.Start()
 
