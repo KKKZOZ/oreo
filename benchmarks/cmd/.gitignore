@@ -3,11 +3,15 @@
 *.txt
 *.out
 *.prof
+log/
 
 # Executables and binaries
 iot-load
+social-load
+order-load
 executor
 timeoracle
+cmd
 
 # Python environment
 .venv/

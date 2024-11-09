@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -12,10 +13,20 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 
+	"github.com/go-kivik/kivik/v4/couchdb"
 	_ "github.com/go-kivik/kivik/v4/couchdb"
 )
 
 var _ txn.Connector = (*CouchDBConnection)(nil)
+
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		MaxIdleConns:        6000,
+		MaxIdleConnsPerHost: 1000,
+		MaxConnsPerHost:     1000,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
 
 type CouchDBConnection struct {
 	client       *kivik.Client
@@ -45,7 +56,9 @@ func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 		config.Address = "http://admin:password@localhost:5984"
 	}
 
-	client, _ := kivik.New("couch", config.Address)
+	client, _ := kivik.New("couch", config.Address, couchdb.OptionHTTPClient(
+		httpClient,
+	))
 
 	// Set the basic authorization header
 
@@ -59,6 +72,11 @@ func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 
 // Connect establishes a connection to the CouchDB server and selects database
 func (r *CouchDBConnection) Connect() error {
+
+	if r.hasConnected {
+		return nil
+	}
+
 	err := r.client.CreateDB(context.Background(), r.config.DBName, nil)
 	// if the error is not 'PreconditionFailed' which means the DB already exists, return the error.
 	if err != nil && kivik.HTTPStatus(err) != http.StatusPreconditionFailed {
@@ -71,6 +89,17 @@ func (r *CouchDBConnection) Connect() error {
 	}
 	r.db = db
 	r.hasConnected = true
+
+	var wg sync.WaitGroup
+	wg.Add(100)
+	for i := 0; i < 100; i++ {
+		go func() {
+			defer wg.Done()
+			_ = r.db.Get(context.Background(), "test")
+		}()
+	}
+	wg.Wait()
+
 	return nil
 }
 

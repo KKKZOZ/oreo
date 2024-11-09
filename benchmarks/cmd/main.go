@@ -8,19 +8,15 @@ import (
 	"benchmark/ycsb"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
-	"sync"
 	"time"
 
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	cfg "github.com/oreo-dtx-lab/oreo/pkg/config"
-	"github.com/oreo-dtx-lab/oreo/pkg/network"
-	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 )
 
 const (
@@ -158,10 +154,10 @@ func main() {
 	wl := createWorkload(wp)
 	client := generateClient(&wl, wp, dbType)
 
-	if isRemote {
-		warmUpHttpClient()
-	}
-	warmupTimeSourceClient()
+	// if isRemote {
+	// 	warmUpHttpClient()
+	// }
+	// warmupTimeSourceClient()
 	displayBenchmarkInfo()
 
 	switch mode {
@@ -192,52 +188,51 @@ func main() {
 	}
 }
 
-func warmUpHttpClient() {
-	for _, addr := range config.RemoteAddressList {
-		url := fmt.Sprintf("http://%s/ping", addr)
-		num := min(800, threadNum+200)
-		var wg sync.WaitGroup
-		wg.Add(num)
+// func warmUpHttpClient() {
+// 	for _, addr := range config.RemoteAddressList {
+// 		url := fmt.Sprintf("http://%s/ping", addr)
+// 		num := min(800, threadNum+200)
+// 		var wg sync.WaitGroup
+// 		wg.Add(num)
 
-		for i := 0; i < num; i++ {
-			go func() {
-				defer wg.Done()
-				resp, err := network.HttpClient.Get(url)
-				if err != nil {
-					fmt.Printf("Error when warming up http client: %v\n", err)
-				}
-				defer func() {
-					_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
-					_ = resp.Body.Close()
-				}()
-			}()
-		}
-		wg.Wait()
-	}
+// 		for i := 0; i < num; i++ {
+// 			go func() {
+// 				defer wg.Done()
+// 				resp, err := network.HttpClient.Get(url)
+// 				if err != nil {
+// 					fmt.Printf("Error when warming up http client: %v\n", err)
+// 				}
+// 				defer func() {
+// 					_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
+// 					_ = resp.Body.Close()
+// 				}()
+// 			}()
+// 		}
+// 		wg.Wait()
+// 	}
+// }
 
-}
+// func warmupTimeSourceClient() {
+// 	timeUrl := fmt.Sprintf("%s/timestamp/common", config.TimeOracleUrl)
+// 	num := 300
+// 	var wg sync.WaitGroup
+// 	wg.Add(num)
 
-func warmupTimeSourceClient() {
-	timeUrl := fmt.Sprintf("%s/timestamp/common", config.TimeOracleUrl)
-	num := 300
-	var wg sync.WaitGroup
-	wg.Add(num)
-
-	for i := 0; i < num; i++ {
-		go func() {
-			defer wg.Done()
-			resp, err := timesource.HttpClient.Get(timeUrl)
-			if err != nil {
-				fmt.Printf("Error when warming up http client: %v\n", err)
-			}
-			defer func() {
-				_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
-				_ = resp.Body.Close()
-			}()
-		}()
-	}
-	wg.Wait()
-}
+// 	for i := 0; i < num; i++ {
+// 		go func() {
+// 			defer wg.Done()
+// 			resp, err := timesource.HttpClient.Get(timeUrl)
+// 			if err != nil {
+// 				fmt.Printf("Error when warming up http client: %v\n", err)
+// 			}
+// 			defer func() {
+// 				_, _ = io.CopyN(io.Discard, resp.Body, 1024*4)
+// 				_ = resp.Body.Close()
+// 			}()
+// 		}()
+// 	}
+// 	wg.Wait()
+// }
 
 func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
 	if workloadType != "" {

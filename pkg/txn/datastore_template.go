@@ -44,18 +44,20 @@ type Datastore struct {
 	conn Connector
 
 	// readCache is the cache for read operations in Datastore.
-	readCache util.ConcurrentMap[string, DataItem]
+	// readCache util.ConcurrentMap[string, DataItem]
+	readCache map[string]DataItem
 
 	// writeCache is the cache for write operations in Datastore.
 	writeCache map[string]DataItem
 
 	// writtenSet is the set of keys that have successfully been written to the DB.
-	writtenSet util.ConcurrentMap[string, bool]
+	// writtenSet util.ConcurrentMap[string, bool]
 
 	// invisibleSet is the set of keys that are not visible to the current transaction.
 	invisibleSet map[string]bool
 
-	validationSet util.ConcurrentMap[string, PredicateInfo]
+	// validationSet util.ConcurrentMap[string, PredicateInfo]
+	validationSet map[string]PredicateInfo
 
 	// se is the serializer used for serializing and deserializing data in Datastore.
 	se serializer.Serializer
@@ -71,13 +73,13 @@ type Datastore struct {
 // It initializes the read and write caches, as well as the serializer.
 func NewDatastore(name string, conn Connector, factory DataItemFactory) *Datastore {
 	return &Datastore{
-		Name:          name,
-		conn:          conn,
-		readCache:     util.NewConcurrentMap[DataItem](),
-		writeCache:    make(map[string]DataItem),
-		writtenSet:    util.NewConcurrentMap[bool](),
+		Name:       name,
+		conn:       conn,
+		readCache:  make(map[string]DataItem),
+		writeCache: make(map[string]DataItem),
+		// writtenSet:    util.NewConcurrentMap[bool](),
 		invisibleSet:  make(map[string]bool),
-		validationSet: util.NewConcurrentMap[PredicateInfo](),
+		validationSet: make(map[string]PredicateInfo),
 		se:            config.Config.Serializer,
 		itemFactory:   factory,
 	}
@@ -100,7 +102,7 @@ func (r *Datastore) Read(key string, value any) error {
 		return r.getValue(item, value)
 	}
 	// if the record is in the readCache
-	if item, ok := r.readCache.Get(key); ok {
+	if item, ok := r.readCache[key]; ok {
 		return r.getValue(item, value)
 	}
 
@@ -119,21 +121,21 @@ func (r *Datastore) readFromRemote(key string, value any) error {
 	// TODO: logic for AssumeCommit and AssumeAbort
 	switch readStrategy {
 	case AssumeCommit:
-		r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
+		r.validationSet[item.GroupKeyList()] = PredicateInfo{
 			ItemKey: item.Key(),
 			State:   config.COMMITTED,
-		})
+		}
 	case AssumeAbort:
-		r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
+		r.validationSet[item.GroupKeyList()] = PredicateInfo{
 			ItemKey: item.Key(),
 			State:   config.ABORTED,
-		})
+		}
 	}
 
 	if item.IsDeleted() {
 		return errors.New(KeyNotFound)
 	}
-	r.readCache.Set(item.Key(), item)
+	r.readCache[item.Key()] = item
 	return r.getValue(item, value)
 }
 
@@ -170,7 +172,7 @@ func (r *Datastore) readFromConn(key string, value any) error {
 				// If it is not put into the cache, the record is invisible for prepare phase
 				// so the code will regard it as a new record
 				// and create a new record in the prepare phase (set `doCreate` to true)
-				r.readCache.Set(curItem.Key(), curItem)
+				r.readCache[curItem.Key()] = curItem
 				errMsg := "key not found because item is already deleted in " + r.Name
 				return errors.New(errMsg)
 			}
@@ -182,7 +184,7 @@ func (r *Datastore) readFromConn(key string, value any) error {
 				return err
 			}
 		}
-		r.readCache.Set(curItem.Key(), curItem)
+		r.readCache[curItem.Key()] = curItem
 		return nil
 	}
 
@@ -301,17 +303,17 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 		} else {
 			switch config.Config.ReadStrategy {
 			case config.AssumeCommit:
-				r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
+				r.validationSet[item.GroupKeyList()] = PredicateInfo{
 					ItemKey: item.Key(),
 					State:   config.COMMITTED,
-				})
+				}
 				return item, nil
 			case config.AssumeAbort:
-				r.validationSet.Set(item.GroupKeyList(), PredicateInfo{
+				r.validationSet[item.GroupKeyList()] = PredicateInfo{
 					State:     config.ABORTED,
 					ItemKey:   item.Key(),
 					LeaseTime: item.TLease(),
-				})
+				}
 				if item.Prev() == "" {
 					return nil, errors.New("key not found in AssumeAbort")
 				}
@@ -385,7 +387,7 @@ func (r *Datastore) Write(key string, value any) error {
 func (r *Datastore) writeToCache(cacheItem DataItem) error {
 
 	// check if it follows read-modified-commit pattern
-	if oldItem, ok := r.readCache.Get(cacheItem.Key()); ok {
+	if oldItem, ok := r.readCache[cacheItem.Key()]; ok {
 		cacheItem.SetVersion(oldItem.Version())
 	} else {
 		// else we set it to empty, indicating this is a direct write
@@ -455,7 +457,7 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 	// if the cacheItem follows read-modified-write pattern,
 	// it already has a valid version, we can skip the read step.
 	if cacheItem.Version() != "" {
-		dbItem, _ := r.readCache.Get(cacheItem.Key())
+		dbItem, _ := r.readCache[cacheItem.Key()]
 		return r.doConditionalUpdate(cacheItem, dbItem)
 	}
 
@@ -466,7 +468,7 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 			return err
 		}
 	}
-	dbItem, _ := r.readCache.Get(cacheItem.Key())
+	dbItem, _ := r.readCache[cacheItem.Key()]
 	// if the record is dropped by the repeatable read rule
 	if res, ok := r.invisibleSet[cacheItem.Key()]; ok && res {
 		dbItem = nil
@@ -591,8 +593,7 @@ func (r *Datastore) validate() error {
 	}
 
 	var eg errgroup.Group
-	set := r.validationSet.Items()
-	for gkk, predd := range set {
+	for gkk, predd := range r.validationSet {
 		gk := gkk
 		pred := predd
 		if pred.ItemKey == "" {
@@ -693,7 +694,7 @@ func (r *Datastore) prepareInNative(items []DataItem) (int64, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			cacheItem, _ := r.readCache.Get(item.Key())
+			cacheItem, _ := r.readCache[item.Key()]
 			item, aErr := r.updateMetadata(item, cacheItem)
 			if aErr != nil {
 				err = aErr
@@ -710,7 +711,7 @@ func (r *Datastore) prepareInRemote(items []DataItem) (int64, error) {
 	// for those whose version is clear, update their metadata
 	for _, item := range items {
 		if item.Version() != "" {
-			dbItem, _ := r.readCache.Get(item.Key())
+			dbItem, _ := r.readCache[item.Key()]
 			newItem, err := r.updateMetadata(item, dbItem)
 			if err != nil {
 				return 0, errors.Errorf("UpdateMetadata failed: %v", err)
@@ -719,8 +720,7 @@ func (r *Datastore) prepareInRemote(items []DataItem) (int64, error) {
 		}
 	}
 
-	validationMap := r.validationSet.Items()
-	verMap, tCommit, err := r.Txn.RemotePrepare(r.Name, items, validationMap)
+	verMap, tCommit, err := r.Txn.RemotePrepare(r.Name, items, r.validationSet)
 	logger.Log.Debugw("Remote prepare Result",
 		"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err, "Latency", time.Since(r.Txn.debugStart), "Topic", "CheckPoint")
 	if err != nil {
@@ -961,8 +961,8 @@ func (r *Datastore) GetWriteCacheSize() int {
 }
 
 func (r *Datastore) clear() {
-	r.readCache = util.NewConcurrentMap[DataItem]()
+	r.readCache = make(map[string]DataItem)
 	r.writeCache = make(map[string]DataItem)
-	r.writtenSet = util.NewConcurrentMap[bool]()
+	// r.writtenSet = util.NewConcurrentMap[bool]()
 	r.invisibleSet = make(map[string]bool)
 }

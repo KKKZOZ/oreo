@@ -26,6 +26,11 @@ thread_load=50
 wl_type=iot
 tar_dir=$wl_type
 
+# bash update-component.sh
+
+# Go to the script root directory
+cd "$(dirname "$0")" && cd ..
+
 # Clear files
 # rm iot-native.txt iot-oreo.txt iot-cg.txt
 mkdir -p "$tar_dir"
@@ -45,16 +50,16 @@ if [ -n "$pid" ]; then
 fi
 
 verbose_echo "Starting executor"
-./executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w iot -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 >/dev/null 2>executor.log &
+./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 >/dev/null 2>./log/executor.log &
 # ./executor -p "$executor_port" -w iot -kvrocks 39.104.105.27:6379 -mongo1 mongodb://39.104.105.27:27018 > /dev/null 2> executor.log &
 executor_pid=$!
 
 verbose_echo "Starting time oracle"
 
-./timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>timeoracle.log &
+./bin/timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>./log/timeoracle.log &
 time_oracle_pid=$!
 
-if [ ! -f "iot-load" ]; then
+if [ ! -f "$tar_dir/$wl_type-load" ]; then
 
   verbose_echo "Loading to IOT native"
   # ben load iot native "$thread_load"
@@ -68,16 +73,16 @@ if [ ! -f "iot-load" ]; then
   # ben load iot oreo "$thread_load"
   go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m load -ps oreo -t "$thread_load"
 
-  touch iot-load
+  touch "$tar_dir/${wl_type}-load"
 else
   verbose_echo "Data has been already loaded"
 fi
 
-verbose_echo "Running IOT native"
-go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps native -t "$thread" >"$tar_dir/iot-native.txt"
+# verbose_echo "Running IOT native"
+# go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps native -t "$thread" >"$tar_dir/iot-native.txt"
 
-verbose_echo "Running IOT Cherry Garcia"
-go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps cg -t "$thread" >"$tar_dir/iot-cg.txt"
+# verbose_echo "Running IOT Cherry Garcia"
+# go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps cg -t "$thread" >"$tar_dir/iot-cg.txt"
 
 verbose_echo "Running IOT oreo"
 go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m run -ps oreo -remote -t "$thread" >"$tar_dir/iot-oreo.txt"

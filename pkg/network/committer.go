@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alitto/pond/v2"
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/logger"
@@ -22,9 +23,13 @@ type Committer struct {
 	se          serializer.Serializer
 	itemFactory txn.DataItemFactory
 	timeSource  timesource.TimeSourcer
+	pool        pond.Pool
 }
 
 func NewCommitter(connMap map[string]txn.Connector, reader Reader, se serializer.Serializer, itemFactory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Committer {
+
+	pool := pond.NewPool(200)
+
 	// conn.Connect()
 	return &Committer{
 		connMap:     connMap,
@@ -32,6 +37,7 @@ func NewCommitter(connMap map[string]txn.Connector, reader Reader, se serializer
 		se:          se,
 		itemFactory: itemFactory,
 		timeSource:  timeSource,
+		pool:        pool,
 	}
 }
 
@@ -90,12 +96,15 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	}
 
 	var mu sync.Mutex
-	var eg errgroup.Group
+	// var eg errgroup.Group
 	versionMap := make(map[string]string)
+
+	subPool := c.pool.NewSubpool(5)
+	taskGroup := subPool.NewGroup()
 
 	for _, it := range itemList {
 		item := it
-		eg.Go(func() error {
+		taskGroup.SubmitErr(func() error {
 			var doCreate bool
 			// if this item follows the read-modify-write pattern
 			if item.Version() != "" {
@@ -104,22 +113,23 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 				// else we do a txn Read to determine its version
 				dbItem, _, err := c.reader.Read(dsName, item.Key(), startTime, cfg, false)
 				if err != nil && err.Error() != "key not found" {
+					logger.Log.Errorw("Read error", "error", err)
 					return err
 				}
-				logger.Log.Debugw("error?", "err", err)
 				if dbItem == nil {
 					doCreate = true
 				} else {
 					doCreate = false
 				}
-				logger.Log.Debugw("do a txn Read to determine the record version", "dbItem", dbItem)
+				// logger.Log.Debugw("do a txn Read to determine the record version", "dbItem", dbItem)
 				item, _ = c.updateMetadata(item, dbItem, 0, cfg)
 			}
 			logger.Log.Debugw("Before c.connMap[dsName].ConditionalUpdate", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 			ver, err := c.connMap[dsName].ConditionalUpdate(item.Key(), item, doCreate)
 			logger.Log.Debugw("After c.connMap[dsName].ConditionalUpdate", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
+
 			// if err != nil {
-			// 	fmt.Printf("ConditionalUpdate error: %v in %v, item: %v\n", err, dsName, item)
+			// 	logger.Log.Errorw("ConditionalUpdate error", "error", err)
 			// }
 
 			mu.Lock()
@@ -128,7 +138,7 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 			return err
 		})
 	}
-	err = eg.Wait()
+	err = taskGroup.Wait()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -156,10 +166,12 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 }
 
 func (c *Committer) Abort(dsName string, keyList []string, groupKeyList string) error {
-	var eg errgroup.Group
+	// var eg errgroup.Group
+	subPool := c.pool.NewSubpool(5)
+	taskGroup := subPool.NewGroup()
 	for _, k := range keyList {
 		key := k
-		eg.Go(func() error {
+		taskGroup.SubmitErr(func() error {
 			item, err := c.connMap[dsName].GetItem(key)
 			if err != nil {
 				return err
@@ -172,19 +184,21 @@ func (c *Committer) Abort(dsName string, keyList []string, groupKeyList string) 
 			}
 		})
 	}
-	return eg.Wait()
+	return taskGroup.Wait()
 }
 
 func (c *Committer) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64) error {
-	var eg errgroup.Group
+	// var eg errgroup.Group
+	subPool := c.pool.NewSubpool(5)
+	taskGroup := subPool.NewGroup()
 	for _, info := range infoList {
 		item := info
-		eg.Go(func() error {
+		taskGroup.SubmitErr(func() error {
 			_, err := c.connMap[dsName].ConditionalCommit(item.Key, item.Version, tCommit)
 			return err
 		})
 	}
-	return eg.Wait()
+	return taskGroup.Wait()
 }
 
 // truncate truncates the linked list of DataItems

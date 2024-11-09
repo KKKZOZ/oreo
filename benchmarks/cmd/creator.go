@@ -312,12 +312,15 @@ func OreoMongoCreator(isRemote bool) (ycsb.DBCreator, error) {
 // TODO: Add isRemote logic
 func OreoCouchCreator(isRemote bool) (ycsb.DBCreator, error) {
 	couchConn1 := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
-		Address:  OreoCouchDBAddr,
-		DBName:   "oreo",
-		Username: CouchUsername,
-		Password: CouchPassword,
+		Address: OreoCouchDBAddr,
+		DBName:  "oreo",
+		// Username: CouchUsername,
+		// Password: CouchPassword,
 	})
-	couchConn1.Connect()
+	err := couchConn1.Connect()
+	if err != nil {
+		return nil, err
+	}
 
 	// try to warm up the connection
 	var wg sync.WaitGroup
@@ -501,12 +504,16 @@ func NewMongoDBConn() *mongoCo.MongoConnection {
 
 func NewCouchDBConn() *couchdb.CouchDBConnection {
 	couchConn := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
-		Address:  OreoCouchDBAddr,
-		DBName:   "oreo",
-		Username: CouchUsername,
-		Password: CouchPassword,
+		Address: OreoCouchDBAddr,
+		DBName:  "oreo",
+		// Username: CouchUsername,
+		// Password: CouchPassword,
 	})
-	couchConn.Connect()
+	err := couchConn.Connect()
+	if err != nil {
+		log.Fatalf("Error when connecting to couchdb: %v\n", err)
+	}
+
 	// try to warm up the connection
 	var wg sync.WaitGroup
 	for i := 1; i <= 30; i++ {
