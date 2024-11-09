@@ -21,7 +21,7 @@ docker run -d \
   mongo
 
 echo "Remove iot-load file"
-rm iot-load
+rm ../iot/iot-load
 
 echo "IOT setup complete"
 

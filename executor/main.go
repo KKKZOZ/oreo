@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
@@ -26,7 +27,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// var json = jsoniter.ConfigCompatibleWithStandardLibrary
+var json2 = jsoniter.ConfigCompatibleWithStandardLibrary
 
 var banner = `
  ____  _        _       _               
@@ -43,11 +44,11 @@ type Server struct {
 }
 
 func NewServer(port int, connMap map[string]txn.Connector, factory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Server {
-	reader := *network.NewReader(connMap, factory, serializer.NewJSONSerializer(), network.NewCacher())
+	reader := *network.NewReader(connMap, factory, serializer.NewJSON2Serializer(), network.NewCacher())
 	return &Server{
 		port:      port,
 		reader:    reader,
-		committer: *network.NewCommitter(connMap, reader, serializer.NewJSONSerializer(), factory, timeSource),
+		committer: *network.NewCommitter(connMap, reader, serializer.NewJSON2Serializer(), factory, timeSource),
 	}
 }
 
@@ -149,7 +150,7 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 	}()
 
 	var req network.PrepareRequest
-	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
+	if err := json2.Unmarshal(ctx.PostBody(), &req); err != nil {
 		errMsg := fmt.Sprintf("Invalid prepare request body, error: %s\n Body: %v\n", err.Error(), string(ctx.PostBody()))
 		ctx.Error(errMsg, fasthttp.StatusBadRequest)
 		return
@@ -170,7 +171,7 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 			TCommit: tCommit,
 		}
 	}
-	respBytes, _ := json.Marshal(resp)
+	respBytes, _ := json2.Marshal(resp)
 	ctx.Write(respBytes)
 }
 
@@ -257,7 +258,7 @@ func main() {
 	parseFlag()
 
 	if pprofFlag {
-		cpuFile, err := os.Create("executor_profile.prof")
+		cpuFile, err := os.Create("executor_cpu_profile.prof")
 		if err != nil {
 			fmt.Println("无法创建 CPU profile 文件:", err)
 			return
@@ -268,6 +269,16 @@ func main() {
 			return
 		}
 		defer pprof.StopCPUProfile()
+
+		// fMem, err := os.Create("executor_mem_profile.prof")
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// defer func() {
+		// 	runtime.GC() // 触发 GC，确保内存分配的准确性
+		// 	pprof.WriteHeapProfile(fMem)
+		// 	fMem.Close()
+		// }()
 	}
 
 	if traceFlag {
@@ -426,9 +437,10 @@ func getKVRocksConn() *redis.RedisConnection {
 
 func getCouchConn() *couchdb.CouchDBConnection {
 	couchConn := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
-		Address:  couchAddr,
-		Username: CouchUsername,
-		Password: CouchPassword,
+		Address: couchAddr,
+		// Username: CouchUsername,
+		// Password: CouchPassword,
+		DBName: "oreo",
 	})
 	err := couchConn.Connect()
 	if err != nil {

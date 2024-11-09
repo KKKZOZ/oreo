@@ -5,13 +5,9 @@ timeoracle_port=8010
 thread_load=50
 wl_type=iot
 tar_dir=$wl_type
-threads=(8 16 32 64 96)
-results_file="${wl_type}_benchmark_results.csv"
-
-# Create/overwrite results file with header
-echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99" >"$results_file"
-
-operation=$(rg '^operationcount' ./workloads/$wl_type.yaml | rg -o '[0-9.]+')
+threads=(32 64 96)
+# threads=(16 32 64 96 128 160 192 224 256)
+results_file="$tar_dir/${wl_type}_benchmark_results.csv"
 
 if [ $# -eq 1 ]; then
 	verbose=false
@@ -22,6 +18,12 @@ fi
 log() {
 	[[ "${verbose}" = true ]] && echo "$@"
 }
+
+handle_error() {
+	echo "Error: $1"
+	exit 1
+}
+
 kill_process_on_port() {
 	local port=$1
 	local pid
@@ -35,7 +37,7 @@ kill_process_on_port() {
 run_workload() {
 	local mode=$1 profile=$2 thread=$3 output=$4
 	log "Running $wl_type $profile thread=$thread"
-	go run . -d oreo -wl $wl_type -wc "./workloads/$wl_type.yaml" -m $mode -ps $profile -t "$thread" >"$output"
+	./bin/cmd -d oreo -wl $wl_type -wc "./workloads/$wl_type.yaml" -m $mode -ps $profile -t "$thread" >"$output"
 }
 
 load_data() {
@@ -43,7 +45,7 @@ load_data() {
 		log "Loading to ${wl_type} $profile"
 		run_workload "load" "$profile" "$thread_load" "/dev/null"
 	done
-	touch "${wl_type}-load"
+	touch "$tar_dir/${wl_type}-load"
 }
 
 get_metrics() {
@@ -71,21 +73,36 @@ print_summary() {
 }
 
 main() {
+
+	# bash update-component.sh || handle_error "Failed to update components"
+
+	# Go to the script root directory
+	cd "$(dirname "$0")" && cd ..
+
+	echo "Building the benchmark"
+	go build .
+	mv cmd ./bin
+
+	# Create/overwrite results file with header
+	echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99" >"$results_file"
+
+	operation=$(rg '^operationcount' ./workloads/$wl_type.yaml | rg -o '[0-9.]+')
+
 	mkdir -p "$tar_dir"
 
 	kill_process_on_port "$executor_port"
 	kill_process_on_port "$timeoracle_port"
 
 	log "Starting executor"
-	./executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w iot -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 2>executor.log &
+	./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 2>./log/executor.log &
 	executor_pid=$!
 
 	log "Starting time oracle"
-	./timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>timeoracle.log &
+	./bin/timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>./log/timeoracle.log &
 	time_oracle_pid=$!
 
 	# Load data if needed
-	if [ ! -f "${wl_type}-load" ]; then
+	if [ ! -f "$tar_dir/${wl_type}-load" ]; then
 		load_data
 	else
 		log "Data has been already loaded"

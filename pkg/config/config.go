@@ -100,7 +100,7 @@ var Config = config{
 	LeaseTime:                   1000 * time.Millisecond,
 	MaxRecordLength:             2,
 	IdGenerator:                 generator.NewUUIDGenerator(),
-	Serializer:                  serializer.NewJSONSerializer(),
+	Serializer:                  serializer.NewJSON2Serializer(),
 	LogLevel:                    zapcore.InfoLevel,
 	ConcurrentOptimizationLevel: DEFAULT,
 	AsyncLevel:                  AsyncLevelZero,

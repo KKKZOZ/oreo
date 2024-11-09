@@ -1,16 +1,16 @@
 package network
 
 import (
-	"encoding/json"
 	"fmt"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
-// var json = jsoniter.ConfigCompatibleWithStandardLibrary
+var json2 = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type Response[T any] struct {
 	Status string
@@ -63,34 +63,34 @@ type AbortRequest struct {
 }
 
 func (r *ReadResponse) UnmarshalJSON(data []byte) error {
-	type Alias ReadResponse
-	aux := &struct {
-		Data json.RawMessage `json:"Data"`
-		*Alias
-	}{
-		Alias: (*Alias)(r),
+	type TempResponse struct {
+		ItemType txn.ItemType        `json:"ItemType"`
+		Data     jsoniter.RawMessage `json:"Data"`
 	}
 
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
+	var aux TempResponse
+	if err := json2.Unmarshal(data, &aux); err != nil {
+		return fmt.Errorf("failed to unmarshal basic fields: %v", err)
 	}
+
+	r.ItemType = aux.ItemType
 
 	switch r.ItemType {
 	case txn.RedisItem:
 		var redisItem redis.RedisItem
-		if err := json.Unmarshal(aux.Data, &redisItem); err != nil {
+		if err := json2.Unmarshal(aux.Data, &redisItem); err != nil {
 			return err
 		}
 		r.Data = &redisItem
 	case txn.MongoItem:
 		var mongoItem mongo.MongoItem
-		if err := json.Unmarshal(aux.Data, &mongoItem); err != nil {
+		if err := json2.Unmarshal(aux.Data, &mongoItem); err != nil {
 			return err
 		}
 		r.Data = &mongoItem
 	case txn.CouchItem:
 		var couchItem couchdb.CouchDBItem
-		if err := json.Unmarshal(aux.Data, &couchItem); err != nil {
+		if err := json2.Unmarshal(aux.Data, &couchItem); err != nil {
 			return err
 		}
 		r.Data = &couchItem
@@ -104,21 +104,42 @@ func (r *ReadResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
-	type Alias PrepareRequest
-	aux := &struct {
-		ItemList json.RawMessage `json:"ItemList"`
-		*Alias
-	}{
-		Alias: (*Alias)(p),
+
+	type TempRequest struct {
+		DsName        string                       `json:"DsName"`
+		ValidationMap map[string]txn.PredicateInfo `json:"ValidationMap"`
+		ItemType      txn.ItemType                 `json:"ItemType"`
+		StartTime     int64                        `json:"StartTime"`
+		Config        txn.RecordConfig             `json:"Config"`
+		ItemList      jsoniter.RawMessage          `json:"ItemList"`
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
+
+	var aux TempRequest
+	if err := json2.Unmarshal(data, &aux); err != nil {
+		return fmt.Errorf("failed to unmarshal basic fields: %v", err)
 	}
+
+	p.DsName = aux.DsName
+	p.ValidationMap = aux.ValidationMap
+	p.ItemType = aux.ItemType
+	p.StartTime = aux.StartTime
+	p.Config = aux.Config
+
+	// type Alias PrepareRequest
+	// aux := &struct {
+	// 	ItemList jsoniter.RawMessage `json:"ItemList"`
+	// 	*Alias
+	// }{
+	// 	Alias: (*Alias)(p),
+	// }
+	// if err := json2.Unmarshal(data, &aux); err != nil {
+	// 	return err
+	// }
 
 	switch p.ItemType {
 	case txn.RedisItem:
 		var redisItemList []redis.RedisItem
-		if err := json.Unmarshal(aux.ItemList, &redisItemList); err != nil {
+		if err := json2.Unmarshal(aux.ItemList, &redisItemList); err != nil {
 			return err
 		}
 		p.ItemList = make([]txn.DataItem, len(redisItemList))
@@ -128,11 +149,21 @@ func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
 		}
 	case txn.MongoItem:
 		var mongoItemList []mongo.MongoItem
-		if err := json.Unmarshal(aux.ItemList, &mongoItemList); err != nil {
+		if err := json2.Unmarshal(aux.ItemList, &mongoItemList); err != nil {
 			return err
 		}
 		p.ItemList = make([]txn.DataItem, len(mongoItemList))
 		for i, it := range mongoItemList {
+			item := it
+			p.ItemList[i] = &item
+		}
+	case txn.CouchItem:
+		var couchItemList []couchdb.CouchDBItem
+		if err := json2.Unmarshal(aux.ItemList, &couchItemList); err != nil {
+			return err
+		}
+		p.ItemList = make([]txn.DataItem, len(couchItemList))
+		for i, it := range couchItemList {
 			item := it
 			p.ItemList[i] = &item
 		}

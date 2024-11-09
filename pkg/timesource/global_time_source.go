@@ -1,10 +1,8 @@
 package timesource
 
 import (
-	"io"
-	"net/http"
-
 	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/valyala/fasthttp"
 )
 
 type GlobalTimeSource struct {
@@ -13,14 +11,6 @@ type GlobalTimeSource struct {
 
 var _ TimeSourcer = (*GlobalTimeSource)(nil)
 
-var HttpClient = &http.Client{
-	Transport: &http.Transport{
-		MaxIdleConns:        6000,
-		MaxIdleConnsPerHost: 1000,
-		MaxConnsPerHost:     1000,
-	},
-}
-
 func NewGlobalTimeSource(url string) *GlobalTimeSource {
 	return &GlobalTimeSource{
 		Url: url,
@@ -28,21 +18,29 @@ func NewGlobalTimeSource(url string) *GlobalTimeSource {
 }
 
 func (g *GlobalTimeSource) GetTime(mode string) (int64, error) {
-	resp, err := HttpClient.Get(g.Url + "/timestamp/common")
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	// 设置请求 URL
+	req.SetRequestURI(g.Url + "/timestamp/common")
+
+	// 发起 GET 请求
+	err := fasthttp.Do(req, resp)
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	// 检查状态码
+	if resp.StatusCode() != fasthttp.StatusOK {
 		return 0, err
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, err
-	}
-
+	// 读取响应体
+	body := resp.Body()
 	timeValue := util.ToInt(string(body))
+
 	return timeValue, nil
 }
