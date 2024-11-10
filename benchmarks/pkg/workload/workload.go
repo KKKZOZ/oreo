@@ -23,6 +23,7 @@ const (
 	mongoDatastore1
 	mongoDatastore2
 	couchDatastore1
+	kvrocksDatastore1
 )
 
 const (

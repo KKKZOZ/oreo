@@ -16,8 +16,8 @@ type WorkloadParameter struct {
 	ReadProportion            float64 `yaml:"readproportion"`
 	UpdateProportion          float64 `yaml:"updateproportion"`
 	InsertProportion          float64 `yaml:"insertproportion"`
-	ScanProportion            float64 `yaml:"scanproportion"`
 	ReadModifyWriteProportion float64 `yaml:"readmodifywriteproportion"`
+	ScanProportion            float64 `yaml:"scanproportion"`
 	DoubleSeqCommitProportion float64 `yaml:"doubleseqcommitproportion"`
 
 	// These parameters are for the data consistency test
@@ -31,6 +31,7 @@ type WorkloadParameter struct {
 	Redis1Proportion    float64 `yaml:"redis1proportion"`
 	Mongo1Proportion    float64 `yaml:"mongo1proportion"`
 	Mongo2Proportion    float64 `yaml:"mongo2proportion"`
+	KVRocksProportion   float64 `yaml:"kvrocksproportion"`
 	CouchDBProportion   float64 `yaml:"couchdbproportion"`
 
 	Task1Proportion float64 `yaml:"task1proportion"`
