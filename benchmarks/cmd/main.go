@@ -278,6 +278,18 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 
 	var c *client.Client
 	switch dbName {
+	case "oreo-ycsb":
+		wp.DBName = "oreo-ycsb"
+		creator, err := OreoYCSBCreator(workloadType, preset)
+		if err != nil {
+			fmt.Printf("Error when creating oreo-ycsb client: %v\n", err)
+			return nil
+		}
+		creatorMap := map[string]ycsb.DBCreator{
+			dbName: creator,
+		}
+		c = client.NewClient(wl, wp, creatorMap)
+
 	case "oreo":
 		wp.DBName = "oreo"
 		creator, err := OreoRealisticCreator(workloadType, isRemote, preset)

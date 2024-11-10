@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,35 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+func OreoYCSBCreator(workloadType string, mode string) (ycsb.DBCreator, error) {
+	nameList := strings.Split(workloadType, ",")
+
+	connMap := make(map[string]txn.Connector)
+	for _, name := range nameList {
+		if name == "Redis" {
+			redisConn := NewRedisConn()
+			connMap["Redis"] = redisConn
+		}
+		if name == "KVRocks" {
+			kvConn := NewKVRocksConn()
+			connMap["KVRocks"] = kvConn
+		}
+		if name == "MongoDB" {
+			mongoConn := NewMongoDBConn()
+			connMap["MongoDB"] = mongoConn
+		}
+		if name == "CouchDB" {
+			couchConn := NewCouchDBConn()
+			connMap["CouchDB"] = couchConn
+		}
+	}
+	return &oreo.OreoYCSBCreator{
+		ConnMap:             connMap,
+		GlobalDatastoreName: nameList[0],
+		Mode:                mode,
+	}, nil
+}
 
 func NativeRealisticCreator(workloadType string) (ycsb.DBCreator, error) {
 	if workloadType == "iot" {
