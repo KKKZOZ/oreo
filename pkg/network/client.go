@@ -114,10 +114,13 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 		Config:        cfg,
 		ValidationMap: validationMap,
 	}
+
 	jsonData, err := json2.Marshal(data)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// fmt.Printf("Prepare request(JSON DATA): %v\n", string(jsonData))
 
 	reqUrl := c.GetServerAddr() + "/prepare"
 
@@ -270,6 +273,8 @@ func (c *Client) getItemType(dsName string) txn.ItemType {
 		return txn.CouchItem
 	case "KVRocks":
 		return txn.RedisItem
+	case "Cassandra":
+		return txn.CassandraItem
 	default:
 		return ""
 	}

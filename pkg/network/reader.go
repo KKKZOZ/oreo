@@ -43,7 +43,13 @@ func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
 	isRemoteCall bool) (txn.DataItem, txn.RemoteDataStrategy, error) {
 	dataType := txn.Normal
 
-	item, err := r.connMap[dsName].GetItem(key)
+	conn, ok := r.connMap[dsName]
+	if !ok {
+		return nil, dataType, fmt.Errorf("connector to %s is not found", dsName)
+	}
+
+	item, err := conn.GetItem(key)
+	logger.Log.Infow("Read", "key", key, "item", item)
 	if err != nil {
 		return nil, dataType, err
 	}

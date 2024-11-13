@@ -54,11 +54,12 @@ func (r *Randomizer) ResetKeySequence() {
 
 func createDatastoreGenerator(wp *WorkloadParameter) *generator.Discrete {
 	proportions := map[int64]float64{
-		int64(kvrocksDatastore1): wp.KVRocksProportion,
-		int64(redisDatastore1):   wp.Redis1Proportion,
-		int64(mongoDatastore1):   wp.Mongo1Proportion,
-		int64(mongoDatastore2):   wp.Mongo2Proportion,
-		int64(couchDatastore1):   wp.CouchDBProportion,
+		int64(kvrocksDatastore1):   wp.KVRocksProportion,
+		int64(redisDatastore1):     wp.Redis1Proportion,
+		int64(mongoDatastore1):     wp.Mongo1Proportion,
+		int64(mongoDatastore2):     wp.Mongo2Proportion,
+		int64(couchDatastore1):     wp.CouchDBProportion,
+		int64(cassandraDatastore1): wp.CassandraProportion,
 	}
 
 	datastoreChooser := generator.NewDiscrete()

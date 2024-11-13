@@ -76,12 +76,12 @@ main() {
     go build .
     mv cmd ./bin
 
+    mkdir -p "$tar_dir"
     # Create/overwrite results file with header
     echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99" >"$results_file"
 
     operation=$(rg '^operationcount' ./workloads/$wl_type.yaml | rg -o '[0-9.]+')
 
-    mkdir -p "$tar_dir"
 
     kill_process_on_port "$executor_port"
     kill_process_on_port "$timeoracle_port"

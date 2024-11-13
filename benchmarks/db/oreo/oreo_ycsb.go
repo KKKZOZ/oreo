@@ -5,6 +5,7 @@ import (
 	"benchmark/ycsb"
 	"context"
 
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
@@ -83,6 +84,12 @@ func (r *OreoYCSBDatastore) Start() error {
 			if r.globalDatastoreName == "CouchDB" {
 				txn1.SetGlobalDatastore(cds)
 			}
+		case "Cassandra":
+			cds := cassandra.NewCassandraDatastore("Cassandra", conn)
+			txn1.AddDatastore(cds)
+			if r.globalDatastoreName == "Cassandra" {
+				txn1.SetGlobalDatastore(cds)
+			}
 		default:
 			panic("unknown datastore")
 		}
@@ -151,7 +158,8 @@ func (r *OreoYCSBDatastore) addPrefix(key string) string {
 	case "oreo":
 		prefix = "oreo-"
 	default:
-		panic("unknown mode in OreoYCSBDatastore")
+		msg := "unknown mode in OreoYCSBDatastore: " + r.mode
+		panic(msg)
 	}
 	return prefix + key
 }

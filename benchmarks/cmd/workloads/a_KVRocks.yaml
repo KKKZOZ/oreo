@@ -1,0 +1,23 @@
+# Total number of records to be generated
+recordcount: 10000
+
+# Total number of operations to be performed
+operationcount: 1000
+
+# Number of operations in each transaction group
+txnoperationgroup: 5
+postcheckinterval: 1000
+
+# Proportions of different operations
+readproportion: 0.5 # Proportion of read operations
+updateproportion: 0.5 # Proportion of update operations
+insertproportion: 0 # Proportion of insert operations
+scanproportion: 0 # Proportion of scan operations
+readmodifywriteproportion: 0 # Proportion of read-modify-write operations
+
+# Proportions of operations on different databases
+redis1proportion: 0 # Proportion of operations on Redis instance 1
+mongo1proportion: 0 # Proportion of operations on MongoDB instance 1
+mongo2proportion: 0 # Proportion of operations on MongoDB instance 2
+kvrocksproportion: 1.0 # Proportion of operations on KVRocks
+couchdbproportion: 0 # Proportion of operations on CouchDB

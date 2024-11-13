@@ -116,7 +116,7 @@ func (g *GroupKeyMaintainer) CreateGroupKey(urls []string, state config.State) i
 	for i := 0; i < len(urls); i++ {
 		err := <-resChan
 		if err != nil {
-			logger.Log.Infow("Error in creating group key", "error", err)
+			logger.Log.Errorw("Error in creating group key", "error", err)
 			okInTotal--
 		}
 	}
@@ -134,7 +134,7 @@ func (g *GroupKeyMaintainer) CreateGroupKeyList(item DataItem, state config.Stat
 			tokens := strings.Split(url, ":")
 			conn, ok := g.connMap[tokens[0]]
 			if !ok {
-				resChan <- fmt.Errorf("Connector to %s is not found", tokens[0])
+				resChan <- fmt.Errorf("Connector to %s is not found; url: %s, item: %v", tokens[0], url, item)
 				return
 			}
 
@@ -157,7 +157,7 @@ func (g *GroupKeyMaintainer) CreateGroupKeyList(item DataItem, state config.Stat
 	for i := 0; i < len(keyList); i++ {
 		err := <-resChan
 		if err != nil {
-			logger.Log.Infow("Error in creating group key", "error", err)
+			logger.Log.Errorw("Error in creating group key", "error", err)
 			okInTotal--
 		}
 	}

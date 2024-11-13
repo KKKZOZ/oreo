@@ -15,10 +15,11 @@ const (
 type ItemType string
 
 const (
-	NoneItem  ItemType = ""
-	RedisItem ItemType = "redis"
-	MongoItem ItemType = "mongo"
-	CouchItem ItemType = "couch"
+	NoneItem      ItemType = ""
+	RedisItem     ItemType = "redis"
+	MongoItem     ItemType = "mongo"
+	CouchItem     ItemType = "couch"
+	CassandraItem ItemType = "cassandra"
 )
 
 type NetworkItem struct {
