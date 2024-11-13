@@ -42,10 +42,13 @@ func (wl *OreoYCSBWorkload) Load(ctx context.Context, opCount int,
 		dbList = append(dbList, "Redis")
 	}
 	if wl.wp.Mongo1Proportion > 0 {
-		dbList = append(dbList, "Mongo")
+		dbList = append(dbList, "MongoDB")
 	}
 	if wl.wp.CouchDBProportion > 0 {
 		dbList = append(dbList, "CouchDB")
+	}
+	if wl.wp.CassandraProportion > 0 {
+		dbList = append(dbList, "Cassandra")
 	}
 	err := wl.doLoad(ctx, txnDB, dbList, opCount)
 	if err != nil {
@@ -66,8 +69,11 @@ func (wl *OreoYCSBWorkload) doLoad(ctx context.Context, db ycsb.TransactionDB, d
 			}
 		}
 	}
-	db.Commit()
-	return nil
+	err := db.Commit()
+	if err != nil {
+		fmt.Printf("Error in Oreo YCSB Load: %v\n", err)
+	}
+	return err
 }
 
 func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
@@ -185,13 +191,15 @@ func (wl *OreoYCSBWorkload) datastoreTypeToName(dsType datastoreType) string {
 	case redisDatastore1:
 		return "Redis"
 	case mongoDatastore1:
-		return "Mongo"
+		return "MongoDB"
 	case mongoDatastore2:
-		return "Mongo"
+		return "MongoDB"
 	case couchDatastore1:
 		return "CouchDB"
 	case kvrocksDatastore1:
 		return "KVRocks"
+	case cassandraDatastore1:
+		return "Cassandra"
 	default:
 		return ""
 	}

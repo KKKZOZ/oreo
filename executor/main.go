@@ -15,6 +15,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
@@ -86,6 +87,8 @@ func (s *Server) getItemType(dsName string) txn.ItemType {
 		return txn.CouchItem
 	case "KVRocks":
 		return txn.RedisItem
+	case "Cassandra":
+		return txn.CassandraItem
 	default:
 		return ""
 	}
@@ -98,7 +101,7 @@ func (s *Server) pingHandler(ctx *fasthttp.RequestCtx) {
 func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
-		Log.Infow("Read request", "latency", time.Since(startTime))
+		Log.Debugw("Read request", "latency", time.Since(startTime))
 	}()
 
 	var req network.ReadRequest
@@ -107,6 +110,8 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 		ctx.Error(errMsg, fasthttp.StatusBadRequest)
 		return
 	}
+
+	Log.Infow("Read request", "dsName", req.DsName, "key", req.Key, "startTime", req.StartTime, "config", req.Config)
 
 	item, dataType, err := s.reader.Read(req.DsName, req.Key, req.StartTime, req.Config, true)
 
@@ -146,15 +151,19 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
-		Log.Infow("Prepare request", "latency", time.Since(startTime), "Topic", "CheckPoint")
+		Log.Debugw("Prepare request", "latency", time.Since(startTime), "Topic", "CheckPoint")
 	}()
 
 	var req network.PrepareRequest
+	// body := ctx.PostBody()
+	// Log.Infow("Prepare request", "body", string(body))
 	if err := json2.Unmarshal(ctx.PostBody(), &req); err != nil {
 		errMsg := fmt.Sprintf("Invalid prepare request body, error: %s\n Body: %v\n", err.Error(), string(ctx.PostBody()))
 		ctx.Error(errMsg, fasthttp.StatusBadRequest)
 		return
 	}
+
+	Log.Infow("Prepare request", "dsName", req.DsName, "itemList", req.ItemList, "startTime", req.StartTime, "config", req.Config, "validationMap", req.ValidationMap)
 
 	verMap, tCommit, err := s.committer.Prepare(req.DsName, req.ItemList,
 		req.StartTime, req.Config, req.ValidationMap)
@@ -178,7 +187,7 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
-		Log.Infow("Commit request", "latency", time.Since(startTime))
+		Log.Debugw("Commit request", "latency", time.Since(startTime))
 	}()
 
 	var req network.CommitRequest
@@ -206,7 +215,7 @@ func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
-		Log.Infow("Abort request", "latency", time.Since(startTime))
+		Log.Debugw("Abort request", "latency", time.Since(startTime))
 	}()
 
 	var req network.AbortRequest
@@ -249,6 +258,7 @@ var mongoAddr1 = ""
 var mongoAddr2 = ""
 var kvRocksAddr = ""
 var couchAddr = ""
+var cassandraAddr = ""
 var workloadType = ""
 var cg = false
 
@@ -325,6 +335,7 @@ func parseFlag() {
 	flag.StringVar(&mongoAddr2, "mongo2", "", "Mongo Address")
 	flag.StringVar(&kvRocksAddr, "kvrocks", "", "KVRocks Address")
 	flag.StringVar(&couchAddr, "couch", "", "Couch Address")
+	flag.StringVar(&cassandraAddr, "cas", "", "Cassandra Address")
 	flag.BoolVar(&cg, "cg", false, "Enable Cherry Garcia Mode")
 	flag.Parse()
 
@@ -376,17 +387,31 @@ func getConnMap() map[string]txn.Connector {
 
 		if redisAddr1 != "" {
 			redisConn := getRedisConn(1)
-			connMap["redis1"] = redisConn
+			connMap["Redis"] = redisConn
 		}
 
 		if mongoAddr1 != "" {
 			mongoConn1 := getMongoConn(1)
-			connMap["mongo1"] = mongoConn1
+			connMap["MongoDB"] = mongoConn1
 		}
 
 		if mongoAddr2 != "" {
 			mongoConn2 := getMongoConn(2)
-			connMap["mongo2"] = mongoConn2
+			connMap["MongoDB2"] = mongoConn2
+		}
+
+		if kvRocksAddr != "" {
+			kvConn := getKVRocksConn()
+			connMap["KVRocks"] = kvConn
+		}
+
+		if couchAddr != "" {
+			couchConn := getCouchConn()
+			connMap["CouchDB"] = couchConn
+		}
+		if cassandraAddr != "" {
+			cassConn := getCassandraConn()
+			connMap["Cassandra"] = cassConn
 		}
 	}
 	return connMap
@@ -493,4 +518,16 @@ func getRedisConn(id int) *redis.RedisConnection {
 		Log.Fatal(err)
 	}
 	return redisConn
+}
+
+func getCassandraConn() *cassandra.CassandraConnection {
+	cassConn := cassandra.NewCassandraConnection(&cassandra.ConnectionOptions{
+		Hosts:    []string{cassandraAddr},
+		Keyspace: "oreo",
+	})
+	err := cassConn.Connect()
+	if err != nil {
+		Log.Fatal(err)
+	}
+	return cassConn
 }

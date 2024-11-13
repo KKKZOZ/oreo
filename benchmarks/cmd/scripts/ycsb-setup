@@ -1,0 +1,42 @@
+#!/bin/bash
+
+db=$1
+
+if [ -z "$db" ]; then
+    echo "Error: No database specified."
+    exit 1
+fi
+
+if [ "$db" == "Redis" ]; then
+    echo "Remove redis container"
+    docker rm -f redis
+    echo "Create new redis container"
+    docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
+elif [ "$db" == "MongoDB" ]; then
+    echo "Remove mongoDB container"
+    docker rm -f mongo
+    echo "Create new mongoDB container"
+    docker run -d \
+        --name mongo \
+        -p 27018:27017 \
+        -e MONGO_INITDB_ROOT_USERNAME=admin \
+        -e MONGO_INITDB_ROOT_PASSWORD=admin \
+        --restart=always \
+        mongo
+elif [ "$db" == "KVRocks" ]; then
+    echo "Remove kv-rocks container"
+    docker rm -f kvrocks
+    echo "Create new kv-rocks container"
+    docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass password
+elif [ "$db" == "CouchDB" ]; then
+    echo "Remove couchDB container"
+    docker rm -f couch
+    echo "Create new couchDB container"
+    docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -d couchdb
+else
+    echo "Invalid database"
+fi
+
+rm ../ycsb/ycsb-load
+
+echo "YCSB setup complete"

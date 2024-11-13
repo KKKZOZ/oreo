@@ -147,33 +147,29 @@ func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, do
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
-	var existing CouchDBItem
-	err := r.db.Get(context.Background(), key).ScanDoc(&existing)
-
 	if doCreate {
+		if value.Version() != "" {
+			// 如果是创建模式但已有版本号，说明文档已存在
+			return "", errors.New(txn.VersionMismatch)
+		}
+		// 创建模式，直接尝试创建文档
+		newVer, err := r.db.Put(context.Background(), key, value)
 		if err != nil {
-			if kivik.HTTPStatus(err) == http.StatusNotFound {
-				// If the document doesn't exist, create it
-				newVer, err := r.db.Put(context.Background(), key, value)
-				if err != nil {
-					return "", err
-				}
-				return newVer, nil
+			if kivik.HTTPStatus(err) == http.StatusConflict {
+				return "", errors.New("key exists")
 			}
-			// For all other errors, return as is
 			return "", err
 		}
-		return "", errors.New(txn.VersionMismatch)
-	}
-
-	if err != nil {
-		return "", errors.New(txn.VersionMismatch)
+		return newVer, nil
 	}
 
 	// Update the document
 	newVer, err := r.db.Put(context.Background(), key, value)
 	if err != nil {
-		return "", txn.VersionMismatch
+		if kivik.HTTPStatus(err) == http.StatusConflict {
+			return "", errors.New(txn.VersionMismatch)
+		}
+		return "", err
 	}
 
 	return newVer, nil

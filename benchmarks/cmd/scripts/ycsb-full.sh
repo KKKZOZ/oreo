@@ -3,6 +3,8 @@
 executor_port=8001
 timeoracle_port=8010
 thread_load=50
+threads=(32 48 64 96)
+# threads=(8 16 32)
 
 db_combinations=
 thread=0
@@ -17,10 +19,6 @@ while [[ "$#" -gt 0 ]]; do
         ;;
     -db | --db)
         db_combinations="$2"
-        shift
-        ;;
-    -t | --thread)
-        thread="$2"
         shift
         ;;
     -v | --verbose) verbose=true ;;
@@ -59,15 +57,15 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
     log "Running $wl_type-$wl_mode $profile thread=$thread"
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m $mode -ps $profile -t "$thread" >"$output"
+    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m "$mode" -ps "$profile" -t "$thread" >"$output"
 }
 
 load_data() {
     for profile in native cg oreo; do
         # for profile in native cg oreo; do
         log "Loading to ${wl_type} $profile"
+        ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
-        LOG=ERROR ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m "load" -ps $profile -t "$thread_load"
     done
     touch "$tar_dir/${wl_type}-load"
 }
@@ -75,7 +73,7 @@ load_data() {
 get_metrics() {
     local profile=$1 thread=$2
     local duration
-    local file="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-single.txt"
+    local file="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
     duration=$(rg '^Run finished' "$file" | rg -o '[0-9.]+')
     local duration
     latency=$(rg '^TXN\s' "$file" | rg -o '\s99th\(us\): [0-9]+' | cut -d' ' -f3)
@@ -87,13 +85,13 @@ get_metrics() {
     fi
     total=$((success_cnt + error_cnt))
     ratio=$(bc <<<"scale=4;$error_cnt / $total")
-
     echo "$duration $latency $ratio"
 
 }
 
 print_summary() {
     local thread=$1 native_duration=$2 cg_duration=$3 oreo_duration=$4 native_p99=$5 cg_p99=$6 oreo_p99=$7
+    local native_ratio=$8 cg_ratio=$9 oreo_ratio=${10}
 
     printf "%s:\nnative:%s\ncg    :%s\noreo  :%s\n" "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}"
 
@@ -129,7 +127,6 @@ main() {
     mkdir -p "$tar_dir"
     # Create/overwrite results file with header
     echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99" >"$results_file"
-
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
 
     kill_process_on_port "$executor_port"
@@ -150,20 +147,21 @@ main() {
         log "Data has been already loaded"
     fi
 
-    output="$tar_dir/$wl_type-$wl_mode-$db_combinations-native-single.txt"
-    run_workload "run" "native" "$thread" "$output"
+    for thread in "${threads[@]}"; do
 
-    output="$tar_dir/$wl_type-$wl_mode-$db_combinations-cg-single.txt"
-    run_workload "run" "cg" "$thread" "$output"
+        for profile in native cg oreo; do
+            output="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
+            run_workload "run" "$profile" "$thread" "$output"
+        done
 
-    output="$tar_dir/$wl_type-$wl_mode-$db_combinations-oreo-single.txt"
-    run_workload "run" "oreo" "$thread" "$output"
+        read -r native_duration native_p99 native_ratio <<<"$(get_metrics "native" "$thread")"
+        read -r cg_duration cg_p99 cg_ratio <<<"$(get_metrics "cg" "$thread")"
+        read -r oreo_duration oreo_p99 oreo_ratio <<<"$(get_metrics "oreo" "$thread")"
 
-    read -r native_duration native_p99 native_ratio <<<"$(get_metrics "native" "$thread")"
-    read -r cg_duration cg_p99 cg_ratio <<<"$(get_metrics "cg" "$thread")"
-    read -r oreo_duration oreo_p99 oreo_ratio <<<"$(get_metrics "oreo" "$thread")"
+        echo "$thread,$operation,$native_duration,$cg_duration,$oreo_duration,$native_p99,$cg_p99,$oreo_p99" >>"$results_file"
 
-    print_summary "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}" "${native_p99}" "${cg_p99}" "${oreo_p99}" "${native_ratio}" "${cg_ratio}" "${oreo_ratio}"
+        print_summary "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}" "${native_p99}" "${cg_p99}" "${oreo_p99}" "${native_ratio}" "${cg_ratio}" "${oreo_ratio}"
+    done
 
     clear_up
 }

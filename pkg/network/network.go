@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
@@ -64,8 +65,11 @@ type AbortRequest struct {
 
 func (r *ReadResponse) UnmarshalJSON(data []byte) error {
 	type TempResponse struct {
-		ItemType txn.ItemType        `json:"ItemType"`
-		Data     jsoniter.RawMessage `json:"Data"`
+		Status       string
+		ErrMsg       string
+		DataStrategy txn.RemoteDataStrategy
+		ItemType     txn.ItemType        `json:"ItemType"`
+		Data         jsoniter.RawMessage `json:"Data"`
 	}
 
 	var aux TempResponse
@@ -73,6 +77,9 @@ func (r *ReadResponse) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to unmarshal basic fields: %v", err)
 	}
 
+	r.Status = aux.Status
+	r.ErrMsg = aux.ErrMsg
+	r.DataStrategy = aux.DataStrategy
 	r.ItemType = aux.ItemType
 
 	switch r.ItemType {
@@ -94,6 +101,12 @@ func (r *ReadResponse) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		r.Data = &couchItem
+	case txn.CassandraItem:
+		var cassandraItem cassandra.CassandraItem
+		if err := json2.Unmarshal(aux.Data, &cassandraItem); err != nil {
+			return err
+		}
+		r.Data = &cassandraItem
 	case txn.NoneItem:
 		r.Data = nil
 	default:
@@ -125,16 +138,8 @@ func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
 	p.StartTime = aux.StartTime
 	p.Config = aux.Config
 
-	// type Alias PrepareRequest
-	// aux := &struct {
-	// 	ItemList jsoniter.RawMessage `json:"ItemList"`
-	// 	*Alias
-	// }{
-	// 	Alias: (*Alias)(p),
-	// }
-	// if err := json2.Unmarshal(data, &aux); err != nil {
-	// 	return err
-	// }
+	// fmt.Printf("Item Type: %v\n", p.ItemType)
+	// fmt.Printf("Item List: %v\n", string(aux.ItemList))
 
 	switch p.ItemType {
 	case txn.RedisItem:
@@ -164,6 +169,16 @@ func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
 		}
 		p.ItemList = make([]txn.DataItem, len(couchItemList))
 		for i, it := range couchItemList {
+			item := it
+			p.ItemList[i] = &item
+		}
+	case txn.CassandraItem:
+		var cassandraItemList []cassandra.CassandraItem
+		if err := json2.Unmarshal(aux.ItemList, &cassandraItemList); err != nil {
+			return err
+		}
+		p.ItemList = make([]txn.DataItem, len(cassandraItemList))
+		for i, it := range cassandraItemList {
 			item := it
 			p.ItemList[i] = &item
 		}

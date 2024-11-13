@@ -33,6 +33,7 @@ type WorkloadParameter struct {
 	Mongo2Proportion    float64 `yaml:"mongo2proportion"`
 	KVRocksProportion   float64 `yaml:"kvrocksproportion"`
 	CouchDBProportion   float64 `yaml:"couchdbproportion"`
+	CassandraProportion float64 `yaml:"cassandraproportion"`
 
 	Task1Proportion float64 `yaml:"task1proportion"`
 	Task2Proportion float64 `yaml:"task2proportion"`

@@ -122,9 +122,9 @@ func (r MongoItem) String() string {
 	return fmt.Sprintf(`MongoItem{
     Key:       %s,
     Value:     %s,
-    TxnId:     %s,
+    GroupKeyList:     %s,
     TxnState:  %s,
-    TValid:    %s,
+    TValid:    %d,
     TLease:    %s,
     Prev:      %s,
 	LinkedLen: %d,

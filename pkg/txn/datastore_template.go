@@ -93,6 +93,7 @@ func (r *Datastore) Start() error {
 
 // Read reads a record from the Datastore.
 func (r *Datastore) Read(key string, value any) error {
+
 	// if the record is in the writeCache
 	if item, ok := r.writeCache[key]; ok {
 		// if the record is marked as deleted
@@ -105,12 +106,12 @@ func (r *Datastore) Read(key string, value any) error {
 	if item, ok := r.readCache[key]; ok {
 		return r.getValue(item, value)
 	}
-
 	if r.Txn.isRemote {
 		return r.readFromRemote(key, value)
 	} else {
 		return r.readFromConn(key, value)
 	}
+
 }
 
 func (r *Datastore) readFromRemote(key string, value any) error {
@@ -118,6 +119,7 @@ func (r *Datastore) readFromRemote(key string, value any) error {
 	if err != nil {
 		return err
 	}
+	// fmt.Printf("item: %v\n readStrategy: %v\n error: %v", item, readStrategy, err)
 	// TODO: logic for AssumeCommit and AssumeAbort
 	switch readStrategy {
 	case AssumeCommit:
@@ -371,9 +373,9 @@ func (r *Datastore) Write(key string, value any) error {
 
 	// else write a new record to the cache
 	cacheItem := r.itemFactory.NewDataItem(ItemOptions{
-		Key:          key,
-		Value:        str,
-		GroupKeyList: strings.Join(r.Txn.GroupKeyUrls, ","),
+		Key:   key,
+		Value: str,
+		// GroupKeyList: strings.Join(r.Txn.GroupKeyUrls, ","),
 	})
 	return r.writeToCache(cacheItem)
 }
@@ -639,6 +641,7 @@ func (r *Datastore) Prepare() (int64, error) {
 
 	items := make([]DataItem, 0, len(r.writeCache))
 	for _, v := range r.writeCache {
+		v.SetGroupKeyList(strings.Join(r.Txn.GroupKeyUrls, ","))
 		items = append(items, v)
 	}
 

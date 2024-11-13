@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	// TODO: We change it to Redis's address
-	OreoKVRocksAddr = "localhost:6379"
+	OreoKVRocksAddr = "localhost:6666"
 	KVRocksPassword = "password"
 	RedisDBAddr     = "localhost:6379"
 	RedisPassword   = "password"
@@ -37,6 +36,10 @@ const (
 	CouchUsername   = "admin"
 	CouchPassword   = "password"
 	OreoCouchDBAddr = "http://admin:password@localhost:5984"
+)
+
+var (
+	CassandraUrl = []string{"localhost"}
 )
 
 var help = flag.Bool("help", false, "Show help")
@@ -150,7 +153,7 @@ func main() {
 	measurement.EnableWarmUp(true)
 
 	wp.ThreadCount = threadNum
-	setupDistribution(wp, dbType)
+	// setupDistribution(wp, dbType)
 	wl := createWorkload(wp)
 	client := generateClient(&wl, wp, dbType)
 
@@ -162,7 +165,7 @@ func main() {
 
 	switch mode {
 	case "load":
-		cfg.Config.ConcurrentOptimizationLevel = 1
+		// cfg.Config.ConcurrentOptimizationLevel = 1
 		cfg.Debug.DebugMode = false
 		cfg.Debug.HTTPAdditionalLatency = 0
 		cfg.Debug.ConnAdditionalLatency = 0
@@ -235,6 +238,11 @@ func main() {
 // }
 
 func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
+	if dbType == "oreo-ycsb" {
+		fmt.Println("This is a Oreo YCSB benchmark")
+		return workload.NewOreoYCSBWorkload(wp)
+	}
+
 	if workloadType != "" {
 		switch workloadType {
 		case "ycsb":

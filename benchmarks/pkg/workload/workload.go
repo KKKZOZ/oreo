@@ -24,6 +24,7 @@ const (
 	mongoDatastore2
 	couchDatastore1
 	kvrocksDatastore1
+	cassandraDatastore1
 )
 
 const (

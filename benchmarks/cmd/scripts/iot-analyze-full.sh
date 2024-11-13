@@ -5,7 +5,7 @@ timeoracle_port=8010
 thread_load=50
 wl_type=iot
 tar_dir=$wl_type
-threads=(32 64 96)
+threads=(32 48 64 96 128 160)
 # threads=(16 32 64 96 128 160 192 224 256)
 results_file="$tar_dir/${wl_type}_benchmark_results.csv"
 
@@ -94,7 +94,7 @@ main() {
 	kill_process_on_port "$timeoracle_port"
 
 	log "Starting executor"
-	./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 2>./log/executor.log &
+	./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 2>./log/executor.log &
 	executor_pid=$!
 
 	log "Starting time oracle"

@@ -207,7 +207,7 @@ func (t *Transaction) Read(dsName string, key string, value any) error {
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Read(key, value)
 	}
-	return errors.New("datastore not found")
+	return errors.New("datastore not found: " + dsName)
 }
 
 // Write writes the given key-value pair to the specified datastore in the transaction.
@@ -222,7 +222,7 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Write(key, value)
 	}
-	return errors.New("datastore not found")
+	return errors.New("datastore not found " + dsName)
 }
 
 // Delete deletes a key from the specified datastore in the transaction.
@@ -238,7 +238,7 @@ func (t *Transaction) Delete(dsName string, key string) error {
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Delete(key)
 	}
-	return errors.New("datastore not found")
+	return errors.New("datastore not found: " + dsName)
 }
 
 // Commit commits the transaction.

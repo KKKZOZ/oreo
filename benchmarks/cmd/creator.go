@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/go-kivik/kivik/v4"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	mongoCo "github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	redisCo "github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
@@ -45,6 +46,10 @@ func OreoYCSBCreator(workloadType string, mode string) (ycsb.DBCreator, error) {
 		if name == "CouchDB" {
 			couchConn := NewCouchDBConn()
 			connMap["CouchDB"] = couchConn
+		}
+		if name == "Cassandra" {
+			cassandraConn := NewCassandraConn()
+			connMap["Cassandra"] = cassandraConn
 		}
 	}
 	return &oreo.OreoYCSBCreator{
@@ -556,6 +561,18 @@ func NewCouchDBConn() *couchdb.CouchDBConnection {
 	wg.Wait()
 
 	return couchConn
+}
+
+func NewCassandraConn() *cassandra.CassandraConnection {
+	conn := cassandra.NewCassandraConnection(&cassandra.ConnectionOptions{
+		Hosts:    CassandraUrl,
+		Keyspace: "oreo",
+	})
+	err := conn.Connect()
+	if err != nil {
+		log.Fatalf("Error when connecting to cassandra: %v\n", err)
+	}
+	return conn
 }
 
 func NewRedisClient(addr string) (*goredis.Client, error) {
