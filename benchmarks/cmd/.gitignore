@@ -9,6 +9,8 @@
 iot-load
 social-load
 order-load
+ycsb-load
+
 executor
 timeoracle
 cmd

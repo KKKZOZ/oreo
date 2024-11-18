@@ -108,7 +108,7 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 
 	data := PrepareRequest{
 		DsName:        dsName,
-		ItemType:      c.getItemType(dsName),
+		ItemType:      GetItemType(dsName),
 		ItemList:      itemList,
 		StartTime:     startTime,
 		Config:        cfg,
@@ -260,22 +260,5 @@ func (c *Client) Abort(dsName string, keyList []string, groupKeyList string) err
 	} else {
 		errMsg := response.ErrMsg
 		return errors.New(errMsg)
-	}
-}
-
-func (c *Client) getItemType(dsName string) txn.ItemType {
-	switch dsName {
-	case "redis1", "Redis":
-		return txn.RedisItem
-	case "mongo1", "mongo2", "MongoDB":
-		return txn.MongoItem
-	case "CouchDB":
-		return txn.CouchItem
-	case "KVRocks":
-		return txn.RedisItem
-	case "Cassandra":
-		return txn.CassandraItem
-	default:
-		return ""
 	}
 }

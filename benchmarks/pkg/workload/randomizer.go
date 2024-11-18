@@ -60,6 +60,7 @@ func createDatastoreGenerator(wp *WorkloadParameter) *generator.Discrete {
 		int64(mongoDatastore2):     wp.Mongo2Proportion,
 		int64(couchDatastore1):     wp.CouchDBProportion,
 		int64(cassandraDatastore1): wp.CassandraProportion,
+		int64(dynamodbDatastore1):  wp.DynamoDBProportion,
 	}
 
 	datastoreChooser := generator.NewDiscrete()

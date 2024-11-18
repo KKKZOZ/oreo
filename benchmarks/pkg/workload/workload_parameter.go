@@ -28,12 +28,13 @@ type WorkloadParameter struct {
 
 	// These parameters are for the data distribution test
 	GlobalDatastoreName string  `yaml:"globaldatastorename"`
-	Redis1Proportion    float64 `yaml:"redis1proportion"`
-	Mongo1Proportion    float64 `yaml:"mongo1proportion"`
-	Mongo2Proportion    float64 `yaml:"mongo2proportion"`
-	KVRocksProportion   float64 `yaml:"kvrocksproportion"`
-	CouchDBProportion   float64 `yaml:"couchdbproportion"`
-	CassandraProportion float64 `yaml:"cassandraproportion"`
+	Redis1Proportion    float64 `yaml:"redis1proportion" oreo:"Redis"`
+	Mongo1Proportion    float64 `yaml:"mongo1proportion" oreo:"MongoDB"`
+	Mongo2Proportion    float64 `yaml:"mongo2proportion" oreo:"MongoDB"`
+	KVRocksProportion   float64 `yaml:"kvrocksproportion" oreo:"MongoDB"`
+	CouchDBProportion   float64 `yaml:"couchdbproportion" oreo:"CouchDB"`
+	CassandraProportion float64 `yaml:"cassandraproportion" oreo:"Cassandra"`
+	DynamoDBProportion  float64 `yaml:"dynamodbproportion" oreo:"DynamoDB"`
 
 	Task1Proportion float64 `yaml:"task1proportion"`
 	Task2Proportion float64 `yaml:"task2proportion"`

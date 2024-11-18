@@ -18,6 +18,7 @@ import (
 	"github.com/go-kivik/kivik/v4"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	mongoCo "github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	redisCo "github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -50,6 +51,10 @@ func OreoYCSBCreator(workloadType string, mode string) (ycsb.DBCreator, error) {
 		if name == "Cassandra" {
 			cassandraConn := NewCassandraConn()
 			connMap["Cassandra"] = cassandraConn
+		}
+		if name == "DynamoDB" {
+			dynamoConn := NewDynamoDBConn()
+			connMap["DynamoDB"] = dynamoConn
 		}
 	}
 	return &oreo.OreoYCSBCreator{
@@ -571,6 +576,18 @@ func NewCassandraConn() *cassandra.CassandraConnection {
 	err := conn.Connect()
 	if err != nil {
 		log.Fatalf("Error when connecting to cassandra: %v\n", err)
+	}
+	return conn
+}
+
+func NewDynamoDBConn() *dynamodb.DynamoDBConnection {
+	conn := dynamodb.NewDynamoDBConnection(&dynamodb.ConnectionOptions{
+		Endpoint:  "http://localhost:8000",
+		TableName: "oreo",
+	})
+	err := conn.Connect()
+	if err != nil {
+		log.Fatalf("Error when connecting to dynamodb: %v\n", err)
 	}
 	return conn
 }

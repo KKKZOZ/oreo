@@ -36,6 +36,8 @@ const (
 	CouchUsername   = "admin"
 	CouchPassword   = "password"
 	OreoCouchDBAddr = "http://admin:password@localhost:5984"
+
+	DynamoDBAddr = "http://localhost:8000"
 )
 
 var (
