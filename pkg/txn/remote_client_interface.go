@@ -20,6 +20,7 @@ const (
 	MongoItem     ItemType = "mongo"
 	CouchItem     ItemType = "couch"
 	CassandraItem ItemType = "cassandra"
+	DynamoDBItem  ItemType = "dynamodb"
 )
 
 type NetworkItem struct {

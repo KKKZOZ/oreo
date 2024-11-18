@@ -25,6 +25,7 @@ const (
 	couchDatastore1
 	kvrocksDatastore1
 	cassandraDatastore1
+	dynamodbDatastore1
 )
 
 const (

@@ -702,7 +702,10 @@ func (r *Datastore) prepareInNative(items []DataItem) (int64, error) {
 			if aErr != nil {
 				err = aErr
 			}
-			r.conn.PutItem(item.Key(), item)
+			_, aErr = r.conn.PutItem(item.Key(), item)
+			if aErr != nil {
+				err = aErr
+			}
 		}()
 		wg.Wait()
 	}

@@ -4,6 +4,8 @@ import (
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -34,26 +36,55 @@ func (wl *OreoYCSBWorkload) Load(ctx context.Context, opCount int,
 		return
 	}
 
-	dbList := make([]string, 0)
-	if wl.wp.KVRocksProportion > 0 {
-		dbList = append(dbList, "KVRocks")
-	}
-	if wl.wp.Redis1Proportion > 0 {
-		dbList = append(dbList, "Redis")
-	}
-	if wl.wp.Mongo1Proportion > 0 {
-		dbList = append(dbList, "MongoDB")
-	}
-	if wl.wp.CouchDBProportion > 0 {
-		dbList = append(dbList, "CouchDB")
-	}
-	if wl.wp.CassandraProportion > 0 {
-		dbList = append(dbList, "Cassandra")
-	}
+	// dbList := make([]string, 0)
+	// if wl.wp.KVRocksProportion > 0 {
+	// 	dbList = append(dbList, "KVRocks")
+	// }
+	// if wl.wp.Redis1Proportion > 0 {
+	// 	dbList = append(dbList, "Redis")
+	// }
+	// if wl.wp.Mongo1Proportion > 0 {
+	// 	dbList = append(dbList, "MongoDB")
+	// }
+	// if wl.wp.CouchDBProportion > 0 {
+	// 	dbList = append(dbList, "CouchDB")
+	// }
+	// if wl.wp.CassandraProportion > 0 {
+	// 	dbList = append(dbList, "Cassandra")
+	// }
+	// if wl.wp.DynamoDBProportion > 0 {
+	// 	dbList = append(dbList, "DynamoDB")
+	// }
+	dbList := getDatabases(*wl.wp)
 	err := wl.doLoad(ctx, txnDB, dbList, opCount)
 	if err != nil {
 		fmt.Printf("Error in Oreo YCSB Load: %v\n", err)
 	}
+}
+
+func getDatabases(wp WorkloadParameter) []string {
+	dbList := make([]string, 0)
+	value := reflect.ValueOf(wp)
+	typ := reflect.TypeOf(wp)
+
+	for i := 0; i < value.NumField(); i++ {
+		field := typ.Field(i)
+
+		// 只处理以 Proportion 结尾的字段
+		if strings.HasSuffix(field.Name, "Proportion") {
+			// 确保字段是 float64 类型
+			if field.Type.Kind() == reflect.Float64 {
+				fieldValue := value.Field(i).Float()
+				if fieldValue > 0 {
+					if dbName, ok := field.Tag.Lookup("oreo"); ok && dbName != "" {
+						dbList = append(dbList, dbName)
+					}
+				}
+			}
+		}
+	}
+
+	return dbList
 }
 
 func (wl *OreoYCSBWorkload) doLoad(ctx context.Context, db ycsb.TransactionDB, dbList []string, opCount int) error {
@@ -200,6 +231,8 @@ func (wl *OreoYCSBWorkload) datastoreTypeToName(dsType datastoreType) string {
 		return "KVRocks"
 	case cassandraDatastore1:
 		return "Cassandra"
+	case dynamodbDatastore1:
+		return "DynamoDB"
 	default:
 		return ""
 	}

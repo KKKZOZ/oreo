@@ -17,6 +17,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/network"
@@ -77,22 +78,22 @@ func (s *Server) Run() {
 	log.Fatalf("Server failed: %v", fasthttp.ListenAndServe(address, router))
 }
 
-func (s *Server) getItemType(dsName string) txn.ItemType {
-	switch dsName {
-	case "redis1", "Redis":
-		return txn.RedisItem
-	case "mongo1", "mongo2", "MongoDB":
-		return txn.MongoItem
-	case "CouchDB":
-		return txn.CouchItem
-	case "KVRocks":
-		return txn.RedisItem
-	case "Cassandra":
-		return txn.CassandraItem
-	default:
-		return ""
-	}
-}
+// func (s *Server) getItemType(dsName string) txn.ItemType {
+// 	switch dsName {
+// 	case "redis1", "Redis":
+// 		return txn.RedisItem
+// 	case "mongo1", "mongo2", "MongoDB":
+// 		return txn.MongoItem
+// 	case "CouchDB":
+// 		return txn.CouchItem
+// 	case "KVRocks":
+// 		return txn.RedisItem
+// 	case "Cassandra":
+// 		return txn.CassandraItem
+// 	default:
+// 		return ""
+// 	}
+// }
 
 func (s *Server) pingHandler(ctx *fasthttp.RequestCtx) {
 	ctx.WriteString("pong")
@@ -140,7 +141,7 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 			Status:       "OK",
 			DataStrategy: dataType,
 			Data:         item,
-			ItemType:     s.getItemType(req.DsName),
+			ItemType:     network.GetItemType(req.DsName),
 		}
 		// fmt.Printf("Read response: %v\n", response)
 	}
@@ -259,6 +260,7 @@ var mongoAddr2 = ""
 var kvRocksAddr = ""
 var couchAddr = ""
 var cassandraAddr = ""
+var dynamodbAddr = ""
 var workloadType = ""
 var cg = false
 
@@ -336,6 +338,7 @@ func parseFlag() {
 	flag.StringVar(&kvRocksAddr, "kvrocks", "", "KVRocks Address")
 	flag.StringVar(&couchAddr, "couch", "", "Couch Address")
 	flag.StringVar(&cassandraAddr, "cas", "", "Cassandra Address")
+	flag.StringVar(&dynamodbAddr, "dynamodb", "", "DynamoDB Address")
 	flag.BoolVar(&cg, "cg", false, "Enable Cherry Garcia Mode")
 	flag.Parse()
 
@@ -412,6 +415,10 @@ func getConnMap() map[string]txn.Connector {
 		if cassandraAddr != "" {
 			cassConn := getCassandraConn()
 			connMap["Cassandra"] = cassConn
+		}
+		if dynamodbAddr != "" {
+			dynamoConn := getDynamoConn()
+			connMap["DynamoDB"] = dynamoConn
 		}
 	}
 	return connMap
@@ -530,4 +537,16 @@ func getCassandraConn() *cassandra.CassandraConnection {
 		Log.Fatal(err)
 	}
 	return cassConn
+}
+
+func getDynamoConn() *dynamodb.DynamoDBConnection {
+	dynamoConn := dynamodb.NewDynamoDBConnection(&dynamodb.ConnectionOptions{
+		TableName: "oreo",
+		Endpoint:  dynamodbAddr,
+	})
+	err := dynamoConn.Connect()
+	if err != nil {
+		Log.Fatal(err)
+	}
+	return dynamoConn
 }

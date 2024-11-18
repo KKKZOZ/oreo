@@ -45,7 +45,7 @@ func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
 
 	conn, ok := r.connMap[dsName]
 	if !ok {
-		return nil, dataType, fmt.Errorf("connector to %s is not found", dsName)
+		return nil, dataType, fmt.Errorf("Reader: connector to %s is not found", dsName)
 	}
 
 	item, err := conn.GetItem(key)

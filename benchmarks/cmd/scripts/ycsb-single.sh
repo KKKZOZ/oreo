@@ -126,6 +126,7 @@ main() {
     go build .
     mv cmd ./bin
 
+    tar_dir="$tar_dir/$wl_mode-$db_combinations"
     mkdir -p "$tar_dir"
     # Create/overwrite results file with header
     echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99" >"$results_file"
@@ -136,7 +137,7 @@ main() {
     kill_process_on_port "$timeoracle_port"
 
     log "Starting executor"
-    ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost 2>./log/executor.log &
+    LOG=ERROR ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost -dynamodb http://localhost:8000 2>./log/executor.log &
     executor_pid=$!
 
     log "Starting time oracle"

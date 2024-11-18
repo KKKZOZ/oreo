@@ -6,6 +6,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -107,6 +108,12 @@ func (r *ReadResponse) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		r.Data = &cassandraItem
+	case txn.DynamoDBItem:
+		var dynamoDBItem dynamodb.DynamoDBItem
+		if err := json2.Unmarshal(aux.Data, &dynamoDBItem); err != nil {
+			return err
+		}
+		r.Data = &dynamoDBItem
 	case txn.NoneItem:
 		r.Data = nil
 	default:
@@ -182,6 +189,16 @@ func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
 			item := it
 			p.ItemList[i] = &item
 		}
+	case txn.DynamoDBItem:
+		var dynamoDBItemList []dynamodb.DynamoDBItem
+		if err := json2.Unmarshal(aux.ItemList, &dynamoDBItemList); err != nil {
+			return err
+		}
+		p.ItemList = make([]txn.DataItem, len(dynamoDBItemList))
+		for i, it := range dynamoDBItemList {
+			item := it
+			p.ItemList[i] = &item
+		}
 	case txn.NoneItem:
 		p.ItemList = nil
 	default:
@@ -189,4 +206,23 @@ func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+func GetItemType(dsName string) txn.ItemType {
+	switch dsName {
+	case "redis1", "Redis":
+		return txn.RedisItem
+	case "mongo1", "mongo2", "MongoDB":
+		return txn.MongoItem
+	case "CouchDB":
+		return txn.CouchItem
+	case "KVRocks":
+		return txn.RedisItem
+	case "Cassandra":
+		return txn.CassandraItem
+	case "DynamoDB":
+		return txn.DynamoDBItem
+	default:
+		return ""
+	}
 }

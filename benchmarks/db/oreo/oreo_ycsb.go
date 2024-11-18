@@ -7,6 +7,7 @@ import (
 
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/network"
@@ -89,6 +90,12 @@ func (r *OreoYCSBDatastore) Start() error {
 			txn1.AddDatastore(cds)
 			if r.globalDatastoreName == "Cassandra" {
 				txn1.SetGlobalDatastore(cds)
+			}
+		case "DynamoDB":
+			dds := dynamodb.NewDynamoDBDatastore("DynamoDB", conn)
+			txn1.AddDatastore(dds)
+			if r.globalDatastoreName == "DynamoDB" {
+				txn1.SetGlobalDatastore(dds)
 			}
 		default:
 			panic("unknown datastore")
