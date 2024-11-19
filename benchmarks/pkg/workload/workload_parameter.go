@@ -35,6 +35,7 @@ type WorkloadParameter struct {
 	CouchDBProportion   float64 `yaml:"couchdbproportion" oreo:"CouchDB"`
 	CassandraProportion float64 `yaml:"cassandraproportion" oreo:"Cassandra"`
 	DynamoDBProportion  float64 `yaml:"dynamodbproportion" oreo:"DynamoDB"`
+	TiKVProportion      float64 `yaml:"tikvproportion" oreo:"TiKV"`
 
 	Task1Proportion float64 `yaml:"task1proportion"`
 	Task2Proportion float64 `yaml:"task2proportion"`

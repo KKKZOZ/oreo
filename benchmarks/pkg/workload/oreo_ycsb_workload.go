@@ -233,6 +233,8 @@ func (wl *OreoYCSBWorkload) datastoreTypeToName(dsType datastoreType) string {
 		return "Cassandra"
 	case dynamodbDatastore1:
 		return "DynamoDB"
+	case tikvDatastore1:
+		return "TiKV"
 	default:
 		return ""
 	}

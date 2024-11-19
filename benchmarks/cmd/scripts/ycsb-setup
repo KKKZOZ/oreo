@@ -33,6 +33,10 @@ elif [ "$db" == "CouchDB" ]; then
     docker rm -f couch
     echo "Create new couchDB container"
     docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -d couchdb
+elif [ "$db" == "TiKV" ]; then
+    echo "Restart TiKV binary"
+    ./deploy-tikv.sh
+
 else
     echo "Invalid database"
 fi

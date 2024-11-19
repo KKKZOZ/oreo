@@ -38,6 +38,7 @@ const (
 	OreoCouchDBAddr = "http://admin:password@localhost:5984"
 
 	DynamoDBAddr = "http://localhost:8000"
+	TiKVAddr     = "localhost:2379"
 )
 
 var (

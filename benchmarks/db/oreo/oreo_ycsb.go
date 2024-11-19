@@ -10,6 +10,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/tikv"
 	"github.com/oreo-dtx-lab/oreo/pkg/network"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -96,6 +97,12 @@ func (r *OreoYCSBDatastore) Start() error {
 			txn1.AddDatastore(dds)
 			if r.globalDatastoreName == "DynamoDB" {
 				txn1.SetGlobalDatastore(dds)
+			}
+		case "TiKV":
+			tds := tikv.NewTiKVDatastore("TiKV", conn)
+			txn1.AddDatastore(tds)
+			if r.globalDatastoreName == "TiKV" {
+				txn1.SetGlobalDatastore(tds)
 			}
 		default:
 			panic("unknown datastore")
