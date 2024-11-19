@@ -1,7 +1,7 @@
 package oreo
 
 import (
-	"benchmark/pkg/config"
+	"benchmark/pkg/benconfig"
 	"benchmark/ycsb"
 	"context"
 
@@ -50,11 +50,11 @@ func NewOreoRealisticDatastore(connMap map[string]txn.Connector, globalDatastore
 
 func (r *OreoRealisticDatastore) Start() error {
 	var txn1 *txn.Transaction
-	oracle := timesource.NewGlobalTimeSource(config.TimeOracleUrl)
+	oracle := timesource.NewGlobalTimeSource(benconfig.TimeOracleUrl)
 	// oracle := timesource.NewLocalTimeSource()
 	// oracle := timesource.NewSimpleTimeSource()
 	if r.isRemote {
-		client := network.NewClient(config.RemoteAddressList)
+		client := network.NewClient(benconfig.ExecutorAddressList)
 		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {
 		txn1 = txn.NewTransactionWithOracle(oracle)

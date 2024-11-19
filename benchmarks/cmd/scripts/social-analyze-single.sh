@@ -25,6 +25,7 @@ timeoracle_port=8010
 thread_load=25
 wl_type=social
 tar_dir=$wl_type
+bc=./BenConfig.yaml
 
 # Go to the script root directory
 cd "$(dirname "$0")" && cd ..
@@ -66,7 +67,7 @@ if [ ! -f "$tar_dir/$wl_type-load" ]; then
     # go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -m load -ps cg -t "$thread_load"
 
     verbose_echo "Loading to $wl_type oreo"
-    go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -m load -ps oreo -t "$thread_load"
+    go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -bc "bc" -m load -ps oreo -t "$thread_load"
 
     touch "$tar_dir/${wl_type}-load"
 else
@@ -74,13 +75,13 @@ else
 fi
 
 # verbose_echo "Running $wl_type native"
-# go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -m run -ps native -pprof -t "$thread" >"$tar_dir/$wl_type-native.txt"
+# go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -bc "$bc" -m run -ps native -pprof -t "$thread" >"$tar_dir/$wl_type-native.txt"
 
 # verbose_echo "Running $wl_type Cherry Garcia"
-# go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -m run -ps cg -t "$thread" >"$tar_dir/$wl_type-cg.txt"
+# go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -bc "$bc" -m run -ps cg -t "$thread" >"$tar_dir/$wl_type-cg.txt"
 
 verbose_echo "Running $wl_type oreo"
-go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -m run -ps oreo -t "$thread" >"$tar_dir/$wl_type-oreo.txt"
+go run . -d oreo -wl $wl_type -wc ./workloads/$wl_type.yaml -bc "$bc" -m run -ps oreo -t "$thread" >"$tar_dir/$wl_type-oreo.txt"
 
 native=$(rg '^Run finished' "$tar_dir/$wl_type-native.txt" | rg -o '[0-9.]+')
 cg=$(rg '^Run finished' "$tar_dir/$wl_type-cg.txt" | rg -o '[0-9.]+')

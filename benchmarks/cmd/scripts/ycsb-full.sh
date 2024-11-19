@@ -2,8 +2,8 @@
 
 executor_port=8001
 timeoracle_port=8010
-thread_load=50
-threads=(32 48 64 96)
+thread_load=100
+threads=(16 32 48 64 80 96)
 # threads=(8 16 32)
 
 db_combinations=
@@ -34,6 +34,7 @@ wl_type=ycsb
 tar_dir=ycsb
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
+bc=./BenConfig.yaml
 
 log() {
     [[ "${verbose}" = true ]] && echo "$@"
@@ -57,14 +58,14 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
     log "Running $wl_type-$wl_mode $profile thread=$thread"
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m "$mode" -ps "$profile" -t "$thread" >"$output"
+    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -t "$thread" >"$output"
 }
 
 load_data() {
     for profile in native cg oreo; do
         # for profile in native cg oreo; do
         log "Loading to ${wl_type} $profile"
-        ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m "load" -ps $profile -t "$thread_load"
+        ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
     done
     touch "$tar_dir/${wl_type}-load"
@@ -112,6 +113,38 @@ clear_up() {
     kill $time_oracle_pid
 }
 
+# 基础命令部分
+base_cmd="./bin/executor -p $executor_port -timeurl http://localhost:$timeoracle_port -w $wl_type"
+
+# 数据库连接配置
+declare -A db_configs=(
+    ["TiKV"]="-tikv localhost:2379"
+    ["KVRocks"]="-kvrocks localhost:6666"
+    ["MongoDB"]="-mongo1 mongodb://172.24.58.116:27018"
+    ["Redis"]="-redis1 localhost:6379"
+    ["CouchDB"]="-couch http://admin:password@localhost:5984"
+    ["Cassandra"]="-cas localhost"
+    ["DynamoDB"]="-dynamodb http://localhost:8000"
+)
+
+# 构建命令的函数
+build_command() {
+    local final_cmd="$base_cmd"
+    # 将 db_combinations 按逗号分割
+    IFS=',' read -ra DBS <<< "$db_combinations"
+    
+    # 遍历选择的数据库
+    for db in "${DBS[@]}"; do
+        # 去除可能存在的空格
+        db=$(echo "$db" | xargs)
+        # 如果这个数据库在配置中存在，则添加相应的参数
+        if [[ -n "${db_configs[$db]}" ]]; then
+            final_cmd="$final_cmd ${db_configs[$db]}"
+        fi
+    done 
+    echo "$final_cmd"
+}
+
 main() {
     cd "$(dirname "$0")" && cd ..
 
@@ -124,7 +157,9 @@ main() {
     go build .
     mv cmd ./bin
 
+    tar_dir="$tar_dir/$wl_mode-$db_combinations"
     mkdir -p "$tar_dir"
+
     # Create/overwrite results file with header
     echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99" >"$results_file"
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
@@ -133,7 +168,8 @@ main() {
     kill_process_on_port "$timeoracle_port"
 
     log "Starting executor"
-    ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost 2>./log/executor.log &
+    # ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost 2>./log/executor.log &
+    env LOG=ERROR $(build_command) 2>./log/executor.log &
     executor_pid=$!
 
     log "Starting time oracle"

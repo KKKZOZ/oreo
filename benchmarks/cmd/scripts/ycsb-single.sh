@@ -36,6 +36,7 @@ wl_type=ycsb
 tar_dir=ycsb
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
+bc=./BenConfig.yaml
 
 log() {
     [[ "${verbose}" = true ]] && echo "$@"
@@ -59,7 +60,7 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
     log "Running $wl_type-$wl_mode $profile thread=$thread"
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m $mode -ps $profile -t "$thread" >"$output"
+    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m $mode -ps $profile -t "$thread" >"$output"
 }
 
 load_data() {
@@ -67,7 +68,7 @@ load_data() {
         # for profile in native cg oreo; do
         log "Loading to ${wl_type} $profile"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
-        LOG=ERROR ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -m "load" -ps $profile -t "$thread_load"
+        LOG=ERROR ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
     done
     touch "$tar_dir/${wl_type}-load"
 }
@@ -121,7 +122,7 @@ base_cmd="./bin/executor -p $executor_port -timeurl http://localhost:$timeoracle
 declare -A db_configs=(
     ["TiKV"]="-tikv localhost:2379"
     ["KVRocks"]="-kvrocks localhost:6666"
-    ["MongoDB"]="-mongo1 mongodb://localhost:27018"
+    ["MongoDB"]="-mongo1 mongodb://172.24.58.116:27018"
     ["Redis"]="-redis1 localhost:6379"
     ["CouchDB"]="-couch http://admin:password@localhost:5984"
     ["Cassandra"]="-cas localhost"
@@ -171,7 +172,7 @@ main() {
     log "Starting executor"
     # LOG=ERROR ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost -dynamodb http://localhost:8000 -tikv localhost:2379 2>./log/executor.log &
 
-    printf "final_cmd: %s\n" "$(build_command)"
+    # printf "final_cmd: %s\n" "$(build_command)"
     env LOG=ERROR $(build_command) 2>./log/executor.log &
     executor_pid=$!
 
