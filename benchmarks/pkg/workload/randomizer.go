@@ -1,7 +1,7 @@
 package workload
 
 import (
-	"benchmark/pkg/config"
+	"benchmark/pkg/benconfig"
 	"benchmark/pkg/generator"
 	"benchmark/pkg/util"
 	"benchmark/ycsb"
@@ -40,7 +40,7 @@ func NewRandomizer(wp *WorkloadParameter) *Randomizer {
 		keyChooser: generator.NewScrambledZipfian(
 			keyrangeLowerBound,
 			keyrangeUpperBound,
-			config.ZipfianConstant),
+			benconfig.ZipfianConstant),
 	}
 	// fmt.Println("NewRandomizer")
 	return r

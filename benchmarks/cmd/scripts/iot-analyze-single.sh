@@ -25,6 +25,7 @@ timeoracle_port=8010
 thread_load=50
 wl_type=iot
 tar_dir=$wl_type
+bc=./BenConfig.yaml
 
 # bash update-component.sh
 
@@ -63,15 +64,15 @@ if [ ! -f "$tar_dir/$wl_type-load" ]; then
 
   verbose_echo "Loading to IOT native"
   # ben load iot native "$thread_load"
-  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m load -ps native -t "$thread_load"
+  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -bc "$bc" -m load -ps native -t "$thread_load"
 
   verbose_echo "Loading to IOT Cherry Garcia"
   # ben load iot native "$thread_load"
-  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m load -ps cg -t "$thread_load"
+  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -bc "$bc" -m load -ps cg -t "$thread_load"
 
   verbose_echo "Loading to IOT oreo"
   # ben load iot oreo "$thread_load"
-  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -m load -ps oreo -t "$thread_load"
+  go run . -d oreo -wl iot -wc ./workloads/iot.yaml -bc "$bc" -m load -ps oreo -t "$thread_load"
 
   touch "$tar_dir/${wl_type}-load"
 else

@@ -245,7 +245,7 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 const (
 	RedisPassword = "password"
 	MongoUsername = "admin"
-	MongoPassword = "admin"
+	MongoPassword = "password"
 	CouchUsername = "admin"
 	CouchPassword = "password"
 )

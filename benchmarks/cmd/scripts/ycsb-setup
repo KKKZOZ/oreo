@@ -20,7 +20,7 @@ elif [ "$db" == "MongoDB" ]; then
         --name mongo \
         -p 27018:27017 \
         -e MONGO_INITDB_ROOT_USERNAME=admin \
-        -e MONGO_INITDB_ROOT_PASSWORD=admin \
+        -e MONGO_INITDB_ROOT_PASSWORD=password \
         --restart=always \
         mongo
 elif [ "$db" == "KVRocks" ]; then

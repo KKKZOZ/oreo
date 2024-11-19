@@ -1,7 +1,7 @@
 package oreo
 
 import (
-	"benchmark/pkg/config"
+	"benchmark/pkg/benconfig"
 	"benchmark/ycsb"
 	"context"
 	"sync"
@@ -53,8 +53,8 @@ func NewMongoDatastore(conn *mongo.MongoConnection, isRemote bool) *MongoDatasto
 func (r *MongoDatastore) Start() error {
 	var txn1 *txn.Transaction
 	if r.isRemote {
-		client := network.NewClient(config.RemoteAddressList)
-		oracle := timesource.NewGlobalTimeSource(config.TimeOracleUrl)
+		client := network.NewClient(benconfig.ExecutorAddressList)
+		oracle := timesource.NewGlobalTimeSource(benconfig.TimeOracleUrl)
 		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {
 		txn1 = txn.NewTransaction()

@@ -1,0 +1,28 @@
+# Benchmark system configuration
+executor_address_list: ["localhost:8001"]
+time_oracle_url: "http://localhost:8010"
+zipfian_constant: 0.9
+latency_value: 10
+
+# Redis configuration
+redis_addr: "localhost:6379"
+redis_password: "password"
+
+# MongoDB configuration
+mongodb_addr: "mongodb://172.24.58.116:27018"
+mongodb_username: "admin"
+mongodb_password: "password"
+
+# KVRocks configuration
+kvrocks_addr: "localhost:6666"
+kvrocks_password: "password"
+
+# CouchDB configuration
+couchdb_addr: "http://localhost:5984"
+couchdb_username: "admin"
+couchdb_password: "password"
+
+# Other databases configuration
+cassandra_addr: ["localhost"]
+dynamodb_addr: "http://localhost:8000"
+tikv_addr: ["localhost:2379"]

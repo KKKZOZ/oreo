@@ -1,8 +1,8 @@
 package main
 
 import (
+	"benchmark/pkg/benconfig"
 	"benchmark/pkg/client"
-	"benchmark/pkg/config"
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
@@ -19,30 +19,8 @@ import (
 	cfg "github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
-const (
-	OreoKVRocksAddr = "localhost:6666"
-	KVRocksPassword = "password"
-	RedisDBAddr     = "localhost:6379"
-	RedisPassword   = "password"
-	OreoRedisAddr   = "localhost:6379"
-
-	MongoUsername    = "admin"
-	MongoPassword    = "admin"
-	MongoDBAddr1     = "mongodb://localhost:27017"
-	MongoDBAddr2     = "mongodb://localhost:27017"
-	OreoMongoDBAddr1 = "mongodb://localhost:27018"
-	OreoMongoDBAddr2 = "mongodb://localhost:27018"
-
-	CouchUsername   = "admin"
-	CouchPassword   = "password"
-	OreoCouchDBAddr = "http://admin:password@localhost:5984"
-
-	DynamoDBAddr = "http://localhost:8000"
-	TiKVAddr     = "localhost:2379"
-)
-
 var (
-	CassandraUrl = []string{"localhost"}
+	benConfig = benconfig.BenchmarkConfig{}
 )
 
 var help = flag.Bool("help", false, "Show help")
@@ -50,6 +28,7 @@ var dbType = ""
 var mode = "load"
 var workloadType = ""
 var workloadConfigPath = ""
+var benConfigPath = ""
 var threadNum = 1
 var traceFlag = false
 var pprofFlag = false
@@ -84,36 +63,7 @@ func main() {
 		defer trace.Stop()
 	}
 
-	wp := &workload.WorkloadParameter{
-		RecordCount:               10000,
-		OperationCount:            10000,
-		TxnOperationGroup:         4,
-		ReadProportion:            0.5,
-		UpdateProportion:          0,
-		InsertProportion:          0,
-		ScanProportion:            0,
-		ReadModifyWriteProportion: 0.5,
-
-		Redis1Proportion: 0,
-		Mongo1Proportion: 0,
-		Mongo2Proportion: 0,
-	}
-
-	loader := aconfig.LoaderFor(wp, aconfig.Config{
-		SkipDefaults: true,
-		SkipFiles:    false,
-		SkipEnv:      true,
-		SkipFlags:    true,
-		Files:        []string{workloadConfigPath},
-		FileDecoders: map[string]aconfig.FileDecoder{
-			".yaml": aconfigyaml.New(),
-		},
-	})
-
-	if err := loader.Load(); err != nil {
-		fmt.Printf("Error when loading workload configuration: %v\n", err)
-		return
-	}
+	wp := loadConfig()
 
 	switch preset {
 	case "cg":
@@ -121,27 +71,26 @@ func main() {
 		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.CherryGarciaMode = true
 		cfg.Debug.DebugMode = true
-		cfg.Debug.ConnAdditionalLatency = config.Latency
+		cfg.Debug.ConnAdditionalLatency = benConfig.Latency
 		cfg.Config.ConcurrentOptimizationLevel = 0
 		cfg.Config.AsyncLevel = 2
 	case "native":
 		fmt.Printf("Running under Native Mode\n")
 		cfg.Debug.NativeMode = true
 		cfg.Debug.DebugMode = true
-		cfg.Debug.ConnAdditionalLatency = config.Latency
+		cfg.Debug.ConnAdditionalLatency = benConfig.Latency
 	case "oreo":
 		fmt.Printf("Running under Oreo Mode\n")
 		isRemote = true
 		cfg.Config.ReadStrategy = cfg.Pessimistic
 		cfg.Debug.DebugMode = true
-		cfg.Debug.HTTPAdditionalLatency = config.Latency
+		cfg.Debug.HTTPAdditionalLatency = benConfig.Latency
 		cfg.Debug.ConnAdditionalLatency = 0
 		cfg.Config.ConcurrentOptimizationLevel = 2
 		cfg.Config.AsyncLevel = 2
 	}
 	cfg.Config.LeaseTime = 100 * time.Millisecond
 	cfg.Config.MaxRecordLength = 2
-	// config.ZipfianConstant = 0.8
 
 	switch readStrategy {
 	case "p":
@@ -327,7 +276,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 
 	case "redis":
 		wp.DBName = "redis"
-		creator, err := RedisCreator(RedisDBAddr)
+		creator, err := RedisCreator(benConfig.RedisAddr)
 		if err != nil {
 			fmt.Printf("Error when creating redis client: %v\n", err)
 			return nil
@@ -338,7 +287,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "mongo":
 		wp.DBName = "mongo"
-		creator, err := MongoCreator(MongoDBAddr1)
+		creator, err := MongoCreator(benConfig.MongoDBAddr)
 		if err != nil {
 			fmt.Printf("Error when creating mongo client: %v\n", err)
 			return nil
@@ -436,6 +385,7 @@ func parseAndValidateFlag() {
 	flag.StringVar(&mode, "m", "load", "Mode: load or run")
 	flag.StringVar(&workloadType, "wl", "", "Workload type")
 	flag.StringVar(&workloadConfigPath, "wc", "", "Workload configuration path")
+	flag.StringVar(&benConfigPath, "bc", "", "Benchmark configuration path")
 	flag.IntVar(&threadNum, "t", 1, "Thread number")
 	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
 	flag.BoolVar(&pprofFlag, "pprof", false, "Enable pprof")
@@ -495,6 +445,48 @@ func displayBenchmarkInfo() {
 	fmt.Printf("HTTPAdditionalLatency: %v ConnAdditionalLatency: %v\n",
 		cfg.Debug.HTTPAdditionalLatency, cfg.Debug.ConnAdditionalLatency)
 	fmt.Printf("LeaseTime: %v\n", cfg.Config.LeaseTime)
-	fmt.Printf("ZipfianConstant: %v\n", config.ZipfianConstant)
+	fmt.Printf("ZipfianConstant: %v\n", benConfig.ZipfianConstant)
 	fmt.Printf("-----------------\n")
+}
+
+func loadConfig() *workload.WorkloadParameter {
+
+	bcLoader := aconfig.LoaderFor(&benConfig, aconfig.Config{
+		SkipDefaults: true,
+		SkipFiles:    false,
+		SkipEnv:      true,
+		SkipFlags:    true,
+		Files:        []string{benConfigPath},
+		FileDecoders: map[string]aconfig.FileDecoder{
+			".yaml": aconfigyaml.New(),
+		},
+	})
+
+	if err := bcLoader.Load(); err != nil {
+		log.Fatalf("Error when loading benchmark configuration: %v\n", err)
+		return nil
+	}
+
+	benConfig.Latency = time.Duration(benConfig.LatencyValue) * time.Millisecond
+	benconfig.ExecutorAddressList = benConfig.ExecutorAddressList
+	benconfig.TimeOracleUrl = benConfig.TimeOracleUrl
+	benconfig.ZipfianConstant = benConfig.ZipfianConstant
+
+	wp := &workload.WorkloadParameter{}
+	wpLoader := aconfig.LoaderFor(wp, aconfig.Config{
+		SkipDefaults: true,
+		SkipFiles:    false,
+		SkipEnv:      true,
+		SkipFlags:    true,
+		Files:        []string{workloadConfigPath},
+		FileDecoders: map[string]aconfig.FileDecoder{
+			".yaml": aconfigyaml.New(),
+		},
+	})
+	if err := wpLoader.Load(); err != nil {
+		log.Fatalf("Error when loading workload configuration: %v\n", err)
+		return nil
+	}
+
+	return wp
 }
