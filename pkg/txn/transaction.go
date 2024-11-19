@@ -222,7 +222,7 @@ func (t *Transaction) Write(dsName string, key string, value any) error {
 	if ds, ok := t.dataStoreMap[dsName]; ok {
 		return ds.Write(key, value)
 	}
-	return errors.New("datastore not found " + dsName)
+	return errors.New("datastore not found: " + dsName)
 }
 
 // Delete deletes a key from the specified datastore in the transaction.

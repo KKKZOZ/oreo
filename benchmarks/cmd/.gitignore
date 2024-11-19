@@ -5,6 +5,8 @@
 *.prof
 *.png
 
+tikv-deploy
+
 # Executables and binaries
 iot-load
 social-load

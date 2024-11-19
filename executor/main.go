@@ -20,6 +20,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/tikv"
 	"github.com/oreo-dtx-lab/oreo/pkg/network"
 	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
@@ -261,6 +262,7 @@ var kvRocksAddr = ""
 var couchAddr = ""
 var cassandraAddr = ""
 var dynamodbAddr = ""
+var tikvAddr = ""
 var workloadType = ""
 var cg = false
 
@@ -339,6 +341,7 @@ func parseFlag() {
 	flag.StringVar(&couchAddr, "couch", "", "Couch Address")
 	flag.StringVar(&cassandraAddr, "cas", "", "Cassandra Address")
 	flag.StringVar(&dynamodbAddr, "dynamodb", "", "DynamoDB Address")
+	flag.StringVar(&tikvAddr, "tikv", "", "TiKV Address")
 	flag.BoolVar(&cg, "cg", false, "Enable Cherry Garcia Mode")
 	flag.Parse()
 
@@ -384,9 +387,9 @@ func getConnMap() map[string]txn.Connector {
 		connMap["KVRocks"] = kvConn
 
 	case "ycsb":
-		if redisAddr1 == "" && mongoAddr1 == "" && mongoAddr2 == "" {
-			Log.Fatal("No datastore address specified")
-		}
+		// if redisAddr1 == "" && mongoAddr1 == "" && mongoAddr2 == "" {
+		// 	Log.Fatal("No datastore address specified")
+		// }
 
 		if redisAddr1 != "" {
 			redisConn := getRedisConn(1)
@@ -419,6 +422,10 @@ func getConnMap() map[string]txn.Connector {
 		if dynamodbAddr != "" {
 			dynamoConn := getDynamoConn()
 			connMap["DynamoDB"] = dynamoConn
+		}
+		if tikvAddr != "" {
+			tikvConn := getTiKVConn()
+			connMap["TiKV"] = tikvConn
 		}
 	}
 	return connMap
@@ -549,4 +556,15 @@ func getDynamoConn() *dynamodb.DynamoDBConnection {
 		Log.Fatal(err)
 	}
 	return dynamoConn
+}
+
+func getTiKVConn() *tikv.TiKVConnection {
+	tikvConn := tikv.NewTiKVConnection(&tikv.ConnectionOptions{
+		PDAddrs: []string{tikvAddr},
+	})
+	err := tikvConn.Connect()
+	if err != nil {
+		Log.Fatal(err)
+	}
+	return tikvConn
 }

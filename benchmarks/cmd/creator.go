@@ -21,6 +21,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	mongoCo "github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	redisCo "github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/tikv"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	goredis "github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -55,6 +56,10 @@ func OreoYCSBCreator(workloadType string, mode string) (ycsb.DBCreator, error) {
 		if name == "DynamoDB" {
 			dynamoConn := NewDynamoDBConn()
 			connMap["DynamoDB"] = dynamoConn
+		}
+		if name == "TiKV" {
+			tikvConn := NewTiKVConn()
+			connMap["TiKV"] = tikvConn
 		}
 	}
 	return &oreo.OreoYCSBCreator{
@@ -588,6 +593,17 @@ func NewDynamoDBConn() *dynamodb.DynamoDBConnection {
 	err := conn.Connect()
 	if err != nil {
 		log.Fatalf("Error when connecting to dynamodb: %v\n", err)
+	}
+	return conn
+}
+
+func NewTiKVConn() *tikv.TiKVConnection {
+	conn := tikv.NewTiKVConnection(&tikv.ConnectionOptions{
+		PDAddrs: []string{TiKVAddr},
+	})
+	err := conn.Connect()
+	if err != nil {
+		log.Fatalf("Error when connecting to tikv: %v\n", err)
 	}
 	return conn
 }

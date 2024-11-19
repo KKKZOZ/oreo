@@ -26,6 +26,7 @@ const (
 	kvrocksDatastore1
 	cassandraDatastore1
 	dynamodbDatastore1
+	tikvDatastore1
 )
 
 const (

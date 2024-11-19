@@ -9,6 +9,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/tikv"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
@@ -114,6 +115,12 @@ func (r *ReadResponse) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		r.Data = &dynamoDBItem
+	case txn.TiKVItem:
+		var tikvItem tikv.TiKVItem
+		if err := json2.Unmarshal(aux.Data, &tikvItem); err != nil {
+			return err
+		}
+		r.Data = &tikvItem
 	case txn.NoneItem:
 		r.Data = nil
 	default:
@@ -199,6 +206,16 @@ func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
 			item := it
 			p.ItemList[i] = &item
 		}
+	case txn.TiKVItem:
+		var tikvItemList []tikv.TiKVItem
+		if err := json2.Unmarshal(aux.ItemList, &tikvItemList); err != nil {
+			return err
+		}
+		p.ItemList = make([]txn.DataItem, len(tikvItemList))
+		for i, it := range tikvItemList {
+			item := it
+			p.ItemList[i] = &item
+		}
 	case txn.NoneItem:
 		p.ItemList = nil
 	default:
@@ -222,6 +239,8 @@ func GetItemType(dsName string) txn.ItemType {
 		return txn.CassandraItem
 	case "DynamoDB":
 		return txn.DynamoDBItem
+	case "TiKV":
+		return txn.TiKVItem
 	default:
 		return ""
 	}

@@ -114,6 +114,38 @@ clear_up() {
     kill $time_oracle_pid
 }
 
+# 基础命令部分
+base_cmd="./bin/executor -p $executor_port -timeurl http://localhost:$timeoracle_port -w $wl_type"
+
+# 数据库连接配置
+declare -A db_configs=(
+    ["TiKV"]="-tikv localhost:2379"
+    ["KVRocks"]="-kvrocks localhost:6666"
+    ["MongoDB"]="-mongo1 mongodb://localhost:27018"
+    ["Redis"]="-redis1 localhost:6379"
+    ["CouchDB"]="-couch http://admin:password@localhost:5984"
+    ["Cassandra"]="-cas localhost"
+    ["DynamoDB"]="-dynamodb http://localhost:8000"
+)
+
+# 构建命令的函数
+build_command() {
+    local final_cmd="$base_cmd"
+    # 将 db_combinations 按逗号分割
+    IFS=',' read -ra DBS <<< "$db_combinations"
+    
+    # 遍历选择的数据库
+    for db in "${DBS[@]}"; do
+        # 去除可能存在的空格
+        db=$(echo "$db" | xargs)
+        # 如果这个数据库在配置中存在，则添加相应的参数
+        if [[ -n "${db_configs[$db]}" ]]; then
+            final_cmd="$final_cmd ${db_configs[$db]}"
+        fi
+    done 
+    echo "$final_cmd"
+}
+
 main() {
     cd "$(dirname "$0")" && cd ..
 
@@ -137,7 +169,10 @@ main() {
     kill_process_on_port "$timeoracle_port"
 
     log "Starting executor"
-    LOG=ERROR ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost -dynamodb http://localhost:8000 2>./log/executor.log &
+    # LOG=ERROR ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost -dynamodb http://localhost:8000 -tikv localhost:2379 2>./log/executor.log &
+
+    printf "final_cmd: %s\n" "$(build_command)"
+    env LOG=ERROR $(build_command) 2>./log/executor.log &
     executor_pid=$!
 
     log "Starting time oracle"
