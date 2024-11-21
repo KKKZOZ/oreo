@@ -19,7 +19,8 @@ type BenchmarkConfig struct {
 	RedisAddr     string `yaml:"redis_addr"`
 	RedisPassword string `yaml:"redis_password"`
 
-	MongoDBAddr     string `yaml:"mongodb_addr"`
+	MongoDBAddr1    string `yaml:"mongodb_addr1"`
+	MongoDBAddr2    string `yaml:"mongodb_addr2"`
 	MongoDBUsername string `yaml:"mongodb_username"`
 	MongoDBPassword string `yaml:"mongodb_password"`
 

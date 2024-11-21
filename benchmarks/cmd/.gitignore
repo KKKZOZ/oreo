@@ -15,6 +15,7 @@ ycsb-load
 
 executor
 timeoracle
+cassandra_util
 cmd
 
 # Python environment

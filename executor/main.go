@@ -405,9 +405,9 @@ func getConnMap() map[string]txn.Connector {
 			case "Redis":
 				redisConn := getRedisConn(1)
 				connMap["Redis"] = redisConn
-			case "MongoDB":
+			case "MongoDB1":
 				mongoConn1 := getMongoConn(1)
-				connMap["MongoDB"] = mongoConn1
+				connMap["MongoDB1"] = mongoConn1
 			case "MongoDB2":
 				mongoConn2 := getMongoConn(2)
 				connMap["MongoDB2"] = mongoConn2
@@ -495,9 +495,9 @@ func getMongoConn(id int) *mongo.MongoConnection {
 	address := ""
 	switch id {
 	case 1:
-		address = benConfig.MongoDBAddr
-	// case 2:
-	// 	address = mongoAddr2
+		address = benConfig.MongoDBAddr1
+	case 2:
+		address = benConfig.MongoDBAddr2
 	default:
 		Log.Fatal("Invalid mongo id")
 	}

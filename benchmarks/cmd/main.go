@@ -287,7 +287,7 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 		c = client.NewClient(wl, wp, creatorMap)
 	case "mongo":
 		wp.DBName = "mongo"
-		creator, err := MongoCreator(benConfig.MongoDBAddr)
+		creator, err := MongoCreator(benConfig.MongoDBAddr1)
 		if err != nil {
 			fmt.Printf("Error when creating mongo client: %v\n", err)
 			return nil

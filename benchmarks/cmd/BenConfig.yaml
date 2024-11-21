@@ -9,7 +9,8 @@ redis_addr: "localhost:6379"
 redis_password: "password"
 
 # MongoDB configuration
-mongodb_addr: "mongodb://172.24.58.116:27018"
+mongodb_addr1: "mongodb://localhost:27017"
+mongodb_addr2: "mongodb://localhost:27018"
 mongodb_username: "admin"
 mongodb_password: "password"
 

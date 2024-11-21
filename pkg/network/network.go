@@ -229,7 +229,7 @@ func GetItemType(dsName string) txn.ItemType {
 	switch dsName {
 	case "redis1", "Redis":
 		return txn.RedisItem
-	case "mongo1", "mongo2", "MongoDB":
+	case "mongo1", "mongo2", "MongoDB", "MongoDB1", "MongoDB2":
 		return txn.MongoItem
 	case "CouchDB":
 		return txn.CouchItem
