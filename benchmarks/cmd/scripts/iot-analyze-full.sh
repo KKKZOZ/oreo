@@ -95,7 +95,7 @@ main() {
 	kill_process_on_port "$timeoracle_port"
 
 	log "Starting executor"
-	./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 2>./log/executor.log &
+	./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" 2>./log/executor.log &
 	executor_pid=$!
 
 	log "Starting time oracle"

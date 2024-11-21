@@ -83,12 +83,11 @@ main() {
 
     operation=$(rg '^operationcount' ./workloads/$wl_type.yaml | rg -o '[0-9.]+')
 
-
     kill_process_on_port "$executor_port"
     kill_process_on_port "$timeoracle_port"
 
     log "Starting executor"
-    ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -redis1 localhost:6379 -mongo1 mongodb://localhost:27018 -couch http://admin:password@localhost:5984 2>./log/executor.log &
+    ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" 2>./log/executor.log &
     executor_pid=$!
 
     log "Starting time oracle"

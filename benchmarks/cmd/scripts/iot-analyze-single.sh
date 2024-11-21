@@ -51,7 +51,7 @@ if [ -n "$pid" ]; then
 fi
 
 verbose_echo "Starting executor"
-./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 >/dev/null 2>./log/executor.log &
+./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" >/dev/null 2>./log/executor.log &
 # ./executor -p "$executor_port" -w iot -kvrocks 39.104.105.27:6379 -mongo1 mongodb://39.104.105.27:27018 > /dev/null 2> executor.log &
 executor_pid=$!
 

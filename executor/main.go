@@ -1,6 +1,7 @@
 package main
 
 import (
+	"benchmark/pkg/benconfig"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -10,9 +11,12 @@ import (
 	"os/signal"
 	"runtime/pprof"
 	"runtime/trace"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/cristalhq/aconfig"
+	"github.com/cristalhq/aconfig/aconfigyaml"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
@@ -32,7 +36,7 @@ import (
 
 var json2 = jsoniter.ConfigCompatibleWithStandardLibrary
 
-var banner = `
+var Banner = `
  ____  _        _       _               
 / ___|| |_ __ _| |_ ___| | ___  ___ ___ 
 \___ \| __/ _| | __/ _ \ |/ _ \/ __/ __|
@@ -78,23 +82,6 @@ func (s *Server) Run() {
 	Log.Infow("Server running", "address", address)
 	log.Fatalf("Server failed: %v", fasthttp.ListenAndServe(address, router))
 }
-
-// func (s *Server) getItemType(dsName string) txn.ItemType {
-// 	switch dsName {
-// 	case "redis1", "Redis":
-// 		return txn.RedisItem
-// 	case "mongo1", "mongo2", "MongoDB":
-// 		return txn.MongoItem
-// 	case "CouchDB":
-// 		return txn.CouchItem
-// 	case "KVRocks":
-// 		return txn.RedisItem
-// 	case "Cassandra":
-// 		return txn.CassandraItem
-// 	default:
-// 		return ""
-// 	}
-// }
 
 func (s *Server) pingHandler(ctx *fasthttp.RequestCtx) {
 	ctx.WriteString("pong")
@@ -242,34 +229,35 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 	ctx.Write(respBytes)
 }
 
-const (
-	RedisPassword = "password"
-	MongoUsername = "admin"
-	MongoPassword = "password"
-	CouchUsername = "admin"
-	CouchPassword = "password"
-)
+// const (
+// 	RedisPassword = "password"
+// 	MongoUsername = "admin"
+// 	MongoPassword = "password"
+// 	CouchUsername = "admin"
+// 	CouchPassword = "password"
+// )
 
 var port = 8000
 var poolSize = 60
 var traceFlag = false
 var pprofFlag = false
-var timeOracleUrl = ""
-var redisAddr1 = ""
-var mongoAddr1 = ""
-var mongoAddr2 = ""
-var kvRocksAddr = ""
-var couchAddr = ""
-var cassandraAddr = ""
-var dynamodbAddr = ""
-var tikvAddr = ""
 var workloadType = ""
+var db_combination = ""
+var benConfigPath = ""
 var cg = false
 
 var Log *zap.SugaredLogger
 
+var (
+	benConfig = benconfig.BenchmarkConfig{}
+)
+
 func main() {
 	parseFlag()
+	err := loadConfig()
+	if err != nil {
+		Log.Fatal(err)
+	}
 
 	if pprofFlag {
 		cpuFile, err := os.Create("executor_cpu_profile.prof")
@@ -311,12 +299,14 @@ func main() {
 		config.Debug.CherryGarciaMode = true
 	}
 
+	config.Debug.DebugMode = false
+
 	connMap := getConnMap()
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	oracle := timesource.NewGlobalTimeSource(timeOracleUrl)
+	oracle := timesource.NewGlobalTimeSource(benConfig.TimeOracleUrl)
 	server := NewServer(port, connMap, &redis.RedisItemFactory{}, oracle)
 	go server.Run()
 
@@ -327,26 +317,45 @@ func main() {
 
 }
 
+func loadConfig() error {
+	bcLoader := aconfig.LoaderFor(&benConfig, aconfig.Config{
+		SkipDefaults: true,
+		SkipFiles:    false,
+		SkipEnv:      true,
+		SkipFlags:    true,
+		Files:        []string{benConfigPath},
+		FileDecoders: map[string]aconfig.FileDecoder{
+			".yaml": aconfigyaml.New(),
+		},
+	})
+
+	if err := bcLoader.Load(); err != nil {
+		log.Fatalf("Error when loading benchmark configuration: %v\n", err)
+	}
+
+	if benConfig.TimeOracleUrl == "" {
+		Log.Fatal("Time Oracle URL must be specified")
+	}
+	return nil
+}
+
 func parseFlag() {
 	flag.IntVar(&port, "p", 8000, "Server Port")
 	flag.IntVar(&poolSize, "s", 60, "Pool Size")
 	flag.BoolVar(&traceFlag, "trace", false, "Enable trace")
 	flag.BoolVar(&pprofFlag, "pprof", false, "Enable pprof")
-	flag.StringVar(&workloadType, "w", "ycsb", "Workload Type")
-	flag.StringVar(&timeOracleUrl, "timeurl", "", "Time Oracle URL")
-	flag.StringVar(&redisAddr1, "redis1", "", "Redis Address")
-	flag.StringVar(&mongoAddr1, "mongo1", "", "Mongo Address")
-	flag.StringVar(&mongoAddr2, "mongo2", "", "Mongo Address")
-	flag.StringVar(&kvRocksAddr, "kvrocks", "", "KVRocks Address")
-	flag.StringVar(&couchAddr, "couch", "", "Couch Address")
-	flag.StringVar(&cassandraAddr, "cas", "", "Cassandra Address")
-	flag.StringVar(&dynamodbAddr, "dynamodb", "", "DynamoDB Address")
-	flag.StringVar(&tikvAddr, "tikv", "", "TiKV Address")
+	flag.StringVar(&workloadType, "w", "", "Workload Type")
+	flag.StringVar(&db_combination, "db", "", "Database Combination")
 	flag.BoolVar(&cg, "cg", false, "Enable Cherry Garcia Mode")
+	flag.StringVar(&benConfigPath, "bc", "", "Benchmark Configuration Path")
 	flag.Parse()
 
-	if timeOracleUrl == "" {
-		Log.Fatal("Time Oracle URL must be specified")
+	if benConfigPath == "" {
+		Log.Fatal("Benchmark Configuration Path must be specified")
+	}
+
+	if workloadType == "ycsb" && db_combination == "" {
+		Log.Fatal("Database Combination must be specified for YCSB workload")
 	}
 
 	newLogger()
@@ -356,17 +365,17 @@ func getConnMap() map[string]txn.Connector {
 	connMap := make(map[string]txn.Connector)
 	switch workloadType {
 	case "iot":
-		if kvRocksAddr == "" || mongoAddr1 == "" {
-			Log.Fatal("IOT Datastore address must be specified")
-		}
+		// if kvRocksAddr == "" || mongoAddr1 == "" {
+		// 	Log.Fatal("IOT Datastore address must be specified")
+		// }
 		kvConn := getKVRocksConn()
 		mongoConn1 := getMongoConn(1)
 		connMap["KVRocks"] = kvConn
 		connMap["MongoDB"] = mongoConn1
 	case "social":
-		if mongoAddr1 == "" || couchAddr == "" || redisAddr1 == "" {
-			Log.Fatal("SOCIAL Datastore address must be specified")
-		}
+		// if mongoAddr1 == "" || couchAddr == "" || redisAddr1 == "" {
+		// 	Log.Fatal("SOCIAL Datastore address must be specified")
+		// }
 		mongoConn1 := getMongoConn(1)
 		couchConn := getCouchConn()
 		redisConn := getRedisConn(1)
@@ -374,9 +383,9 @@ func getConnMap() map[string]txn.Connector {
 		connMap["CouchDB"] = couchConn
 		connMap["Redis"] = redisConn
 	case "order":
-		if mongoAddr1 == "" || couchAddr == "" || redisAddr1 == "" || kvRocksAddr == "" {
-			Log.Fatal("ORDER Datastore address must be specified")
-		}
+		// if mongoAddr1 == "" || couchAddr == "" || redisAddr1 == "" || kvRocksAddr == "" {
+		// 	Log.Fatal("ORDER Datastore address must be specified")
+		// }
 		mongoConn1 := getMongoConn(1)
 		couchConn := getCouchConn()
 		redisConn := getRedisConn(1)
@@ -390,42 +399,36 @@ func getConnMap() map[string]txn.Connector {
 		// if redisAddr1 == "" && mongoAddr1 == "" && mongoAddr2 == "" {
 		// 	Log.Fatal("No datastore address specified")
 		// }
-
-		if redisAddr1 != "" {
-			redisConn := getRedisConn(1)
-			connMap["Redis"] = redisConn
-		}
-
-		if mongoAddr1 != "" {
-			mongoConn1 := getMongoConn(1)
-			connMap["MongoDB"] = mongoConn1
-		}
-
-		if mongoAddr2 != "" {
-			mongoConn2 := getMongoConn(2)
-			connMap["MongoDB2"] = mongoConn2
-		}
-
-		if kvRocksAddr != "" {
-			kvConn := getKVRocksConn()
-			connMap["KVRocks"] = kvConn
-		}
-
-		if couchAddr != "" {
-			couchConn := getCouchConn()
-			connMap["CouchDB"] = couchConn
-		}
-		if cassandraAddr != "" {
-			cassConn := getCassandraConn()
-			connMap["Cassandra"] = cassConn
-		}
-		if dynamodbAddr != "" {
-			dynamoConn := getDynamoConn()
-			connMap["DynamoDB"] = dynamoConn
-		}
-		if tikvAddr != "" {
-			tikvConn := getTiKVConn()
-			connMap["TiKV"] = tikvConn
+		dbList := strings.Split(db_combination, ",")
+		for _, db := range dbList {
+			switch db {
+			case "Redis":
+				redisConn := getRedisConn(1)
+				connMap["Redis"] = redisConn
+			case "MongoDB":
+				mongoConn1 := getMongoConn(1)
+				connMap["MongoDB"] = mongoConn1
+			case "MongoDB2":
+				mongoConn2 := getMongoConn(2)
+				connMap["MongoDB2"] = mongoConn2
+			case "KVRocks":
+				kvConn := getKVRocksConn()
+				connMap["KVRocks"] = kvConn
+			case "CouchDB":
+				couchConn := getCouchConn()
+				connMap["CouchDB"] = couchConn
+			case "Cassandra":
+				cassConn := getCassandraConn()
+				connMap["Cassandra"] = cassConn
+			case "DynamoDB":
+				dynamoConn := getDynamoConn()
+				connMap["DynamoDB"] = dynamoConn
+			case "TiKV":
+				tikvConn := getTiKVConn()
+				connMap["TiKV"] = tikvConn
+			default:
+				Log.Fatal("Invalid database combination")
+			}
 		}
 	}
 	return connMap
@@ -460,8 +463,8 @@ func newLogger() {
 
 func getKVRocksConn() *redis.RedisConnection {
 	kvConn := redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address:  kvRocksAddr,
-		Password: RedisPassword,
+		Address:  benConfig.KVRocksAddr,
+		Password: benConfig.RedisPassword,
 		PoolSize: poolSize,
 	})
 	err := kvConn.Connect()
@@ -476,7 +479,7 @@ func getKVRocksConn() *redis.RedisConnection {
 
 func getCouchConn() *couchdb.CouchDBConnection {
 	couchConn := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
-		Address: couchAddr,
+		Address: benConfig.CouchDBAddr,
 		// Username: CouchUsername,
 		// Password: CouchPassword,
 		DBName: "oreo",
@@ -492,24 +495,24 @@ func getMongoConn(id int) *mongo.MongoConnection {
 	address := ""
 	switch id {
 	case 1:
-		address = mongoAddr1
-	case 2:
-		address = mongoAddr2
+		address = benConfig.MongoDBAddr
+	// case 2:
+	// 	address = mongoAddr2
 	default:
 		Log.Fatal("Invalid mongo id")
 	}
-	mongoConn1 := mongo.NewMongoConnection(&mongo.ConnectionOptions{
+	mongoConn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 		Address:        address,
 		DBName:         "oreo",
 		CollectionName: "benchmark",
-		Username:       MongoUsername,
-		Password:       MongoPassword,
+		Username:       benConfig.MongoDBUsername,
+		Password:       benConfig.MongoDBPassword,
 	})
-	err := mongoConn1.Connect()
+	err := mongoConn.Connect()
 	if err != nil {
 		Log.Fatal(err)
 	}
-	return mongoConn1
+	return mongoConn
 }
 
 func getRedisConn(id int) *redis.RedisConnection {
@@ -517,14 +520,14 @@ func getRedisConn(id int) *redis.RedisConnection {
 	address := ""
 	switch id {
 	case 1:
-		address = redisAddr1
+		address = benConfig.RedisAddr
 	default:
 		Log.Fatal("Invalid redis id")
 	}
 
 	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address:  address,
-		Password: RedisPassword,
+		Password: benConfig.RedisPassword,
 		PoolSize: poolSize,
 	})
 	err := redisConn.Connect()
@@ -536,7 +539,7 @@ func getRedisConn(id int) *redis.RedisConnection {
 
 func getCassandraConn() *cassandra.CassandraConnection {
 	cassConn := cassandra.NewCassandraConnection(&cassandra.ConnectionOptions{
-		Hosts:    []string{cassandraAddr},
+		Hosts:    benConfig.CassandraAddr,
 		Keyspace: "oreo",
 	})
 	err := cassConn.Connect()
@@ -549,7 +552,7 @@ func getCassandraConn() *cassandra.CassandraConnection {
 func getDynamoConn() *dynamodb.DynamoDBConnection {
 	dynamoConn := dynamodb.NewDynamoDBConnection(&dynamodb.ConnectionOptions{
 		TableName: "oreo",
-		Endpoint:  dynamodbAddr,
+		Endpoint:  benConfig.DynamoDBAddr,
 	})
 	err := dynamoConn.Connect()
 	if err != nil {
@@ -560,7 +563,7 @@ func getDynamoConn() *dynamodb.DynamoDBConnection {
 
 func getTiKVConn() *tikv.TiKVConnection {
 	tikvConn := tikv.NewTiKVConnection(&tikv.ConnectionOptions{
-		PDAddrs: []string{tikvAddr},
+		PDAddrs: benConfig.TiKVAddr,
 	})
 	err := tikvConn.Connect()
 	if err != nil {
