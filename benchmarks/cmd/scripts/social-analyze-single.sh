@@ -50,7 +50,7 @@ fi
 
 verbose_echo "Starting executor"
 # ./executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w iot -kvrocks localhost:6379 -mongo1 mongodb://localhost:27018 >/dev/null 2>executor.log &
-./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -redis1 localhost:6379 -mongo1 mongodb://localhost:27018 -couch http://admin:password@localhost:5984 2>./log/executor.log &
+./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" 2>./log/executor.log &
 executor_pid=$!
 
 verbose_echo "Starting time oracle"

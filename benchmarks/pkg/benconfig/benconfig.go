@@ -33,4 +33,6 @@ type BenchmarkConfig struct {
 	CassandraAddr []string `yaml:"cassandra_addr"`
 	DynamoDBAddr  string   `yaml:"dynamodb_addr"`
 	TiKVAddr      []string `yaml:"tikv_addr"`
+
+	// DBCombination []string `yaml:"db_combination"`
 }

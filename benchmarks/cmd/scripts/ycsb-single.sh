@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 executor_port=8001
 timeoracle_port=8010
@@ -133,8 +133,8 @@ declare -A db_configs=(
 build_command() {
     local final_cmd="$base_cmd"
     # 将 db_combinations 按逗号分割
-    IFS=',' read -ra DBS <<< "$db_combinations"
-    
+    IFS=',' read -ra DBS <<<"$db_combinations"
+
     # 遍历选择的数据库
     for db in "${DBS[@]}"; do
         # 去除可能存在的空格
@@ -143,7 +143,7 @@ build_command() {
         if [[ -n "${db_configs[$db]}" ]]; then
             final_cmd="$final_cmd ${db_configs[$db]}"
         fi
-    done 
+    done
     echo "$final_cmd"
 }
 
@@ -170,10 +170,10 @@ main() {
     kill_process_on_port "$timeoracle_port"
 
     log "Starting executor"
-    # LOG=ERROR ./bin/executor -p "$executor_port" -timeurl "http://localhost:$timeoracle_port" -w $wl_type -kvrocks localhost:6666 -mongo1 mongodb://localhost:27018 -redis1 localhost:6379 -couch http://admin:password@localhost:5984 -cas localhost -dynamodb http://localhost:8000 -tikv localhost:2379 2>./log/executor.log &
+    LOG=ERROR ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
 
     # printf "final_cmd: %s\n" "$(build_command)"
-    env LOG=ERROR $(build_command) 2>./log/executor.log &
+    # env LOG=ERROR $(build_command) 2>./log/executor.log &
     executor_pid=$!
 
     log "Starting time oracle"
