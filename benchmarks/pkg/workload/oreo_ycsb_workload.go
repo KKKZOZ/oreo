@@ -36,25 +36,6 @@ func (wl *OreoYCSBWorkload) Load(ctx context.Context, opCount int,
 		return
 	}
 
-	// dbList := make([]string, 0)
-	// if wl.wp.KVRocksProportion > 0 {
-	// 	dbList = append(dbList, "KVRocks")
-	// }
-	// if wl.wp.Redis1Proportion > 0 {
-	// 	dbList = append(dbList, "Redis")
-	// }
-	// if wl.wp.Mongo1Proportion > 0 {
-	// 	dbList = append(dbList, "MongoDB")
-	// }
-	// if wl.wp.CouchDBProportion > 0 {
-	// 	dbList = append(dbList, "CouchDB")
-	// }
-	// if wl.wp.CassandraProportion > 0 {
-	// 	dbList = append(dbList, "Cassandra")
-	// }
-	// if wl.wp.DynamoDBProportion > 0 {
-	// 	dbList = append(dbList, "DynamoDB")
-	// }
 	dbList := getDatabases(*wl.wp)
 	err := wl.doLoad(ctx, txnDB, dbList, opCount)
 	if err != nil {
@@ -222,9 +203,9 @@ func (wl *OreoYCSBWorkload) datastoreTypeToName(dsType datastoreType) string {
 	case redisDatastore1:
 		return "Redis"
 	case mongoDatastore1:
-		return "MongoDB"
+		return "MongoDB1"
 	case mongoDatastore2:
-		return "MongoDB"
+		return "MongoDB2"
 	case couchDatastore1:
 		return "CouchDB"
 	case kvrocksDatastore1:

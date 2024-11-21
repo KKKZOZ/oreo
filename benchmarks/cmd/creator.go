@@ -41,9 +41,13 @@ func OreoYCSBCreator(workloadType string, mode string) (ycsb.DBCreator, error) {
 			kvConn := NewKVRocksConn()
 			connMap["KVRocks"] = kvConn
 		}
-		if name == "MongoDB" {
-			mongoConn := NewMongoDBConn()
-			connMap["MongoDB"] = mongoConn
+		if name == "MongoDB1" {
+			mongoConn := NewMongoDBConn(1)
+			connMap["MongoDB1"] = mongoConn
+		}
+		if name == "MongoDB2" {
+			mongoConn := NewMongoDBConn(2)
+			connMap["MongoDB2"] = mongoConn
 		}
 		if name == "CouchDB" {
 			couchConn := NewCouchDBConn()
@@ -77,7 +81,7 @@ func NativeRealisticCreator(workloadType string) (ycsb.DBCreator, error) {
 		}
 		kvDB := redis.NewRedis(rdb1)
 
-		mongoClient1, err := NewMongoDBClient(benConfig.MongoDBAddr)
+		mongoClient1, err := NewMongoDBClient(benConfig.MongoDBAddr1)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +101,7 @@ func NativeRealisticCreator(workloadType string) (ycsb.DBCreator, error) {
 		}
 		redisDB := redis.NewRedis(rdb1)
 
-		mongoClient1, err := NewMongoDBClient(benConfig.MongoDBAddr)
+		mongoClient1, err := NewMongoDBClient(benConfig.MongoDBAddr1)
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +134,7 @@ func NativeRealisticCreator(workloadType string) (ycsb.DBCreator, error) {
 		}
 		kvDB := redis.NewRedis(rdb2)
 
-		mongoClient1, err := NewMongoDBClient(benConfig.MongoDBAddr)
+		mongoClient1, err := NewMongoDBClient(benConfig.MongoDBAddr1)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +164,7 @@ func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb
 
 	if workloadType == "iot" {
 		kvConn := NewKVRocksConn()
-		mongoConn := NewMongoDBConn()
+		mongoConn := NewMongoDBConn(1)
 
 		connMap := map[string]txn.Connector{
 			"KVRocks": kvConn,
@@ -175,7 +179,7 @@ func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb
 	}
 	if workloadType == "social" {
 		redisConn := NewRedisConn()
-		mongoConn := NewMongoDBConn()
+		mongoConn := NewMongoDBConn(1)
 		couchConn := NewCouchDBConn()
 
 		connMap := map[string]txn.Connector{
@@ -193,7 +197,7 @@ func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb
 	if workloadType == "order" {
 		redisConn := NewRedisConn()
 		kvrocksConn := NewKVRocksConn()
-		mongoConn := NewMongoDBConn()
+		mongoConn := NewMongoDBConn(1)
 		couchConn := NewCouchDBConn()
 
 		connMap := map[string]txn.Connector{
@@ -258,8 +262,8 @@ func MongoCreator(addr string) (ycsb.DBCreator, error) {
 func NativeCreator(pattern string) (ycsb.DBCreator, error) {
 	fmt.Printf("Creating native workload with pattern: %v\n", pattern)
 	if pattern == "mm" {
-		mongoCreator1, err1 := MongoCreator(benConfig.MongoDBAddr)
-		mongoCreator2, err2 := MongoCreator(benConfig.MongoDBAddr)
+		mongoCreator1, err1 := MongoCreator(benConfig.MongoDBAddr1)
+		mongoCreator2, err2 := MongoCreator(benConfig.MongoDBAddr2)
 		if err1 != nil || err2 != nil {
 			log.Fatalf("Error when creating client: %v %v\n", err1, err2)
 			return nil, nil
@@ -276,7 +280,7 @@ func NativeCreator(pattern string) (ycsb.DBCreator, error) {
 
 	if pattern == "rm" {
 		redisCreator, err1 := RedisCreator(benConfig.RedisAddr)
-		mongoCreator1, err2 := MongoCreator(benConfig.MongoDBAddr)
+		mongoCreator1, err2 := MongoCreator(benConfig.MongoDBAddr1)
 		if err1 != nil || err2 != nil {
 			log.Fatalf("Error when creating client: %v %v\n", err1, err2)
 			return nil, nil
@@ -321,14 +325,14 @@ func OreoRedisCreator(isRemote bool) (ycsb.DBCreator, error) {
 
 func OreoMongoCreator(isRemote bool) (ycsb.DBCreator, error) {
 	mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-		Address:        benConfig.MongoDBAddr,
+		Address:        benConfig.MongoDBAddr1,
 		DBName:         "oreo",
 		CollectionName: "benchmark",
 		Username:       benConfig.MongoDBUsername,
 		Password:       benConfig.MongoDBPassword,
 	})
 	mongoConn2 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-		Address:        benConfig.MongoDBAddr,
+		Address:        benConfig.MongoDBAddr2,
 		DBName:         "oreo",
 		CollectionName: "benchmark",
 		Username:       benConfig.MongoDBUsername,
@@ -388,14 +392,14 @@ func OreoCreator(pattern string, isRemote bool) (ycsb.DBCreator, error) {
 
 	if pattern == "mm" {
 		mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-			Address:        benConfig.MongoDBAddr,
+			Address:        benConfig.MongoDBAddr1,
 			DBName:         "oreo",
 			CollectionName: "benchmark",
 			Username:       benConfig.MongoDBUsername,
 			Password:       benConfig.MongoDBPassword,
 		})
 		mongoConn2 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-			Address:        benConfig.MongoDBAddr,
+			Address:        benConfig.MongoDBAddr2,
 			DBName:         "oreo",
 			CollectionName: "benchmark",
 			Username:       benConfig.MongoDBUsername,
@@ -434,7 +438,7 @@ func OreoCreator(pattern string, isRemote bool) (ycsb.DBCreator, error) {
 		})
 
 		mongoConn1 := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-			Address:        benConfig.MongoDBAddr,
+			Address:        benConfig.MongoDBAddr1,
 			DBName:         "oreo",
 			CollectionName: "benchmark",
 			Username:       benConfig.MongoDBUsername,
@@ -524,9 +528,19 @@ func NewKVRocksConn() *redisCo.RedisConnection {
 // Returns:
 //
 //	*mongoCo.MongoConnection: A pointer to the established MongoDB connection.
-func NewMongoDBConn() *mongoCo.MongoConnection {
+func NewMongoDBConn(id int) *mongoCo.MongoConnection {
+	mongoDBAddr := ""
+	switch id {
+	case 1:
+		mongoDBAddr = benConfig.MongoDBAddr1
+	case 2:
+		mongoDBAddr = benConfig.MongoDBAddr2
+	default:
+		log.Panicf("Invalid MongoDB ID: %v", id)
+	}
+
 	mongoConn := mongoCo.NewMongoConnection(&mongoCo.ConnectionOptions{
-		Address:        benConfig.MongoDBAddr,
+		Address:        mongoDBAddr,
 		DBName:         "oreo",
 		CollectionName: "benchmark",
 		Username:       benConfig.MongoDBUsername,

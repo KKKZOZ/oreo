@@ -12,12 +12,23 @@ if [ "$db" == "Redis" ]; then
     docker rm -f redis
     echo "Create new redis container"
     docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
-elif [ "$db" == "MongoDB" ]; then
-    echo "Remove mongoDB container"
-    docker rm -f mongo
-    echo "Create new mongoDB container"
+elif [ "$db" == "MongoDB1" ]; then
+    echo "Remove mongoDB1 container"
+    docker rm -f mongo1
+    echo "Create new mongoDB1 container"
     docker run -d \
-        --name mongo \
+        --name mongo1 \
+        -p 27017:27017 \
+        -e MONGO_INITDB_ROOT_USERNAME=admin \
+        -e MONGO_INITDB_ROOT_PASSWORD=password \
+        --restart=always \
+        mongo
+elif [ "$db" == "MongoDB2" ]; then
+    echo "Remove mongoDB2 container"
+    docker rm -f mongo2
+    echo "Create new mongoDB2 container"
+    docker run -d \
+        --name mongo2 \
         -p 27018:27017 \
         -e MONGO_INITDB_ROOT_USERNAME=admin \
         -e MONGO_INITDB_ROOT_PASSWORD=password \

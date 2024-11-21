@@ -80,6 +80,18 @@ func (r *OreoYCSBDatastore) Start() error {
 			if r.globalDatastoreName == "MongoDB" {
 				txn1.SetGlobalDatastore(mds)
 			}
+		case "MongoDB1":
+			mds := mongo.NewMongoDatastore("MongoDB1", conn)
+			txn1.AddDatastore(mds)
+			if r.globalDatastoreName == "MongoDB1" {
+				txn1.SetGlobalDatastore(mds)
+			}
+		case "MongoDB2":
+			mds := mongo.NewMongoDatastore("MongoDB2", conn)
+			txn1.AddDatastore(mds)
+			if r.globalDatastoreName == "MongoDB2" {
+				txn1.SetGlobalDatastore(mds)
+			}
 		case "CouchDB":
 			cds := couchdb.NewCouchDBDatastore("CouchDB", conn)
 			txn1.AddDatastore(cds)
