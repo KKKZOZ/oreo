@@ -63,7 +63,6 @@ run_workload() {
 
 load_data() {
     for profile in native cg oreo; do
-        # for profile in native cg oreo; do
         log "Loading to ${wl_type} $profile"
         ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
@@ -168,7 +167,7 @@ main() {
     kill_process_on_port "$timeoracle_port"
 
     log "Starting executor"
-    LOG=ERROR ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
+    ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
     # env LOG=ERROR $(build_command) 2>./log/executor.log &
     executor_pid=$!
 

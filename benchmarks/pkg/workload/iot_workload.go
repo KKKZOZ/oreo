@@ -16,7 +16,7 @@ type IotWorkload struct {
 	taskChooser      *generator.Discrete
 	wp               *WorkloadParameter
 	seriesCnt        int
-	KVRocksNamespace string
+	RedisNamespace   string
 	MongoDBNamespace string
 	task1Count       int
 	task2Count       int
@@ -32,7 +32,7 @@ func NewIotWorkload(wp *WorkloadParameter) *IotWorkload {
 		taskChooser:      createTaskGenerator(wp),
 		wp:               wp,
 		seriesCnt:        3,
-		KVRocksNamespace: "sensor_data",
+		RedisNamespace:   "sensor_data",
 		MongoDBNamespace: "processed_data",
 	}
 }
@@ -42,7 +42,7 @@ func (wl *IotWorkload) DataIngestion(ctx context.Context, db ycsb.TransactionDB)
 
 	db.Start()
 	for i := 1; i <= wl.seriesCnt; i++ {
-		db.Update(ctx, "KVRocks", fmt.Sprintf("%v:%v:%d", wl.KVRocksNamespace, sensor_id, i), wl.RandomValue())
+		db.Update(ctx, "Redis", fmt.Sprintf("%v:%v:%d", wl.RedisNamespace, sensor_id, i), wl.RandomValue())
 	}
 	db.Commit()
 }
@@ -54,7 +54,7 @@ func (wl *IotWorkload) DataProcessing(ctx context.Context, db ycsb.TransactionDB
 
 	sum := int64(0)
 	for i := 1; i <= wl.seriesCnt; i++ {
-		value, err := db.Read(ctx, "KVRocks", fmt.Sprintf("%v:%v:%d", wl.KVRocksNamespace, sensor_id, i))
+		value, err := db.Read(ctx, "Redis", fmt.Sprintf("%v:%v:%d", wl.RedisNamespace, sensor_id, i))
 		if err != nil {
 			continue
 		}
@@ -83,10 +83,10 @@ func (wl *IotWorkload) Load(ctx context.Context, opCount int,
 	}
 	txnDB.Start()
 	for i := 0; i < opCount; i++ {
-		keyPrefix := fmt.Sprintf("%v:%v", wl.KVRocksNamespace, wl.NextKeyNameFromSequence())
+		keyPrefix := fmt.Sprintf("%v:%v", wl.RedisNamespace, wl.NextKeyNameFromSequence())
 		for j := 1; j <= wl.seriesCnt; j++ {
 			key := fmt.Sprintf("%v:%d", keyPrefix, j)
-			txnDB.Update(ctx, "KVRocks", key, wl.RandomValue())
+			txnDB.Update(ctx, "Redis", key, wl.RandomValue())
 		}
 
 	}

@@ -13,29 +13,29 @@ type OrderWorkload struct {
 	mu sync.Mutex
 
 	Randomizer
-	taskChooser      *generator.Discrete
-	wp               *WorkloadParameter
-	MongoDBNamespace string
-	CouchDBNamespace string
-	RedisNamespace   string
-	KVRocksNamespace string
-	task1Count       int
-	task2Count       int
-	task3Count       int
+	taskChooser        *generator.Discrete
+	wp                 *WorkloadParameter
+	MongoDBNamespace   string
+	CassandraNamespace string
+	RedisNamespace     string
+	KVRocksNamespace   string
+	task1Count         int
+	task2Count         int
+	task3Count         int
 }
 
 var _ Workload = (*OrderWorkload)(nil)
 
 func NewOrderWorkload(wp *WorkloadParameter) *OrderWorkload {
 	return &OrderWorkload{
-		mu:               sync.Mutex{},
-		Randomizer:       *NewRandomizer(wp),
-		taskChooser:      createTaskGenerator(wp),
-		wp:               wp,
-		MongoDBNamespace: "products",
-		CouchDBNamespace: "orders",
-		RedisNamespace:   "sessions",
-		KVRocksNamespace: "inventory",
+		mu:                 sync.Mutex{},
+		Randomizer:         *NewRandomizer(wp),
+		taskChooser:        createTaskGenerator(wp),
+		wp:                 wp,
+		MongoDBNamespace:   "products",
+		CassandraNamespace: "orders",
+		RedisNamespace:     "sessions",
+		KVRocksNamespace:   "inventory",
 	}
 }
 
@@ -70,7 +70,7 @@ func (wl *OrderWorkload) OrderPlacement(ctx context.Context, db ycsb.Transaction
 			db.Update(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, product_id), util.ToString(quantity))
 
 			order_id := wl.NextKeyName()
-			db.Insert(ctx, "CouchDB", fmt.Sprintf("%v:%v", wl.CouchDBNamespace, order_id), wl.RandomValue())
+			db.Insert(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, order_id), wl.RandomValue())
 		}
 		db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, session_id), wl.RandomValue())
 	}

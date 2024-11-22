@@ -5,23 +5,26 @@ echo "Remove MongoDB, Redis, KVRocks and CouchDB containers"
 docker rm -f mongo
 docker rm -f redis
 docker rm -f kvrocks
-docker rm -f couch
+# docker rm -f couch
+docker rm -f cassandra
 
 echo "Create new containers"
 
-docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass password
-
 docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
-
-docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -d couchdb
 
 docker run -d \
   --name mongo \
-  -p 27018:27017 \
+  -p 27017:27017 \
   -e MONGO_INITDB_ROOT_USERNAME=admin \
   -e MONGO_INITDB_ROOT_PASSWORD=password \
   --restart=always \
   mongo
+
+docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass password
+
+docker run -d --name cassandra -p 9842:9842 cassandra
+
+# docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -d couchdb
 
 echo "Remove order-load file"
 rm ../order/order-load
