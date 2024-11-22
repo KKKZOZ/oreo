@@ -60,7 +60,7 @@ export PATH=$PATH:/usr/local/go/bin
 
 source .bashrc
 
-go env -w GOPROXY=<https://goproxy.cn,direct>
+go env -w GOPROXY=https://goproxy.cn,direct
 
 ## 安装 Java
 

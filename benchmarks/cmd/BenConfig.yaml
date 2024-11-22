@@ -1,6 +1,6 @@
 # Benchmark system configuration
-executor_address_list: ["localhost:8001"]
-time_oracle_url: "http://localhost:8010"
+executor_address_list: ["172.24.58.116:8001","172.24.58.115:8001"]
+time_oracle_url: "http://172.24.58.116:8010"
 zipfian_constant: 0.9
 latency_value: 10
 
@@ -9,8 +9,8 @@ redis_addr: "localhost:6379"
 redis_password: "password"
 
 # MongoDB configuration
-mongodb_addr1: "mongodb://localhost:27017"
-mongodb_addr2: "mongodb://localhost:27018"
+mongodb_addr1: "mongodb://172.24.58.116:27017"
+mongodb_addr2: "mongodb://172.24.58.115:27018"
 mongodb_username: "admin"
 mongodb_password: "password"
 

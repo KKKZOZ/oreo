@@ -1,0 +1,46 @@
+#!/bin/bash
+
+executor_port=8001
+db_combinations=
+wl_mode=
+verbose=false
+bc=./BenConfig.yaml
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+    -wl | --workload)
+        wl_mode="$2"
+        shift
+        ;;
+    -db | --db)
+        db_combinations="$2"
+        shift
+        ;;
+    -v | --verbose) verbose=true ;;
+    *)
+        echo "Unknown parameter passed: $1"
+        exit 1
+        ;;
+    esac
+    shift
+done
+
+
+kill_process_on_port() {
+    local port=$1
+    local pid
+    pid=$(lsof -t -i ":$port")
+    if [ -n "$pid" ]; then
+        echo "Port $port is occupied by process $pid. Terminating this process..."
+        kill -9 "$pid"
+    fi
+}
+
+main(){
+    kill_process_on_port "$executor_port"
+    echo "Starting executor"
+    nohup ./executor -p "$executor_port" -w $wl_mode -bc "$bc" -db "$db_combinations" 2>./executor.log &
+    echo "Executor started"
+}
+
+main "$@"

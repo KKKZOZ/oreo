@@ -350,15 +350,16 @@ func parseFlag() {
 	flag.StringVar(&benConfigPath, "bc", "", "Benchmark Configuration Path")
 	flag.Parse()
 
+	newLogger()
+
 	if benConfigPath == "" {
-		Log.Fatal("Benchmark Configuration Path must be specified")
+		log.Fatal("Benchmark Configuration Path must be specified")
 	}
 
 	if workloadType == "ycsb" && db_combination == "" {
-		Log.Fatal("Database Combination must be specified for YCSB workload")
+		log.Fatal("Database Combination must be specified for YCSB workload")
 	}
 
-	newLogger()
 }
 
 func getConnMap() map[string]txn.Connector {
