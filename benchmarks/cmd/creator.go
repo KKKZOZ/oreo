@@ -163,29 +163,29 @@ func NativeRealisticCreator(workloadType string) (ycsb.DBCreator, error) {
 func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb.DBCreator, error) {
 
 	if workloadType == "iot" {
-		kvConn := NewKVRocksConn()
+		redisConn := NewRedisConn()
 		mongoConn := NewMongoDBConn(1)
 
 		connMap := map[string]txn.Connector{
-			"KVRocks": kvConn,
+			"Redis":   redisConn,
 			"MongoDB": mongoConn,
 		}
 		return &oreo.OreoRealisticCreator{
 			IsRemote:            isRemote,
 			ConnMap:             connMap,
-			GlobalDatastoreName: "KVRocks",
+			GlobalDatastoreName: "Redis",
 			Mode:                mode,
 		}, nil
 	}
 	if workloadType == "social" {
 		redisConn := NewRedisConn()
 		mongoConn := NewMongoDBConn(1)
-		couchConn := NewCouchDBConn()
+		cassandraConn := NewCassandraConn()
 
 		connMap := map[string]txn.Connector{
-			"Redis":   redisConn,
-			"MongoDB": mongoConn,
-			"CouchDB": couchConn,
+			"Redis":     redisConn,
+			"MongoDB":   mongoConn,
+			"Cassandra": cassandraConn,
 		}
 		return &oreo.OreoRealisticCreator{
 			IsRemote:            isRemote,
@@ -198,13 +198,13 @@ func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb
 		redisConn := NewRedisConn()
 		kvrocksConn := NewKVRocksConn()
 		mongoConn := NewMongoDBConn(1)
-		couchConn := NewCouchDBConn()
+		cassandraConn := NewCassandraConn()
 
 		connMap := map[string]txn.Connector{
-			"Redis":   redisConn,
-			"KVRocks": kvrocksConn,
-			"MongoDB": mongoConn,
-			"CouchDB": couchConn,
+			"Redis":     redisConn,
+			"KVRocks":   kvrocksConn,
+			"MongoDB":   mongoConn,
+			"Cassandra": cassandraConn,
 		}
 		return &oreo.OreoRealisticCreator{
 			IsRemote:            isRemote,

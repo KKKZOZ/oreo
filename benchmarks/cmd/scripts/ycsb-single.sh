@@ -170,7 +170,7 @@ main() {
     kill_process_on_port "$timeoracle_port"
 
     log "Starting executor"
-    LOG=ERROR ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
+    ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
 
     # printf "final_cmd: %s\n" "$(build_command)"
     # env LOG=ERROR $(build_command) 2>./log/executor.log &

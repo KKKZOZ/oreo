@@ -16,7 +16,7 @@ type SocialWorkload struct {
 	taskChooser             *generator.Discrete
 	wp                      *WorkloadParameter
 	MongoDBNamespace        string
-	CouchDBNamespace        string
+	CassandraNamespace      string
 	RedisNamespaceAnalytics string
 	RedisNamespaceSession   string
 	task1Count              int
@@ -33,7 +33,7 @@ func NewSocialWorkload(wp *WorkloadParameter) *SocialWorkload {
 		taskChooser:             createTaskGenerator(wp),
 		wp:                      wp,
 		MongoDBNamespace:        "users",
-		CouchDBNamespace:        "posts",
+		CassandraNamespace:      "posts",
 		RedisNamespaceAnalytics: "analytics",
 		RedisNamespaceSession:   "session",
 	}
@@ -44,7 +44,7 @@ func (wl *SocialWorkload) ContentFeedRetrieval(ctx context.Context, db ycsb.Tran
 	db.Start()
 
 	post_id := wl.NextKeyName()
-	_, _ = db.Read(ctx, "CouchDB", fmt.Sprintf("%v:%v", wl.CouchDBNamespace, post_id))
+	_, _ = db.Read(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, post_id))
 	_, _ = db.Read(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, post_id))
 
 	db.Commit()
@@ -55,7 +55,7 @@ func (wl *SocialWorkload) ContentCreation(ctx context.Context, db ycsb.Transacti
 	db.Start()
 
 	post_id := wl.NextKeyName()
-	db.Update(ctx, "CouchDB", fmt.Sprintf("%v:%v", wl.CouchDBNamespace, post_id), wl.RandomValue())
+	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, post_id), wl.RandomValue())
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, post_id), wl.RandomValue())
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, post_id), wl.RandomValue())
 
@@ -82,7 +82,7 @@ func (wl *SocialWorkload) Load(ctx context.Context, opCount int,
 	for i := 0; i < opCount; i++ {
 		key := wl.NextKeyNameFromSequence()
 		txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, key), wl.RandomValue())
-		txnDB.Insert(ctx, "CouchDB", fmt.Sprintf("%v:%v", wl.CouchDBNamespace, key), wl.RandomValue())
+		txnDB.Insert(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, key), wl.RandomValue())
 		txnDB.Insert(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, key), wl.RandomValue())
 	}
 	err := txnDB.Commit()
