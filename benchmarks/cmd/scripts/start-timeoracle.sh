@@ -13,10 +13,16 @@ kill_process_on_port() {
 }
 
 main(){
+
+    cd "$(dirname "$0")"
+
     kill_process_on_port "$timeoracle_port"
     echo "Starting timeoracle"
     nohup ./timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>./timeoracle.log &
+
+    sleep 1
     echo "Timeoracle started"
+    lsof -i ":$timeoracle_port"
 }
 
 main "$@"

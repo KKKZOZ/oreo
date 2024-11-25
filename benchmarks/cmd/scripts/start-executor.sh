@@ -9,7 +9,7 @@ bc=./BenConfig.yaml
 while [[ "$#" -gt 0 ]]; do
     case $1 in
     -wl | --workload)
-        wl_mode="$2"
+        wl_mode="$2"    
         shift
         ;;
     -db | --db)
@@ -25,7 +25,6 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-
 kill_process_on_port() {
     local port=$1
     local pid
@@ -37,10 +36,26 @@ kill_process_on_port() {
 }
 
 main(){
+
+    cd "$(dirname "$0")"
+
+    if [ ! -f "$bc" ]; then
+        echo "Error: Benchmark Configuration file not found at $bc"
+        exit 1
+    fi
+
+    if [ -z "$wl_mode" ]; then
+        echo "Error: Workload mode must be specified using -wl or --workload"
+        exit 1
+    fi
+
     kill_process_on_port "$executor_port"
     echo "Starting executor"
-    nohup ./executor -p "$executor_port" -w $wl_mode -bc "$bc" -db "$db_combinations" 2>./executor.log &
+    nohup ./executor -p "$executor_port" -w "$wl_mode" -bc "$bc" -db "$db_combinations" 2>./executor.log &
+
+    sleep 1
     echo "Executor started"
+    lsof -i ":$executor_port"
 }
 
 main "$@"

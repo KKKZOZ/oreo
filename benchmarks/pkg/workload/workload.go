@@ -30,7 +30,7 @@ const (
 )
 
 const (
-	MAX_VALUE_LENGTH = 1000
+	MAX_VALUE_LENGTH = 100
 )
 
 type Workload interface {

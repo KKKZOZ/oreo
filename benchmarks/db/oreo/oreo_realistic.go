@@ -4,10 +4,14 @@ import (
 	"benchmark/pkg/benconfig"
 	"benchmark/ycsb"
 	"context"
+	"log"
 
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/datastore/tikv"
 	"github.com/oreo-dtx-lab/oreo/pkg/network"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -86,8 +90,26 @@ func (r *OreoRealisticDatastore) Start() error {
 			if r.globalDatastoreName == "CouchDB" {
 				txn1.SetGlobalDatastore(cds)
 			}
+		case "Cassandra":
+			cds := cassandra.NewCassandraDatastore("Cassandra", conn)
+			txn1.AddDatastore(cds)
+			if r.globalDatastoreName == "Cassandra" {
+				txn1.SetGlobalDatastore(cds)
+			}
+		case "DynamoDB":
+			dds := dynamodb.NewDynamoDBDatastore("DynamoDB", conn)
+			txn1.AddDatastore(dds)
+			if r.globalDatastoreName == "DynamoDB" {
+				txn1.SetGlobalDatastore(dds)
+			}
+		case "TiKV":
+			tds := tikv.NewTiKVDatastore("TiKV", conn)
+			txn1.AddDatastore(tds)
+			if r.globalDatastoreName == "TiKV" {
+				txn1.SetGlobalDatastore(tds)
+			}
 		default:
-			panic("unknown datastore")
+			log.Panicf("unknown datastore: %s", dbName)
 		}
 	}
 

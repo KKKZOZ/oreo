@@ -5,7 +5,7 @@ zipfian_constant: 0.9
 latency_value: 10
 
 # Redis configuration
-redis_addr: "localhost:6379"
+redis_addr: "172.24.58.116:6379"
 redis_password: "password"
 
 # MongoDB configuration
@@ -15,7 +15,7 @@ mongodb_username: "admin"
 mongodb_password: "password"
 
 # KVRocks configuration
-kvrocks_addr: "localhost:6666"
+kvrocks_addr: "172.24.58.116:6666"
 kvrocks_password: "password"
 
 # CouchDB configuration
@@ -24,6 +24,6 @@ couchdb_username: "admin"
 couchdb_password: "password"
 
 # Other databases configuration
-cassandra_addr: ["localhost"]
+cassandra_addr: ["172.24.58.115"]
 dynamodb_addr: "http://localhost:8000"
 tikv_addr: ["localhost:2379"]

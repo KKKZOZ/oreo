@@ -9,6 +9,13 @@ thread=0
 verbose=false
 wl_mode=
 
+declare -g executor_pid
+declare -g time_oracle_pid
+remote=false
+node2=s1-ljy
+node3=s3-ljy
+PASSWORD=kkkzoz
+
 while [[ "$#" -gt 0 ]]; do
     case $1 in
     -wl | --workload)
@@ -24,6 +31,7 @@ while [[ "$#" -gt 0 ]]; do
         shift
         ;;
     -v | --verbose) verbose=true ;;
+    -r | --remote) remote=true ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -109,42 +117,40 @@ print_summary() {
 }
 
 clear_up() {
-    log "Killing executor"
-    kill $executor_pid
-    log "Killing time oracle"
-    kill $time_oracle_pid
+    if [ "$remote" = false ]; then    
+        log "Killing executor"
+        kill $executor_pid
+        log "Killing time oracle"
+        kill $time_oracle_pid
+    fi
 }
 
-# 基础命令部分
-base_cmd="./bin/executor -p $executor_port -timeurl http://localhost:$timeoracle_port -w $wl_type"
+deploy_local(){
+    kill_process_on_port "$executor_port"
+    kill_process_on_port "$timeoracle_port"
 
-# 数据库连接配置
-declare -A db_configs=(
-    ["TiKV"]="-tikv localhost:2379"
-    ["KVRocks"]="-kvrocks localhost:6666"
-    ["MongoDB"]="-mongo1 mongodb://172.24.58.116:27018"
-    ["Redis"]="-redis1 localhost:6379"
-    ["CouchDB"]="-couch http://admin:password@localhost:5984"
-    ["Cassandra"]="-cas localhost"
-    ["DynamoDB"]="-dynamodb http://localhost:8000"
-)
+    log "Starting executor"
+    ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
+    # env LOG=ERROR $(build_command) 2>./log/executor.log &
+    executor_pid=$!
 
-# 构建命令的函数
-build_command() {
-    local final_cmd="$base_cmd"
-    # 将 db_combinations 按逗号分割
-    IFS=',' read -ra DBS <<<"$db_combinations"
+    log "Starting time oracle"
+    ./bin/timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>./log/timeoracle.log &
+    time_oracle_pid=$!
+}
 
-    # 遍历选择的数据库
-    for db in "${DBS[@]}"; do
-        # 去除可能存在的空格
-        db=$(echo "$db" | xargs)
-        # 如果这个数据库在配置中存在，则添加相应的参数
-        if [[ -n "${db_configs[$db]}" ]]; then
-            final_cmd="$final_cmd ${db_configs[$db]}"
-        fi
-    done
-    echo "$final_cmd"
+deploy_remote(){
+    log "Setup node 2"
+    ssh -t $node2 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh && sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
+
+    log "Setup node 3"
+    ssh -t $node3 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
+
+    read -p "Do you want to continue? (y/n): " continue_choice
+    if [[ "$continue_choice" != "y" && "$continue_choice" != "Y" ]]; then
+        echo "Exiting the script."
+        exit 0
+    fi
 }
 
 main() {
@@ -166,19 +172,15 @@ main() {
 
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
 
-    kill_process_on_port "$executor_port"
-    kill_process_on_port "$timeoracle_port"
+    printf "Running benchmark for [%s] workload with [%s] database combinations\n" "$wl_type" "$db_combinations"
 
-    log "Starting executor"
-    ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
-
-    # printf "final_cmd: %s\n" "$(build_command)"
-    # env LOG=ERROR $(build_command) 2>./log/executor.log &
-    executor_pid=$!
-
-    log "Starting time oracle"
-    ./bin/timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>./log/timeoracle.log &
-    time_oracle_pid=$!
+     if [ "$remote" = true ]; then
+        echo "Running remotely"
+        deploy_remote
+    else
+        echo "Running locally"
+        deploy_local
+    fi
 
     # Load data if needed
     if [ ! -f "$tar_dir/${wl_type}-load" ]; then

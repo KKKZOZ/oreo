@@ -7,6 +7,7 @@ var (
 	TimeOracleUrl       = "http://localhost:8010"
 	ZipfianConstant     = 0.5
 	Latency             = 10 * time.Millisecond
+	MaxLoadBatchSize    = 100
 )
 
 type BenchmarkConfig struct {
@@ -15,6 +16,7 @@ type BenchmarkConfig struct {
 	ZipfianConstant     float64       `yaml:"zipfian_constant"`
 	Latency             time.Duration `yaml:"latency"`
 	LatencyValue        int           `yaml:"latency_value"`
+	MaxLoadBatchSize    int           `yaml:"max_load_batch_size"`
 
 	RedisAddr     string `yaml:"redis_addr"`
 	RedisPassword string `yaml:"redis_password"`

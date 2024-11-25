@@ -118,6 +118,9 @@ func main() {
 	switch mode {
 	case "load":
 		// cfg.Config.ConcurrentOptimizationLevel = 1
+		if benconfig.MaxLoadBatchSize == 0 {
+			benconfig.MaxLoadBatchSize = 1000
+		}
 		cfg.Debug.DebugMode = false
 		cfg.Debug.HTTPAdditionalLatency = 0
 		cfg.Debug.ConnAdditionalLatency = 0
@@ -471,6 +474,7 @@ func loadConfig() *workload.WorkloadParameter {
 	benconfig.ExecutorAddressList = benConfig.ExecutorAddressList
 	benconfig.TimeOracleUrl = benConfig.TimeOracleUrl
 	benconfig.ZipfianConstant = benConfig.ZipfianConstant
+	benconfig.MaxLoadBatchSize = benConfig.MaxLoadBatchSize
 
 	wp := &workload.WorkloadParameter{}
 	wpLoader := aconfig.LoaderFor(wp, aconfig.Config{

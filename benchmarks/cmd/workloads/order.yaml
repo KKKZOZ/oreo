@@ -1,8 +1,8 @@
 # Total number of records to be generated
-recordcount: 10000
+recordcount: 100000
 
 # Total number of operations to be performed
-operationcount: 1000
+operationcount: 2000
 
 # Number of operations in each transaction group
 txnoperationgroup: 6

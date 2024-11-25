@@ -117,6 +117,8 @@ clear_up() {
     kill $time_oracle_pid
 }
 
+
+
 main() {
     cd "$(dirname "$0")" && cd ..
 
@@ -136,27 +138,20 @@ main() {
 
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
 
-    ssh $node2 "bash -c \"$(declare -f kill_process_on_port); kill_process_on_port $port\""
-    ssh $node3 "bash -c \"$(declare -f kill_process_on_port); kill_process_on_port $port\""
-    # kill_process_on_port "$executor_port"
-    ssh $node2 "bash -c \"$(declare -f kill_process_on_port); kill_process_on_port $timeoracle_port\""
-    # kill_process_on_port "$timeoracle_port"
+    printf "Running benchmark for [%s] workload with [%s] database combinations\n" "$wl_type" "$db_combinations"
 
-    log "Starting executor"
-    cmd="./oreo_ben/executor -p ${executor_port} -w ${wl_type} -bc ${bc} -db ${db_combinations} 2>./log/executor.log"
-    ssh $node2 "nohup ${cmd} &"
-    ssh $node3 "nohup ${cmd} &"
-    # ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
+    log "Setup node 2"
+    ssh -t $node2 "sudo -E bash ~/oreo-ben/start-timeoracle.sh && sudo -E bash ~/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
 
-    # printf "final_cmd: %s\n" "$(build_command)"
-    # env LOG=ERROR $(build_command) 2>./log/executor.log &
-    # executor_pid=$!
+    log "Setup node 3"
+    ssh -t $node3 "sudo -E bash ~/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
 
-    log "Starting time oracle"
-    # ./bin/timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>./log/timeoracle.log &
-    cmd="./oreo_ben/timeoracle -p ${timeoracle_port} -type hybrid 2>./log/timeoracle.log"
-    ssh $node2 "nohup ${cmd} &"
-    # time_oracle_pid=$!
+    read -p "Do you want to continue? (y/n): " continue_choice
+    if [[ "$continue_choice" != "y" && "$continue_choice" != "Y" ]]; then
+        echo "Exiting the script."
+        exit 0
+    fi
+
 
     # Load data if needed
     if [ ! -f "$tar_dir/${wl_type}-load" ]; then

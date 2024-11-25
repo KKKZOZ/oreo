@@ -1,11 +1,13 @@
 package workload
 
 import (
+	"benchmark/pkg/benconfig"
 	"benchmark/pkg/generator"
 	"benchmark/pkg/util"
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -78,16 +80,28 @@ func (wl *SocialWorkload) Load(ctx context.Context, opCount int,
 		fmt.Println("The DB does not support transactions")
 		return
 	}
-	txnDB.Start()
-	for i := 0; i < opCount; i++ {
-		key := wl.NextKeyNameFromSequence()
-		txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, key), wl.RandomValue())
-		txnDB.Insert(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, key), wl.RandomValue())
-		txnDB.Insert(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, key), wl.RandomValue())
+	if opCount%benconfig.MaxLoadBatchSize != 0 {
+		log.Fatalf("opCount should be a multiple of MaxLoadBatchSize, opCount: %d, MaxLoadBatchSize: %d", opCount, benconfig.MaxLoadBatchSize)
 	}
-	err := txnDB.Commit()
-	if err != nil {
-		fmt.Printf("Error when committing transaction: %v\n", err)
+
+	round := opCount / benconfig.MaxLoadBatchSize
+	var aErr error
+	for i := 0; i < round; i++ {
+		txnDB.Start()
+		for j := 0; j < benconfig.MaxLoadBatchSize; j++ {
+			key := wl.NextKeyNameFromSequence()
+			txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, key), wl.RandomValue())
+			txnDB.Insert(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, key), wl.RandomValue())
+			txnDB.Insert(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, key), wl.RandomValue())
+		}
+		err := txnDB.Commit()
+		if err != nil {
+			aErr = err
+			fmt.Printf("Error when committing transaction: %v\n", err)
+		}
+	}
+	if aErr != nil {
+		fmt.Printf("Error in Social Load: %v\n", aErr)
 	}
 
 }

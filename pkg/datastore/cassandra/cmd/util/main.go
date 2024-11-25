@@ -50,7 +50,7 @@ var ip = ""
 func main() {
 	// Parse command line arguments
 	flag.StringVar(&op, "op", "", "Operation to perform: create or clear")
-	flag.StringVar(&ip, "ip", "", "IP address of Cassandra node")
+	flag.StringVar(&ip, "ip", "127.0.0.1", "IP address of Cassandra node")
 	flag.Parse()
 
 	if op == "" {
@@ -58,9 +58,10 @@ func main() {
 	}
 
 	// Initialize cluster
-	cluster := gocql.NewCluster("127.0.0.1") // assuming Cassandra runs locally
+	cluster := gocql.NewCluster(ip)
 	cluster.Consistency = gocql.Quorum
 	cluster.Timeout = time.Second * 5
+	cluster.ProtoVersion = 4
 
 	// For initial connection, use system keyspace
 	cluster.Keyspace = "system"

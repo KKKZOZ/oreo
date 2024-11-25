@@ -10,10 +10,10 @@ postcheckinterval: 1000
 
 # Proportions of different operations
 readproportion: 0.5 # Proportion of read operations
-updateproportion: 0.5 # Proportion of update operations
+updateproportion: 0 # Proportion of update operations
 insertproportion: 0 # Proportion of insert operations
 scanproportion: 0 # Proportion of scan operations
-readmodifywriteproportion: 0 # Proportion of read-modify-write operations
+readmodifywriteproportion: 0.5 # Proportion of read-modify-write operations
 
 # Proportions of operations on different databases
 redis1proportion: 0 # Proportion of operations on Redis instance 1
