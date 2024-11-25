@@ -1,11 +1,13 @@
 package workload
 
 import (
+	"benchmark/pkg/benconfig"
 	"benchmark/pkg/generator"
 	"benchmark/pkg/util"
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -81,20 +83,32 @@ func (wl *IotWorkload) Load(ctx context.Context, opCount int,
 		fmt.Println("The DB does not support transactions")
 		return
 	}
-	txnDB.Start()
-	for i := 0; i < opCount; i++ {
-		keyPrefix := fmt.Sprintf("%v:%v", wl.RedisNamespace, wl.NextKeyNameFromSequence())
-		for j := 1; j <= wl.seriesCnt; j++ {
-			key := fmt.Sprintf("%v:%d", keyPrefix, j)
-			txnDB.Update(ctx, "Redis", key, wl.RandomValue())
+	if opCount%benconfig.MaxLoadBatchSize != 0 {
+		log.Fatalf("opCount should be a multiple of MaxLoadBatchSize, opCount: %d, MaxLoadBatchSize: %d", opCount, benconfig.MaxLoadBatchSize)
+	}
+
+	round := opCount / benconfig.MaxLoadBatchSize
+	var aErr error
+
+	for i := 0; i < round; i++ {
+		txnDB.Start()
+		for j := 0; j < benconfig.MaxLoadBatchSize; j++ {
+			keyPrefix := fmt.Sprintf("%v:%v", wl.RedisNamespace, wl.NextKeyNameFromSequence())
+			for k := 1; k <= wl.seriesCnt; k++ {
+				key := fmt.Sprintf("%v:%d", keyPrefix, k)
+				txnDB.Update(ctx, "Redis", key, wl.RandomValue())
+			}
+
 		}
-
+		err := txnDB.Commit()
+		if err != nil {
+			aErr = err
+			fmt.Printf("Error when committing transaction: %v\n", err)
+		}
 	}
-	err := txnDB.Commit()
-	if err != nil {
-		fmt.Printf("Error when committing transaction: %v\n", err)
+	if aErr != nil {
+		fmt.Printf("Error in Iot Load: %v\n", aErr)
 	}
-
 }
 
 func (wl *IotWorkload) Run(ctx context.Context, opCount int,

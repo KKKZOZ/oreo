@@ -1,9 +1,11 @@
 package workload
 
 import (
+	"benchmark/pkg/benconfig"
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"log"
 	"reflect"
 	"strings"
 	"sync"
@@ -69,23 +71,36 @@ func getDatabases(wp WorkloadParameter) []string {
 }
 
 func (wl *OreoYCSBWorkload) doLoad(ctx context.Context, db ycsb.TransactionDB, dbList []string, opCount int) error {
-	db.Start()
-	for i := 0; i < opCount; i++ {
-		keyName := wl.NextKeyNameFromSequence()
-		value := wl.BuildRandomValue()
 
-		for _, dsName := range dbList {
-			err := db.Insert(ctx, dsName, keyName, value)
-			if err != nil {
-				fmt.Println(err)
+	if opCount%benconfig.MaxLoadBatchSize != 0 {
+		log.Fatalf("opCount should be a multiple of MaxLoadBatchSize, opCount: %d, MaxLoadBatchSize: %d", opCount, benconfig.MaxLoadBatchSize)
+		return nil
+	}
+
+	round := opCount / benconfig.MaxLoadBatchSize
+	var aErr error
+
+	for i := 0; i < round; i++ {
+		db.Start()
+		for j := 0; j < benconfig.MaxLoadBatchSize; j++ {
+			keyName := wl.NextKeyNameFromSequence()
+			value := wl.BuildRandomValue()
+
+			for _, dsName := range dbList {
+				err := db.Insert(ctx, dsName, keyName, value)
+				if err != nil {
+					fmt.Println(err)
+				}
 			}
 		}
+		err := db.Commit()
+		if err != nil {
+			aErr = err
+			fmt.Printf("Error in Oreo YCSB Load: %v\n", err)
+		}
 	}
-	err := db.Commit()
-	if err != nil {
-		fmt.Printf("Error in Oreo YCSB Load: %v\n", err)
-	}
-	return err
+
+	return aErr
 }
 
 func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {

@@ -369,32 +369,32 @@ func getConnMap() map[string]txn.Connector {
 		// if kvRocksAddr == "" || mongoAddr1 == "" {
 		// 	Log.Fatal("IOT Datastore address must be specified")
 		// }
-		kvConn := getKVRocksConn()
 		mongoConn1 := getMongoConn(1)
-		connMap["KVRocks"] = kvConn
+		redisConn := getRedisConn(1)
 		connMap["MongoDB"] = mongoConn1
+		connMap["Redis"] = redisConn
 	case "social":
 		// if mongoAddr1 == "" || couchAddr == "" || redisAddr1 == "" {
 		// 	Log.Fatal("SOCIAL Datastore address must be specified")
 		// }
 		mongoConn1 := getMongoConn(1)
-		couchConn := getCouchConn()
 		redisConn := getRedisConn(1)
+		cassandraConn := getCassandraConn()
 		connMap["MongoDB"] = mongoConn1
-		connMap["CouchDB"] = couchConn
 		connMap["Redis"] = redisConn
+		connMap["Cassandra"] = cassandraConn
 	case "order":
 		// if mongoAddr1 == "" || couchAddr == "" || redisAddr1 == "" || kvRocksAddr == "" {
 		// 	Log.Fatal("ORDER Datastore address must be specified")
 		// }
 		mongoConn1 := getMongoConn(1)
-		couchConn := getCouchConn()
+		kvrocksConn := getKVRocksConn()
 		redisConn := getRedisConn(1)
-		kvConn := getKVRocksConn()
+		cassandraConn := getCassandraConn()
 		connMap["MongoDB"] = mongoConn1
-		connMap["CouchDB"] = couchConn
+		connMap["KVRocks"] = kvrocksConn
 		connMap["Redis"] = redisConn
-		connMap["KVRocks"] = kvConn
+		connMap["Cassandra"] = cassandraConn
 
 	case "ycsb":
 		// if redisAddr1 == "" && mongoAddr1 == "" && mongoAddr2 == "" {

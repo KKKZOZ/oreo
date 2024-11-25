@@ -11,7 +11,8 @@ if [ "$db" == "Redis" ]; then
     echo "Remove redis container"
     docker rm -f redis
     echo "Create new redis container"
-    docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
+    docker run --name redis -p 6379:6379 --restart=always -d redis
+    # docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
 elif [ "$db" == "MongoDB1" ]; then
     echo "Remove mongoDB1 container"
     docker rm -f mongo1
@@ -44,6 +45,19 @@ elif [ "$db" == "CouchDB" ]; then
     docker rm -f couch
     echo "Create new couchDB container"
     docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -d couchdb
+elif [ "$db" == "Cassandra" ]; then
+    echo "Remove cassandra container"
+    docker rm -f cassandra
+    echo "Create new cassandra container"
+    docker run -d --name cassandra -p 9042:9042 cassandra
+    if [ ! -f "cassandra_util" ]; then
+        echo "ERROR: cassandra_util not found"
+        exit 1
+    fi
+    echo "Waiting for cassandra to start: 70 seconds"
+    sleep 70
+    echo "Setup cassandra"
+    ./cassandra_util -op create
 elif [ "$db" == "TiKV" ]; then
     echo "Restart TiKV binary"
     ./deploy-tikv.sh

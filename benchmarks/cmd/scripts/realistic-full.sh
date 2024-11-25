@@ -10,18 +10,13 @@ NC='\033[0m' # No Color
 
 executor_port=8001
 timeoracle_port=8010
-thread_load=100
+thread_load=50
 threads=(8 16 32 48 64 80 96)
 round_interval=5
-# threads=(8 16 32)
+bc=./BenConfig.yaml
 
-db_combinations=
-thread=0
+wl_type=
 verbose=false
-wl_mode=
-
-declare -g executor_pid
-declare -g time_oracle_pid
 remote=false
 node2=s1-ljy
 node3=s3-ljy
@@ -30,11 +25,11 @@ PASSWORD=kkkzoz
 while [[ "$#" -gt 0 ]]; do
     case $1 in
     -wl | --workload)
-        wl_mode="$2"
+        wl_type="$2"
         shift
         ;;
-    -db | --db)
-        db_combinations="$2"
+    -t | --threads)
+        threads=($2)
         shift
         ;;
     -v | --verbose) verbose=true ;;
@@ -47,22 +42,21 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-wl_type=ycsb
-tar_dir=./data/ycsb
-config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
-results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
-bc=./BenConfig.yaml
+# Validate workload
+if [[ ! "$wl_type" =~ ^(iot|social|order)$ ]]; then
+    echo "Error: Invalid workload. Must be iot, social or order"
+    exit 1
+fi
+
+tar_dir=./data/$wl_type
+config_file="./workloads/${wl_type}.yaml"
+results_file="$tar_dir/${wl_type}_benchmark_results.csv"
 
 log() {
     local color=${2:-$NC}
     if [[ "${verbose}" = true ]]; then
         echo -e "${color}$1${NC}"
     fi
-}
-
-handle_error() {
-    echo "Error: $1"
-    exit 1
 }
 
 kill_process_on_port() {
@@ -77,14 +71,14 @@ kill_process_on_port() {
 
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
-    log "Running $wl_type-$wl_mode $profile thread=$thread" $BLUE
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -t "$thread" >"$output"
+    log "Running $wl_type $profile thread=$thread" $BLUE
+    go run . -d oreo -wl $wl_type -wc "./workloads/$wl_type.yaml" -bc "$bc" -m $mode -ps $profile -t "$thread" >"$output"
 }
 
 load_data() {
     for profile in native cg oreo; do
         log "Loading to ${wl_type} $profile" $BLUE
-        ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
+        LOG=ERROR ./bin/cmd -d oreo -wl "$wl_type" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
     done
     touch "$tar_dir/${wl_type}-load"
@@ -93,7 +87,7 @@ load_data() {
 get_metrics() {
     local profile=$1 thread=$2
     local duration
-    local file="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
+    local file="$tar_dir/$wl_type-$profile-$thread.txt"
     duration=$(rg '^Run finished' "$file" | rg -o '[0-9.]+')
     local duration
     latency=$(rg '^TXN\s' "$file" | rg -o '\s99th\(us\): [0-9]+' | cut -d' ' -f3)
@@ -127,9 +121,9 @@ print_summary() {
 
 clear_up() {
     if [ "$remote" = false ]; then
-        log "Killing executor"
+        log "Killing executor" $RED
         kill $executor_pid
-        log "Killing time oracle"
+        log "Killing time oracle" $RED
         kill $time_oracle_pid
     fi
 }
@@ -149,15 +143,16 @@ deploy_local(){
 }
 
 deploy_remote(){
-    log "Setup node 2"
+    log "Setup node 2" $GREEN
     ssh -t $node2 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh && sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
 
-    log "Setup node 3"
+    log "Setup node 3" $GREEN
     ssh -t $node3 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
-
 }
 
 main() {
+
+    # Go to the script root directory
     cd "$(dirname "$0")" && cd ..
 
     # check if config file exists
@@ -165,11 +160,14 @@ main() {
         handle_error "Config file $config_file does not exist"
     fi
 
-    echo "Building the benchmark executable"
+    if [ -z "$wl_type" ]; then
+        handle_error "Workload type is not provided"
+    fi
+
+    log "Building the benchmark" $GREEN
     go build .
     mv cmd ./bin
 
-    tar_dir="$tar_dir/$wl_mode-$db_combinations"
     mkdir -p "$tar_dir"
 
     # Create/overwrite results file with header
@@ -179,10 +177,10 @@ main() {
     log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $YELLOW
 
     if [ "$remote" = true ]; then
-        echo "Running remotely"
+        log "Running remotely" $BLUE
         deploy_remote
     else
-        echo "Running locally"
+        log "Running locally" $BLUE
         deploy_local
     fi
 
@@ -198,7 +196,6 @@ main() {
         exit 0
     fi
 
-    # Load data if needed
     if [ ! -f "$tar_dir/${wl_type}-load" ]; then
         load_data
     fi
@@ -206,7 +203,7 @@ main() {
     for thread in "${threads[@]}"; do
 
         for profile in native cg oreo; do
-            output="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
+            output="$tar_dir/$wl_type-$profile-$thread.txt"
             run_workload "run" "$profile" "$thread" "$output"
         done
 
@@ -221,7 +218,7 @@ main() {
         sleep $round_interval
     done
 
-    clear_up
+    clear_up 
 }
 
 main "$@"

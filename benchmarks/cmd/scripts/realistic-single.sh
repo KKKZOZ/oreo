@@ -10,18 +10,12 @@ NC='\033[0m' # No Color
 
 executor_port=8001
 timeoracle_port=8010
-thread_load=100
-threads=(8 16 32 48 64 80 96)
-round_interval=5
-# threads=(8 16 32)
+thread_load=50
+bc=./BenConfig.yaml
 
-db_combinations=
 thread=0
+wl_type=
 verbose=false
-wl_mode=
-
-declare -g executor_pid
-declare -g time_oracle_pid
 remote=false
 node2=s1-ljy
 node3=s3-ljy
@@ -30,11 +24,11 @@ PASSWORD=kkkzoz
 while [[ "$#" -gt 0 ]]; do
     case $1 in
     -wl | --workload)
-        wl_mode="$2"
+        wl_type="$2"
         shift
         ;;
-    -db | --db)
-        db_combinations="$2"
+    -t | --thread)
+        thread="$2"
         shift
         ;;
     -v | --verbose) verbose=true ;;
@@ -47,22 +41,21 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-wl_type=ycsb
-tar_dir=./data/ycsb
-config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
-results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
-bc=./BenConfig.yaml
+# Validate workload
+if [[ ! "$wl_type" =~ ^(iot|social|order)$ ]]; then
+    echo "Error: Invalid workload. Must be iot, social or order"
+    exit 1
+fi
+
+tar_dir=$wl_type
+config_file="./workloads/${wl_type}.yaml"
+results_file="$tar_dir/${wl_type}_benchmark_results.csv"
 
 log() {
     local color=${2:-$NC}
     if [[ "${verbose}" = true ]]; then
         echo -e "${color}$1${NC}"
     fi
-}
-
-handle_error() {
-    echo "Error: $1"
-    exit 1
 }
 
 kill_process_on_port() {
@@ -77,15 +70,14 @@ kill_process_on_port() {
 
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
-    log "Running $wl_type-$wl_mode $profile thread=$thread" $BLUE
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -t "$thread" >"$output"
+    log "Running $wl_type $profile thread=$thread" $BLUE
+    go run . -d oreo -wl $wl_type -wc "./workloads/$wl_type.yaml" -bc "$bc" -m $mode -ps $profile -t "$thread" >"$output"
 }
 
 load_data() {
     for profile in native cg oreo; do
         log "Loading to ${wl_type} $profile" $BLUE
-        ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
-        # run_workload "load" "$profile" "$thread_load" "/dev/null"
+        run_workload "load" "$profile" "$thread_load" "/dev/null"
     done
     touch "$tar_dir/${wl_type}-load"
 }
@@ -93,25 +85,15 @@ load_data() {
 get_metrics() {
     local profile=$1 thread=$2
     local duration
-    local file="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
-    duration=$(rg '^Run finished' "$file" | rg -o '[0-9.]+')
+    duration=$(rg '^Run finished' "$tar_dir/$wl_type-$profile-$thread.txt" | rg -o '[0-9.]+')
     local duration
-    latency=$(rg '^TXN\s' "$file" | rg -o '\s99th\(us\): [0-9]+' | cut -d' ' -f3)
-
-    success_cnt=$(rg 'COMMIT ' "$file" | rg -o 'Count: [0-9]+' | cut -d ' ' -f 2)
-    error_cnt=0
-    if [ "$profile" != "native" ]; then
-        error_cnt=$(rg 'COMMIT_ERROR ' "$file" | rg -o 'Count: [0-9]+' | cut -d ' ' -f 2)
-    fi
-    total=$((success_cnt + error_cnt))
-    ratio=$(bc <<<"scale=4;$error_cnt / $total")
-    echo "$duration $latency $ratio"
+    latency=$(rg '^TXN\s' "$tar_dir/$wl_type-$profile-$thread.txt" | rg -o '\s99th\(us\): [0-9]+' | cut -d' ' -f3)
+    echo "$duration $latency"
 
 }
 
 print_summary() {
     local thread=$1 native_duration=$2 cg_duration=$3 oreo_duration=$4 native_p99=$5 cg_p99=$6 oreo_p99=$7
-    local native_ratio=$8 cg_ratio=$9 oreo_ratio=${10}
 
     printf "%s:\nnative:%s\ncg    :%s\noreo  :%s\n" "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}"
 
@@ -121,7 +103,6 @@ print_summary() {
 
     printf "Oreo:native = %s\nOreo:cg     = %s\n" "${relative_native}" "${relative_cg}"
     printf "native 99th: %s\ncg     99th: %s\noreo   99th: %s\n" "${native_p99}" "${cg_p99}" "${oreo_p99}"
-    printf "Error ratio:\nnative = %s\ncg = %s\noreo = %s\n" "${native_ratio}" "${cg_ratio}" "${oreo_ratio}"
     echo "---------------------------------"
 }
 
@@ -138,12 +119,12 @@ deploy_local(){
     kill_process_on_port "$executor_port"
     kill_process_on_port "$timeoracle_port"
 
-    log "Starting executor"
+    log "Starting executor" $GREEN
     ./bin/executor -p "$executor_port" -w $wl_type -bc "$bc" -db "$db_combinations" 2>./log/executor.log &
     # env LOG=ERROR $(build_command) 2>./log/executor.log &
     executor_pid=$!
 
-    log "Starting time oracle"
+    log "Starting time oracle" $GREEN
     ./bin/timeoracle -p "$timeoracle_port" -type hybrid >/dev/null 2>./log/timeoracle.log &
     time_oracle_pid=$!
 }
@@ -155,9 +136,16 @@ deploy_remote(){
     log "Setup node 3"
     ssh -t $node3 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
 
+    read -p "Do you want to continue? (y/n): " continue_choice
+    if [[ "$continue_choice" != "y" && "$continue_choice" != "Y" ]]; then
+        echo "Exiting the script."
+        exit 0
+    fi
 }
 
 main() {
+
+    # Go to the script root directory
     cd "$(dirname "$0")" && cd ..
 
     # check if config file exists
@@ -165,18 +153,21 @@ main() {
         handle_error "Config file $config_file does not exist"
     fi
 
-    echo "Building the benchmark executable"
+    if [ -z "$wl_type" ]; then
+        handle_error "Workload type is not provided"
+    fi
+
+    echo "Building the benchmark"
     go build .
     mv cmd ./bin
 
-    tar_dir="$tar_dir/$wl_mode-$db_combinations"
     mkdir -p "$tar_dir"
 
     # Create/overwrite results file with header
     echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99,native_err,cg_err,oreo_err" >"$results_file"
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
 
-    log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $YELLOW
+    printf "Running benchmark for [%s] workload with [%s] database combinations\n" "$wl_type" "$db_combinations"
 
     if [ "$remote" = true ]; then
         echo "Running remotely"
@@ -203,25 +194,21 @@ main() {
         load_data
     fi
 
-    for thread in "${threads[@]}"; do
 
-        for profile in native cg oreo; do
-            output="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
-            run_workload "run" "$profile" "$thread" "$output"
-        done
-
-        read -r native_duration native_p99 native_ratio <<<"$(get_metrics "native" "$thread")"
-        read -r cg_duration cg_p99 cg_ratio <<<"$(get_metrics "cg" "$thread")"
-        read -r oreo_duration oreo_p99 oreo_ratio <<<"$(get_metrics "oreo" "$thread")"
-
-        echo "$thread,$operation,$native_duration,$cg_duration,$oreo_duration,$native_p99,$cg_p99,$oreo_p99,$native_ratio,$cg_ratio,$oreo_ratio" >>"$results_file"
-
-        print_summary "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}" "${native_p99}" "${cg_p99}" "${oreo_p99}" "${native_ratio}" "${cg_ratio}" "${oreo_ratio}"
-
-        sleep $round_interval
+    for profile in native cg oreo; do
+        output="$tar_dir/$wl_type-$profile-$thread.txt"
+        run_workload "run" "$profile" "$thread" "$output"
     done
 
-    clear_up
+    read -r native_duration native_p99 <<<"$(get_metrics "native" "$thread")"
+    read -r cg_duration cg_p99 <<<"$(get_metrics "cg" "$thread")"
+    read -r oreo_duration oreo_p99 <<<"$(get_metrics "oreo" "$thread")"
+
+    echo "$thread,$operation,$native_duration,$cg_duration,$oreo_duration,$native_p99,$cg_p99,$oreo_p99,$native_ratio,$cg_ratio,$oreo_ratio" >>"$results_file"
+
+    print_summary "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}" "${native_p99}" "${cg_p99}" "${oreo_p99}"
+
+    clear_up 
 }
 
 main "$@"
