@@ -55,7 +55,7 @@ wl_type=ycsb
 tar_dir=./data/ycsb
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
-bc=./BenConfig.yaml
+bc=./BenConfig_ycsb.yaml
 
 log() {
     local color=${2:-$NC}

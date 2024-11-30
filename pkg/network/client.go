@@ -16,32 +16,57 @@ import (
 var _ txn.RemoteClient = (*Client)(nil)
 
 type Client struct {
-	ServerAddrList []string
-	mutex          sync.Mutex
-	curIndex       int
+	ExecutorAddrMap map[string][]string
+	mutex           sync.Mutex
+	curIndexMap     map[string]int
 }
 
-func NewClient(serverAddrList []string) *Client {
-	addrList := make([]string, 0)
+const ALL = "ALL"
 
-	for _, serverAddr := range serverAddrList {
-		serverAddr = "http://" + serverAddr
-		addrList = append(addrList, serverAddr)
+func NewClient(executorAddrMap map[string][]string) *Client {
+	// addrList := make([]string, 0)
+
+	// for _, serverAddr := range serverAddrList {
+	// 	serverAddr = "http://" + serverAddr
+	// 	addrList = append(addrList, serverAddr)
+	// }
+	curIndexMap := make(map[string]int)
+	for dsName := range executorAddrMap {
+		curIndexMap[dsName] = 0
 	}
 	return &Client{
-		ServerAddrList: addrList,
+		ExecutorAddrMap: executorAddrMap,
+		curIndexMap:     curIndexMap,
 	}
 }
 
-func (c *Client) GetServerAddr() string {
+func (c *Client) GetServerAddr(dsName string) string {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if c.curIndex >= len(c.ServerAddrList) {
-		c.curIndex = 0
+	executorAddrList, ok := c.ExecutorAddrMap[dsName]
+	if !ok {
+		if alt, ok := c.ExecutorAddrMap[ALL]; ok {
+			executorAddrList = alt
+		} else {
+			log.Fatalf("GetExecutorAddr: dsName %v not found in ExecutorAddrMap", dsName)
+		}
 	}
-	addr := c.ServerAddrList[c.curIndex]
-	c.curIndex++
+
+	curIndex, ok := c.curIndexMap[dsName]
+	if !ok {
+		if alt, ok := c.curIndexMap[ALL]; ok {
+			curIndex = alt
+		} else {
+			log.Fatalf("GetExecutorAddr: dsName %v not found in curIndexMap", dsName)
+		}
+	}
+
+	if curIndex >= len(executorAddrList) {
+		curIndex = 0
+	}
+	addr := executorAddrList[curIndex]
+	c.curIndexMap[dsName] = curIndex + 1
 	return addr
 }
 
@@ -58,7 +83,7 @@ func (c *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig)
 	}
 	jsonData, _ := json2.Marshal(data)
 
-	reqUrl := c.GetServerAddr() + "/read"
+	reqUrl := c.GetServerAddr(dsName) + "/read"
 
 	// Create a new POST request using fasthttp
 	req := fasthttp.AcquireRequest()
@@ -122,7 +147,7 @@ func (c *Client) Prepare(dsName string, itemList []txn.DataItem,
 
 	// fmt.Printf("Prepare request(JSON DATA): %v\n", string(jsonData))
 
-	reqUrl := c.GetServerAddr() + "/prepare"
+	reqUrl := c.GetServerAddr(dsName) + "/prepare"
 
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
@@ -175,7 +200,7 @@ func (c *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64)
 	}
 	jsonData, _ := json2.Marshal(data)
 
-	reqUrl := c.GetServerAddr() + "/commit"
+	reqUrl := c.GetServerAddr(dsName) + "/commit"
 
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
@@ -225,7 +250,7 @@ func (c *Client) Abort(dsName string, keyList []string, groupKeyList string) err
 	}
 	jsonData, _ := json2.Marshal(data)
 
-	reqUrl := c.GetServerAddr() + "/abort"
+	reqUrl := c.GetServerAddr(dsName) + "/abort"
 
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)

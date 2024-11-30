@@ -20,8 +20,8 @@ import (
 )
 
 var (
-	ComponentAddrList = []string{"localhost:8000"}
-	TimeOracleUrl     = "localhost:8800"
+	ExecutorAddrMap = map[string][]string{ALL: {"localhost:8000"}}
+	TimeOracleUrl   = "localhost:8800"
 )
 
 // NewDefaultRedisConnection creates and connect a new RedisConnection with default connection options.
@@ -44,7 +44,7 @@ func NewTransactionWithSetup() *trxn.Transaction {
 		Address:  "localhost:6380",
 		Password: "@ljy123456",
 	})
-	client := NewClient(ComponentAddrList)
+	client := NewClient(ExecutorAddrMap)
 	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)
@@ -955,7 +955,7 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 	successId := 0
 
 	concurrentCount := 1000
-	client := NewClient(ComponentAddrList)
+	client := NewClient(ExecutorAddrMap)
 	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)

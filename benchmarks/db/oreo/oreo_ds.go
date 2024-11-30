@@ -47,7 +47,7 @@ func NewOreoDatastore(connMap map[string]txn.Connector, globalDatastoreName stri
 func (r *OreoDatastore) Start() error {
 	var txn1 *txn.Transaction
 	if r.isRemote {
-		client := network.NewClient(benconfig.ExecutorAddressList)
+		client := network.NewClient(benconfig.ExecutorAddressMap)
 		oracle := timesource.NewGlobalTimeSource(benconfig.TimeOracleUrl)
 		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {

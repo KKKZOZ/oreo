@@ -471,7 +471,7 @@ func loadConfig() *workload.WorkloadParameter {
 	}
 
 	benConfig.Latency = time.Duration(benConfig.LatencyValue) * time.Millisecond
-	benconfig.ExecutorAddressList = benConfig.ExecutorAddressList
+	benconfig.ExecutorAddressMap = benConfig.ExecutorAddressMap
 	benconfig.TimeOracleUrl = benConfig.TimeOracleUrl
 	benconfig.ZipfianConstant = benConfig.ZipfianConstant
 	benconfig.MaxLoadBatchSize = benConfig.MaxLoadBatchSize
