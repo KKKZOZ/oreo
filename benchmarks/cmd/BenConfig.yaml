@@ -26,4 +26,4 @@ couchdb_password: "password"
 # Other databases configuration
 cassandra_addr: ["172.24.58.115"]
 dynamodb_addr: "http://localhost:8000"
-tikv_addr: ["localhost:2379"]
+tikv_addr: ["172.24.58.116:2379"]
