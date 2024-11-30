@@ -37,6 +37,10 @@ while [[ "$#" -gt 0 ]]; do
         db_combinations="$2"
         shift
         ;;
+    -t | --threads)
+        threads=($2)
+        shift
+        ;;
     -v | --verbose) verbose=true ;;
     -r | --remote) remote=true ;;
     *)

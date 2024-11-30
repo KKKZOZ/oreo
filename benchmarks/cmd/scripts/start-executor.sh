@@ -53,7 +53,7 @@ main(){
     echo "Starting executor"
     nohup ./executor -p "$executor_port" -w "$wl_mode" -bc "$bc" -db "$db_combinations" 2>./executor.log &
 
-    sleep 1
+    sleep 3
     echo "Executor started"
     lsof -i ":$executor_port"
 }

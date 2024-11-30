@@ -1,15 +1,17 @@
 #!/bin/bash
 
-# 设置错误时退出
-# set -e
-IP=$(curl -s https://api.ipify.org || \
-                 curl -s http://ifconfig.me || \
-                 curl -s https://ip.sb || \
-                 curl -s https://api.ip.sb/ip)
+# 定义IP地址映射
+declare -A node_ips=(
+    ["1"]="172.24.58.116"
+    ["2"]="172.24.58.114"
+    ["3"]="172.24.58.115"
+)
 
-echo "Current IP: $IP"
+PD_IP="172.24.58.116"
+WORK_DIR="$HOME/tikv-deploy"
+DOWNLOAD_URL="https://download.pingcap.org/tidb-latest-linux-amd64.tar.gz"
 
-# 定义进程终止函数
+# 定义端口检查和进程清理函数
 kill_process_on_port() {
     local port=$1
     local pid
@@ -17,18 +19,33 @@ kill_process_on_port() {
     if [ -n "$pid" ]; then
         echo "Port $port is occupied by process $pid. Terminating this process..."
         kill -9 "$pid"
+        sleep 1
     fi
 }
 
-# 创建部署目录
-DEPLOY_DIR="tikv-deploy"
-mkdir -p $DEPLOY_DIR
-cd $DEPLOY_DIR
+# 检查命令行参数
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <node_id>"
+    echo "node_id must be 1, 2, or 3"
+    exit 1
+fi
+
+NODE_ID=$1
+CURRENT_IP=${node_ips[$NODE_ID]}
+
+if [ -z "$CURRENT_IP" ]; then
+    echo "Invalid node_id. Must be 1, 2, or 3"
+    exit 1
+fi
+
+# 创建工作目录
+mkdir -p $WORK_DIR
+cd $WORK_DIR
 
 # 检查是否需要下载包
 if [ ! -f "tidb-latest-linux-amd64.tar.gz" ]; then
     echo "Downloading TiKV package..."
-    wget https://download.pingcap.org/tidb-latest-linux-amd64.tar.gz
+    wget $DOWNLOAD_URL
     wget http://download.pingcap.org/tidb-latest-linux-amd64.sha256
     
     # 验证包完整性
@@ -39,62 +56,73 @@ else
 fi
 
 # 检查是否已解压
-if [ ! -d "tidb-latest-linux-amd64" ]; then
+if [ ! -d "bin" ]; then
     echo "Extracting package..."
     tar -xzf tidb-latest-linux-amd64.tar.gz
+    mv tidb-*-linux-amd64/* .
+    rm -rf tidb-*-linux-amd64
 fi
 
-cd tidb-latest-linux-amd64
+# 根据节点ID启动相应的服务
+case $NODE_ID in
+    "1")
+        # 检查PD端口
+        kill_process_on_port 2379
+        kill_process_on_port 2380
 
-# 创建必要的数据目录
-mkdir -p pd1 tikv1
+        echo "Starting PD server..."
+        nohup ./bin/pd-server --name=pd1 \
+            --data-dir=pd1 \
+            --client-urls="http://$CURRENT_IP:2379" \
+            --peer-urls="http://$CURRENT_IP:2380" \
+            --initial-cluster="pd1=http://$CURRENT_IP:2380" \
+            --log-file=pd1.log > pd.out 2>&1 &
 
-# 清理可能占用的端口
-echo "Checking and clearing ports if necessary..."
-kill_process_on_port 2379  # PD client URL port
-kill_process_on_port 2380  # PD peer URL port
-kill_process_on_port 20160 # TiKV port
+        # 等待PD启动
+        echo "Waiting for PD to start..."
+        sleep 5
 
-# 清理数据文件
-echo "Cleaning up data files..."
-rm -rf pd1/*
-rm -rf tikv1/*
-rm -f *.log
+        # 检查TiKV端口
+        kill_process_on_port 20160
 
+        echo "Starting TiKV server..."
+        nohup ./bin/tikv-server --pd-endpoints="$PD_IP:2379" \
+            --addr="$CURRENT_IP:20160" \
+            --data-dir=tikv1 \
+            --log-file=tikv1.log > tikv.out 2>&1 &
+        ;;
+    
+    "2"|"3")
+        # 检查TiKV端口
+        kill_process_on_port 20160
 
-# 启动 PD
-echo "Starting PD server..."
-./bin/pd-server --name=pd1 \
-    --data-dir=pd1 \
-    --client-urls="http://0.0.0.0:2379" \
-    --advertise-client-urls="http://$IP:2379" \
-    --peer-urls="http://0.0.0.0:2380" \
-    --advertise-peer-urls="http://$IP:2380" \
-    --initial-cluster="pd1=http://$IP:2380" \
-    --log-file=pd1.log &
+        echo "Starting TiKV server..."
+        nohup ./bin/tikv-server --pd-endpoints="$PD_IP:2379" \
+            --addr="$CURRENT_IP:20160" \
+            --data-dir=tikv$NODE_ID \
+            --log-file=tikv$NODE_ID.log > tikv.out 2>&1 &
+        ;;
+esac
 
-# 等待 PD 启动
-echo "Waiting for PD to start..."
-sleep 1
+# 等待服务启动
+sleep 2
 
-# 启动 TiKV
-echo "Starting TiKV server..."
-./bin/tikv-server --pd-endpoints="127.0.0.1:2379" \
-    --addr="0.0.0.0:20160" \
-    --advertise-addr="$IP:20160" \
-    --data-dir=tikv1 \
-    --log-file=tikv1.log &
+# 验证服务是否正常启动
+case $NODE_ID in
+    "1")
+        if ! lsof -i :2379 >/dev/null; then
+            echo "Warning: PD server might have failed to start. Check pd1.log for details."
+        else
+            echo "PD server started successfully."
+        fi
+        ;;
+esac
 
-# 等待 TiKV 启动
-echo "Waiting for TiKV to start..."
-sleep 3
+if ! lsof -i :20160 >/dev/null; then
+    echo "Warning: TiKV server might have failed to start. Check tikv$NODE_ID.log for details."
+else
+    echo "TiKV server started successfully."
+fi
 
-# 验证部署
-echo "Verifying deployment..."
-curl http://localhost:2379/pd/api/v1/stores
-
-echo "Deployment completed. Servers are running in background."
-
-# 显示运行状态
-echo -e "\nCurrent running processes:"
-ps aux | grep -E 'pd-server|tikv-server' | grep -v grep
+echo "Deployment completed for node $NODE_ID"
+echo "You can check the logs in $WORK_DIR"
