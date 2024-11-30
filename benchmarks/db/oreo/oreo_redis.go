@@ -53,7 +53,7 @@ func NewRedisDatastore(conn *redis.RedisConnection, isRemote bool) *RedisDatasto
 func (r *RedisDatastore) Start() error {
 	var txn1 *txn.Transaction
 	if r.isRemote {
-		client := network.NewClient(benconfig.ExecutorAddressList)
+		client := network.NewClient(benconfig.ExecutorAddressMap)
 		oracle := timesource.NewGlobalTimeSource(benconfig.TimeOracleUrl)
 		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {

@@ -8,9 +8,10 @@ main(){
 
     for node in "${nodes[@]}"; do
         echo "Updating $node"
+        ssh -t $node "mkdir -p ~/oreo-ben"
         echo "Updating executor and timeoracle"
         scp ./bin/executor ./bin/timeoracle $node:~/oreo-ben
-        scp ./scripts/start-executor.sh ./scripts/start-timeoracle.sh ./BenConfig.yaml $node:~/oreo-ben
+        scp ./scripts/start-executor.sh ./scripts/start-timeoracle.sh ./BenConfig_ycsb.yaml ./BenConfig_realistic.yaml $node:~/oreo-ben
 
 
         echo "Updating scripts"

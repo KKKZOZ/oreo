@@ -13,7 +13,7 @@ timeoracle_port=8010
 thread_load=50
 threads=(8 16 32 48 64 80 96)
 round_interval=5
-bc=./BenConfig.yaml
+bc=./BenConfig_realistic.yaml
 
 wl_type=
 verbose=false
