@@ -39,6 +39,7 @@ type RecordConfig struct {
 	MaxRecordLen                int
 	ReadStrategy                config.ReadStrategy
 	ConcurrentOptimizationLevel int
+	AblationLevel               int
 }
 
 type RemoteClient interface {

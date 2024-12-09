@@ -1,23 +1,23 @@
 # Total number of records to be generated
-recordcount: 10000
-max_load_batch_size: 100
+recordcount: 1000000
+max_load_batch_size: 1000
 
 # Total number of operations to be performed
-operationcount: 1000
+operationcount: 10000
 
 # Number of operations in each transaction group
-txnoperationgroup: 6
+txnoperationgroup: 4
 postcheckinterval: 1000
 
 # Proportions of different operations
-readproportion: 0.5 # Proportion of read operations
-updateproportion: 0.5 # Proportion of update operations
+readproportion: 0 # Proportion of read operations
+updateproportion: 0 # Proportion of update operations
 insertproportion: 0 # Proportion of insert operations
 scanproportion: 0 # Proportion of scan operations
-readmodifywriteproportion: 0 # Proportion of read-modify-write operations
+readmodifywriteproportion: 1.0 # Proportion of read-modify-write operations
 
 # Proportions of operations on different databases
-redis1proportion: 0 # Proportion of operations on Redis instance 1
-mongo1proportion: 0.5 # Proportion of operations on MongoDB instance 1
+redis1proportion: 0.5 # Proportion of operations on Redis instance 1
+mongo1proportion: 0 # Proportion of operations on MongoDB instance 1
 mongo2proportion: 0.5 # Proportion of operations on MongoDB instance 2
 couchdbproportion: 0 # Proportion of operations on CouchDB

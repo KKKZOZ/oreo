@@ -278,7 +278,8 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 
 		// if TSR does not exist
 		// and if the corresponding transaction is a concurrent transaction
-		// that is, txn's TStart < item's TValid < item's TLease
+		// that is,
+		// txn's TStart < item's TValid < current time <item's TLease
 		// we should try check the previous record
 		if r.Txn.TxnStartTime < item.TValid() {
 			// Origin Cherry Garcia would do

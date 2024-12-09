@@ -94,6 +94,8 @@ type config struct {
 	MaxOutstandingRequest int
 
 	ReadStrategy ReadStrategy
+
+	AblationLevel int
 }
 
 var Config = config{
@@ -106,6 +108,7 @@ var Config = config{
 	AsyncLevel:                  AsyncLevelZero,
 	MaxOutstandingRequest:       5,
 	ReadStrategy:                Pessimistic,
+	AblationLevel:               4,
 }
 
 var Debug = debug{

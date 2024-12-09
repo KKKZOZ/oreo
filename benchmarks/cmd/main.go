@@ -35,6 +35,7 @@ var pprofFlag = false
 var isRemote = false
 var preset = ""
 var readStrategy = ""
+var ablationLevel = 4
 
 func main() {
 	parseAndValidateFlag()
@@ -101,6 +102,8 @@ func main() {
 		cfg.Config.ReadStrategy = cfg.AssumeAbort
 	}
 
+	cfg.Config.AblationLevel = ablationLevel
+
 	measurement.InitMeasure()
 	measurement.EnableWarmUp(true)
 
@@ -119,7 +122,7 @@ func main() {
 	case "load":
 		// cfg.Config.ConcurrentOptimizationLevel = 1
 		if benconfig.MaxLoadBatchSize == 0 {
-			benconfig.MaxLoadBatchSize = 1000
+			log.Fatalf("MaxLoadBatchSize should be specified")
 		}
 		cfg.Debug.DebugMode = false
 		cfg.Debug.HTTPAdditionalLatency = 0
@@ -395,6 +398,7 @@ func parseAndValidateFlag() {
 	flag.BoolVar(&isRemote, "remote", false, "Run in remote mode (for Oreo series)")
 	flag.StringVar(&preset, "ps", "", "Preset configuration for evaluation")
 	flag.StringVar(&readStrategy, "read", "p", "Read Strategy")
+	flag.IntVar(&ablationLevel, "ab", 4, "Ablation level")
 	flag.Parse()
 
 	if *help {
@@ -408,29 +412,6 @@ func parseAndValidateFlag() {
 
 	if threadNum <= 0 {
 		panic("ThreadNum should be a positive integer")
-	}
-}
-
-func setupDistribution(wp *workload.WorkloadParameter, dbType string) {
-	switch dbType {
-	case "native-mm":
-		wp.Redis1Proportion = 0
-		wp.Mongo1Proportion = 0.5
-		wp.Mongo2Proportion = 0.5
-	case "native-rm":
-		wp.Redis1Proportion = 0.5
-		wp.Mongo1Proportion = 0.5
-		wp.Mongo2Proportion = 0
-	case "oreo-mm":
-		wp.Redis1Proportion = 0
-		wp.Mongo1Proportion = 0.5
-		wp.Mongo2Proportion = 0.5
-	case "oreo-rm":
-		wp.Redis1Proportion = 0.5
-		wp.Mongo1Proportion = 0.5
-		wp.Mongo2Proportion = 0
-	default:
-		wp.Redis1Proportion = 1.0
 	}
 }
 
@@ -491,6 +472,7 @@ func loadConfig() *workload.WorkloadParameter {
 		log.Fatalf("Error when loading workload configuration: %v\n", err)
 		return nil
 	}
+	benconfig.MaxLoadBatchSize = wp.MaxLoadBatchSize
 
 	return wp
 }

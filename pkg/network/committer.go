@@ -144,22 +144,28 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	}
 	logger.Log.Debugw("After eg.Wait()", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 
-	tCommit, err := c.timeSource.GetTime("commit")
-	if err != nil {
-		return nil, 0, errors.New("GetTime error: " + err.Error())
+	var tCommit int64
+
+	if cfg.AblationLevel >= 3 {
+		tCommit, err = c.timeSource.GetTime("commit")
+		if err != nil {
+			return nil, 0, errors.New("GetTime error: " + err.Error())
+		}
 	}
 
-	// create the corresponding group key
-	if len(itemList) > 0 {
-		// txnId := strings.Split(itemList[0].GroupKeyList(), ":")[1]
-		singleGK := strings.Split(itemList[0].GroupKeyList(), ",")[0]
-		txnId := strings.Split(singleGK, ":")[1]
-		url := dsName + ":" + txnId
-		err = c.reader.createSingleGroupKey(url, config.COMMITTED, tCommit)
-		if err != nil {
-			return nil, tCommit, fmt.Errorf("failed to create the group key: %v", err)
+	if cfg.AblationLevel >= 4 {
+		// create the corresponding group key
+		if len(itemList) > 0 {
+			// txnId := strings.Split(itemList[0].GroupKeyList(), ":")[1]
+			singleGK := strings.Split(itemList[0].GroupKeyList(), ",")[0]
+			txnId := strings.Split(singleGK, ":")[1]
+			url := dsName + ":" + txnId
+			err = c.reader.createSingleGroupKey(url, config.COMMITTED, tCommit)
+			if err != nil {
+				return nil, tCommit, fmt.Errorf("failed to create the group key: %v", err)
+			}
+			return versionMap, tCommit, nil
 		}
-		return versionMap, tCommit, nil
 	}
 
 	return versionMap, tCommit, nil
