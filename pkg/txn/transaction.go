@@ -270,7 +270,9 @@ func (t *Transaction) Commit() error {
 		if ds.GetWriteCacheSize() == 0 {
 			continue
 		}
-		if i == 1 && config.Debug.CherryGarciaMode {
+		// When in Cherry Garcia mode or AblationLevel < 4,
+		// we need a single group key for all datastores
+		if i == 1 && (config.Debug.CherryGarciaMode || config.Config.AblationLevel < 4) {
 			break
 		}
 		url := fmt.Sprintf("%s:%s", ds.GetName(), t.TxnId)
@@ -391,7 +393,6 @@ func (t *Transaction) commitInOreo() error {
 			Log.Errorw("prepare phase failed", "txnId", t.TxnId, "cause", err, "ds", ds.GetName())
 		}
 		mu.Unlock()
-
 	}
 
 	Log.Infow("Starting to call ds.Prepare()", "txnId", t.TxnId, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
@@ -407,13 +408,45 @@ func (t *Transaction) commitInOreo() error {
 	wg.Wait()
 
 	if !success {
-		// go t.Abort()
+		go t.Abort()
 		return errors.New("prepare phase failed: " + cause.Error())
 	}
 
 	Log.Infow("finishes prepare phase", "txnId", t.TxnId, "latency", time.Since(t.debugStart), "Topic", "CheckPoint")
 
-	t.TxnCommitTime = tCommit
+	if config.Config.AblationLevel >= 3 {
+		t.TxnCommitTime = tCommit
+	} else {
+		var err error
+		t.TxnCommitTime, err = t.getTime("commit")
+		if err != nil {
+			return fmt.Errorf("failed to get time: %v", err)
+		}
+	}
+
+	if config.Config.AblationLevel <= 3 {
+		// Simulate the latency of the request
+		// I don't want to change the messy logic in the test
+		if config.Debug.DebugMode {
+			time.Sleep(config.GetMaxDebugLatency())
+		}
+		successNum := t.CreateGroupKeyFromUrls(t.GroupKeyUrls, config.COMMITTED)
+		if successNum != len(t.GroupKeyUrls) {
+			t.Abort()
+			return fmt.Errorf("transaction is aborted by other transaction when creating group keys, successNum: %d, len(t.GroupKeyUrls): %d", successNum, len(t.GroupKeyUrls))
+		}
+		Log.Infow("Starting to call ds.Commit()", "txnId", t.TxnId)
+		var wg = sync.WaitGroup{}
+		for _, ds := range t.dataStoreMap {
+			wg.Add(1)
+			go func(ds Datastorer) {
+				defer wg.Done()
+				ds.Commit()
+			}(ds)
+		}
+		wg.Wait()
+		return nil
+	}
 
 	go func() {
 		Log.Infow("Starting to call ds.Commit()", "txnId", t.TxnId)
@@ -560,6 +593,7 @@ func (t *Transaction) RemotePrepare(dsName string, itemList []DataItem, validati
 		MaxRecordLen:                config.Config.MaxRecordLength,
 		ReadStrategy:                config.Config.ReadStrategy,
 		ConcurrentOptimizationLevel: config.Config.ConcurrentOptimizationLevel,
+		AblationLevel:               config.Config.AblationLevel,
 	}
 	return t.client.Prepare(dsName, itemList, t.TxnStartTime,
 		cfg, validationMap)

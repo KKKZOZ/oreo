@@ -7,6 +7,13 @@
 
 tikv-deploy
 
+# Data folders
+opt/
+iot/
+order/
+social/
+ycsb/
+
 # Executables and binaries
 iot-load
 social-load

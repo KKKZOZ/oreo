@@ -12,6 +12,7 @@ type WorkloadParameter struct {
 	RecordCount       int `yaml:"recordcount"`
 	OperationCount    int `yaml:"operationcount"`
 	TxnOperationGroup int `yaml:"txnoperationgroup"`
+	MaxLoadBatchSize  int `yaml:"max_load_batch_size"`
 
 	ReadProportion            float64 `yaml:"readproportion"`
 	UpdateProportion          float64 `yaml:"updateproportion"`

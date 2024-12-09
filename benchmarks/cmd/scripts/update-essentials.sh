@@ -15,7 +15,7 @@ main(){
 
 
         echo "Updating scripts"
-        scp ./scripts/ycsb-setup.sh ./scripts/realistic-setup.sh $node:~/oreo-ben
+        scp ./scripts/ycsb-setup.sh ./scripts/realistic-setup.sh ./scripts/opt-setup.sh $node:~/oreo-ben
         scp ./scripts/cassandra_util $node:~/oreo-ben
     done
 }
