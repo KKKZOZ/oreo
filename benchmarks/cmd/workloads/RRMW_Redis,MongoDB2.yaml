@@ -1,6 +1,6 @@
 # Total number of records to be generated
-recordcount: 100000
-max_load_batch_size: 1000
+recordcount: 10000
+max_load_batch_size: 100
 
 # Total number of operations to be performed
 operationcount: 1000
@@ -10,11 +10,11 @@ txnoperationgroup: 4
 postcheckinterval: 1000
 
 # Proportions of different operations
-readproportion: 0 # Proportion of read operations
+readproportion: 0.5 # Proportion of read operations
 updateproportion: 0 # Proportion of update operations
 insertproportion: 0 # Proportion of insert operations
 scanproportion: 0 # Proportion of scan operations
-readmodifywriteproportion: 1.0 # Proportion of read-modify-write operations
+readmodifywriteproportion: 0.5 # Proportion of read-modify-write operations
 
 # Proportions of operations on different databases
 redis1proportion: 0.5 # Proportion of operations on Redis instance 1

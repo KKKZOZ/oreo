@@ -117,10 +117,9 @@ func (r *Datastore) Read(key string, value any) error {
 func (r *Datastore) readFromRemote(key string, value any) error {
 	item, readStrategy, err := r.Txn.RemoteRead(r.Name, key)
 	if err != nil {
-		return err
+		return errors.Join(errors.New("Remote read failed"), err)
 	}
 	// fmt.Printf("item: %v\n readStrategy: %v\n error: %v", item, readStrategy, err)
-	// TODO: logic for AssumeCommit and AssumeAbort
 	switch readStrategy {
 	case AssumeCommit:
 		r.validationSet[item.GroupKeyList()] = PredicateInfo{
@@ -241,13 +240,12 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 			if CommittedForAll(groupKeyList) {
 				// if all the group keys are in COMMITTED state
 				// Items in PREPARED state do not contain a valid TValid
-				if item.TValid() == 0 {
-					tCommit := int64(0)
-					for _, gk := range groupKeyList {
-						tCommit = max(tCommit, gk.TCommit)
-					}
-					item.SetTValid(tCommit)
+				// update its TCommit first
+				tCommit := int64(0)
+				for _, gk := range groupKeyList {
+					tCommit = max(tCommit, gk.TCommit)
 				}
+				item.SetTValid(tCommit)
 				return rollforwardFunc()
 			} else {
 				// or at least one of the group keys is in ABORTED state

@@ -19,6 +19,8 @@ iot-load
 social-load
 order-load
 ycsb-load
+opt-load
+read-load
 
 executor
 timeoracle
