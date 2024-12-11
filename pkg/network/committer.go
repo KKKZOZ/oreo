@@ -58,29 +58,49 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 			urlList := strings.Split(gk, ",")
 			groupKey, err := c.reader.getGroupKey(urlList)
 			if err != nil {
+				// For AssumeAbort
 				if config.Config.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
 						key := pred.ItemKey
 						err := c.rollbackFromConn(dsName, key)
 						if err != nil {
-							return errors.Join(errors.New("validation failed in AA mode"), err)
+							return errors.Join(errors.New("validation failed in fine-AA mode"), err)
 						} else {
 							return nil
 						}
+					} else {
+						return errors.New("validation failed due to unknown status")
 					}
 				}
+
+				// For AssumeCommit
 				return errors.New("validation failed due to unknown status")
 			}
-			if txn.AtLeastOneAborted(groupKey) {
-				return nil
-			} else {
-				return errors.New("validation failed due to false assumption")
+
+			// all group keys are found
+			// AssumeCommit: all group keys are committed
+			if cfg.ReadStrategy == config.AssumeCommit {
+				if txn.CommittedForAll(groupKey) {
+					return nil
+				} else {
+					return errors.New("validation failed due to false assumption")
+				}
 			}
+
+			// AssumeAbort: at least one group key is aborted
+			if cfg.ReadStrategy == config.AssumeAbort {
+				if txn.AtLeastOneAborted(groupKey) {
+					return nil
+				} else {
+					return errors.New("validation failed due to false assumption")
+				}
+			}
+
+			return errors.New("validation failed due to unknown read strategy")
 		})
 	}
 
 	return eg.Wait()
-
 }
 
 func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
@@ -93,6 +113,15 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	logger.Log.Debugw("After validation", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint", "cfg.ConcurrentOptimizationLevel", cfg.ConcurrentOptimizationLevel)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	var tCommit int64
+
+	if cfg.AblationLevel >= 3 {
+		tCommit, err = c.timeSource.GetTime("commit")
+		if err != nil {
+			return nil, 0, errors.New("GetTime error: " + err.Error())
+		}
 	}
 
 	var mu sync.Mutex
@@ -124,6 +153,10 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 				// logger.Log.Debugw("do a txn Read to determine the record version", "dbItem", dbItem)
 				item, _ = c.updateMetadata(item, dbItem, 0, cfg)
 			}
+
+			// add TCommit to the item
+			item.SetTValid(tCommit)
+
 			logger.Log.Debugw("Before c.connMap[dsName].ConditionalUpdate", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 			ver, err := c.connMap[dsName].ConditionalUpdate(item.Key(), item, doCreate)
 			logger.Log.Debugw("After c.connMap[dsName].ConditionalUpdate", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
@@ -143,15 +176,6 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 		return nil, 0, err
 	}
 	logger.Log.Debugw("After eg.Wait()", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
-
-	var tCommit int64
-
-	if cfg.AblationLevel >= 3 {
-		tCommit, err = c.timeSource.GetTime("commit")
-		if err != nil {
-			return nil, 0, errors.New("GetTime error: " + err.Error())
-		}
-	}
 
 	if cfg.AblationLevel >= 4 {
 		// create the corresponding group key

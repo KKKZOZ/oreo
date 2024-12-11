@@ -108,17 +108,15 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 	}
 	if item.TxnState() == config.PREPARED {
 		groupKeyList, err := r.getGroupKey(strings.Split(item.GroupKeyList(), ","))
-		// fmt.Printf("groupKeyList: %v\n", groupKeyList)
 		if err == nil {
 			if txn.CommittedForAll(groupKeyList) {
 				// if all the group keys are in COMMITTED state
-				if item.TValid() == 0 {
-					tCommit := int64(0)
-					for _, gk := range groupKeyList {
-						tCommit = max(tCommit, gk.TCommit)
-					}
-					item.SetTValid(tCommit)
+				// update its TCommit first
+				tCommit := int64(0)
+				for _, gk := range groupKeyList {
+					tCommit = max(tCommit, gk.TCommit)
 				}
+				item.SetTValid(tCommit)
 				return rollforwardFunc()
 			} else {
 				// or at least one of the group keys is in ABORTED state
@@ -260,8 +258,6 @@ func (r *Reader) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 
 func (r *Reader) getGroupKey(urls []string) ([]txn.GroupKey, error) {
 	groupKeys := make([]txn.GroupKey, 0, len(urls)) // 长度为 0，容量为 len(urls)
-	// fmt.Printf("urls: %v\n", urls)
-	// fmt.Printf("len(urls): %v\nlen(groupKeys): %v\n", len(urls), len(groupKeys))
 
 	var mu sync.Mutex
 	var eg errgroup.Group

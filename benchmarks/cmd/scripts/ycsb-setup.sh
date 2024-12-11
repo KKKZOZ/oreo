@@ -11,7 +11,7 @@ if [ "$db" == "Redis" ]; then
     echo "Remove redis container"
     docker rm -f redis
     echo "Create new redis container"
-    docker run --name redis -p 6379:6379 --restart=always -d redis
+    docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass "kkkzoz"
     # docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
 elif [ "$db" == "MongoDB1" ]; then
     echo "Remove mongoDB1 container"

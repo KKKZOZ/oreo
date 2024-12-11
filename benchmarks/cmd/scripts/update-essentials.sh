@@ -1,7 +1,8 @@
 #!/bin/bash
 
-nodes=(s1-ljy s3-ljy)
+# nodes=(s1-ljy s3-ljy)
 
+nodes=("liujinyi@172.24.58.116" "liujinyi@172.24.58.115")
 
 main(){
     cd "$(dirname "$0")" && cd ..
@@ -15,7 +16,7 @@ main(){
 
 
         echo "Updating scripts"
-        scp ./scripts/ycsb-setup.sh ./scripts/realistic-setup.sh ./scripts/opt-setup.sh $node:~/oreo-ben
+        scp ./scripts/ycsb-setup.sh ./scripts/realistic-setup.sh ./scripts/opt-setup.sh ./scripts/read-setup.sh $node:~/oreo-ben
         scp ./scripts/cassandra_util $node:~/oreo-ben
     done
 }

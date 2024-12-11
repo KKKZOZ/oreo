@@ -11,14 +11,14 @@ NC='\033[0m' # No Color
 executor_port=8001
 timeoracle_port=8010
 thread_load=100
-threads=(64)
+threads=(8 16 32 48 64 80 96)
 round_interval=2
 
 thread=0
 verbose=false
 wl_mode=
 db_combinations='Redis,MongoDB2'
-force=false
+skip=false
 
 declare -g executor_pid
 declare -g time_oracle_pid
@@ -39,7 +39,7 @@ while [[ "$#" -gt 0 ]]; do
         ;;
     -v | --verbose) verbose=true ;;
     -r | --remote) remote=true ;;
-    -f | --force) force=true ;;
+    -s | --skip) skip=true ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -48,8 +48,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-wl_type=opt
-tar_dir=./data/opt
+wl_type=read
+tar_dir=./data/read
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
 bc=./BenConfig_ycsb.yaml
@@ -77,9 +77,9 @@ kill_process_on_port() {
 }
 
 run_workload() {
-    local mode=$1 profile=$2 thread=$3 output=$4 abLevel=$5
-    log "Running $wl_type-$wl_mode $profile thread=$thread abLevel=$abLevel" $BLUE
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -ab "$abLevel" -t "$thread" >"$output"
+    local mode=$1 profile=$2 thread=$3 output=$4 read_strategy=$5
+    log "Running $wl_type-$wl_mode $profile thread=$thread readStrategy=$read_strategy" $BLUE
+    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -read "$read_strategy" -t "$thread" >"$output"
 }
 
 load_data() {
@@ -99,14 +99,15 @@ get_metrics() {
     local duration
     latency=$(rg '^TXN\s' "$file" | rg -o '\s99th\(us\): [0-9]+' | cut -d' ' -f3)
 
-    success_cnt=$(rg 'COMMIT ' "$file" | rg -o 'Count: [0-9]+' | cut -d ' ' -f 2)
     error_cnt=0
-    if [ "$profile" != "native" ]; then
-        error_cnt=$(rg 'COMMIT_ERROR ' "$file" | rg -o 'Count: [0-9]+' | cut -d ' ' -f 2)
-    fi
-    total=$((success_cnt + error_cnt))
-    ratio=$(bc <<<"scale=4;$error_cnt / $total")
-    echo "$duration $latency $ratio"
+
+    error_cnt=$((error_cnt + $(rg 'read failed due to unknown txn status' "$file" | rg -o '[0-9]+' || echo 0)))
+
+    error_cnt=$((error_cnt + $(rg 'validation failed due to false assumption' "$file" | rg -o '[0-9]+' || echo 0)))
+
+    error_cnt=$((error_cnt + $(rg 'validation failed due to unknown status' "$file" | rg -o '[0-9]+' || echo 0)))
+
+    echo "$duration $latency $error_cnt"
 
 }
 
@@ -134,7 +135,7 @@ print_summary() {
 
     printf "Opt2:opt1 = %s\nOpt3:opt1 = %s\nOpt4:opt1 = %s\n" "${relative_opt2}" "${relative_opt3}" "${relative_opt4}"
     printf "opt1 99th: %s\nopt2 99th: %s\nopt3 99th: %s\nopt4 99th: %s\n" "${opt1_p99}" "${opt2_p99}" "${opt3_p99}" "${opt4_p99}"
-    printf "Error ratio:\nopt1 = %s\nopt2 = %s\nopt3 = %s\nopt4 = %s\n" "${opt1_ratio}" "${opt2_ratio}" "${opt3_ratio}" "${opt4_ratio}"
+    printf "Read Error Count:\nopt1 = %s\nopt2 = %s\nopt3 = %s\nopt4 = %s\n" "${opt1_ratio}" "${opt2_ratio}" "${opt3_ratio}" "${opt4_ratio}"
     echo "---------------------------------"
 }
 
@@ -178,35 +179,37 @@ main() {
         handle_error "Config file $config_file does not exist"
     fi
 
-    echo "Building the benchmark executable"
-    go build .
-    mv cmd ./bin
+    if [ $skip = false ]; then
+        echo "Building the benchmark executable"
+        go build .
+        mv cmd ./bin
+    fi
 
     tar_dir="$tar_dir/$wl_mode-$db_combinations"
     mkdir -p "$tar_dir"
 
     # Create/overwrite results file with header
-    echo "thread,operation,opt1,opt2,opt3,opt4,opt1_p99,opt2_p99,opt3_p99,opt4_p99,opt1_err,opt2_err,opt3_err,opt4_err" >"$results_file"
+    echo "thread,operation,cg,oreo-p,oreo-ac,oreo-aa,cg_p99,oreo-p_p99,oreo-ac_p99,oreo-aa_p99,cg_err,oreo-p_err,oreo-ac_err,oreo-aa_err" >"$results_file"
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
 
-    log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $YELLOW
+    log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $GREEN
 
-    if [ "$remote" = true ]; then
-        echo "Running remotely"
-        deploy_remote
+    if [ "$skip" = true ]; then
+        log "Skipping deployment" $YELLOW
     else
-        echo "Running locally"
-        deploy_local
+        if [ "$remote" = true ]; then
+            echo "Running remotely"
+            deploy_remote
+        else
+            echo "Running locally"
+            deploy_local
+        fi
     fi
 
     if [ ! -f "$tar_dir/${wl_type}-load" ]; then
         log "Ready to load data" $YELLOW
     else
         log "Data has been already loaded" $YELLOW
-    fi
-
-    if [ "$force" = true ]; then
-        log "Force flag is set. Will load data again" $BLUE
     fi
 
     read -p "Do you want to continue? (y/n): " continue_choice
@@ -216,40 +219,36 @@ main() {
     fi
 
     # Load data if needed
-    if [[ ! -f "$tar_dir/${wl_type}-load" || "$force" = true ]]; then
+    if [ ! -f "$tar_dir/${wl_type}-load" ]; then
         load_data
     fi
 
     for thread in "${threads[@]}"; do
 
-        # for profile in native cg oreo; do
-        #     output="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
-        #     run_workload "run" "$profile" "$thread" "$output"
-        # done
         profile=cg
-        output1="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-1.txt"
-        run_workload "run" "$profile" "$thread" "$output1" "1"
+        output1="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-p-$thread.txt"
+        run_workload "run" "$profile" "$thread" "$output1" "p"
 
         sleep $round_interval
 
         profile=oreo
-        output2="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-2.txt"
-        run_workload "run" "$profile" "$thread" "$output2" "2"
+        output2="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-p-$thread.txt"
+        run_workload "run" "$profile" "$thread" "$output2" "p"
 
         sleep $round_interval
 
-        output3="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-3.txt"
-        run_workload "run" "$profile" "$thread" "$output3" "3"
+        output3="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-ac-$thread.txt"
+        run_workload "run" "$profile" "$thread" "$output3" "ac"
 
         sleep $round_interval
 
-        output4="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-4.txt"
-        run_workload "run" "$profile" "$thread" "$output4" "4"
+        output4="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-aa-$thread.txt"
+        run_workload "run" "$profile" "$thread" "$output4" "aa"
 
-        read -r opt1_duration opt1_p99 opt1_ratio <<<"$(get_metrics "cg" "1")"
-        read -r opt2_duration opt2_p99 opt2_ratio <<<"$(get_metrics "oreo" "2")"
-        read -r opt3_duration opt3_p99 opt3_ratio <<<"$(get_metrics "oreo" "3")"
-        read -r opt4_duration opt4_p99 opt4_ratio <<<"$(get_metrics "oreo" "4")"
+        read -r opt1_duration opt1_p99 opt1_ratio <<<"$(get_metrics "cg" "p-$thread")"
+        read -r opt2_duration opt2_p99 opt2_ratio <<<"$(get_metrics "oreo" "p-$thread")"
+        read -r opt3_duration opt3_p99 opt3_ratio <<<"$(get_metrics "oreo" "ac-$thread")"
+        read -r opt4_duration opt4_p99 opt4_ratio <<<"$(get_metrics "oreo" "aa-$thread")"
 
         echo "$thread,$operation,$opt1_duration,$opt2_duration,$opt3_duration,$opt4_duration,$opt1_p99,$opt2_p99,$opt3_p99,$opt4_p99,$opt1_ratio,$opt2_ratio,$opt3_ratio,$opt4_ratio" >>"$results_file"
 

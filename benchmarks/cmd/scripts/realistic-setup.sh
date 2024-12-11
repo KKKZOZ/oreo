@@ -57,7 +57,7 @@ deploy_redis() {
     echo "Remove Redis container"
     docker rm -f redis
     echo "Create new Redis container"
-    docker run --name redis -p 6379:6379 --restart=always -d redis
+    docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass "kkkzoz"
     # docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
 }
 

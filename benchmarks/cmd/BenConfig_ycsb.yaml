@@ -10,12 +10,12 @@ executor_address_map:
     - "http://172.24.58.115:8001"
 
 time_oracle_url: "http://172.24.58.116:8010"
-zipfian_constant: 0.8
+zipfian_constant: 0.9
 latency_value: 10
 
 # Redis configuration
 redis_addr: "172.24.58.116:6379"
-redis_password: "password"
+redis_password: "kkkzoz"
 
 # MongoDB configuration
 mongodb_addr1: "mongodb://172.24.58.116:27017"
