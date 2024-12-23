@@ -1,30 +1,31 @@
 # Benchmark system configuration
 executor_address_map:
   "MongoDB":
-    - "http://172.24.58.116:8001"  
-  "KVRocks":
-    - "http://172.24.58.116:8001"
+    - "http://10.206.206.3:8001"  
   "Redis":
-    - "http://172.24.58.115:8001"
+    - "http://10.206.206.4:8001"
   "Cassandra":
-    - "http://172.24.58.115:8001"
+    - "http://10.206.206.5:8001"
+  "KVRocks":
+    - "http://10.206.206.6:8001"
 
-time_oracle_url: "http://172.24.58.116:8010"
+# deploy time oracle on node2
+time_oracle_url: "http://10.206.206.3:8010"
 zipfian_constant: 0.9
 latency_value: 10
 
 # Redis configuration
-redis_addr: "172.24.58.116:6379"
-redis_password: "password"
+redis_addr: "10.206.206.4:6379"
+redis_password: "kkkzoz"
 
 # MongoDB configuration
-mongodb_addr1: "mongodb://172.24.58.116:27017"
+mongodb_addr1: "mongodb://10.206.206.3:27017"
 mongodb_addr2: "mongodb://172.24.58.115:27018"
 mongodb_username: "admin"
 mongodb_password: "password"
 
 # KVRocks configuration
-kvrocks_addr: "172.24.58.116:6666"
+kvrocks_addr: "10.206.206.6:6666"
 kvrocks_password: "password"
 
 # CouchDB configuration
@@ -33,6 +34,6 @@ couchdb_username: "admin"
 couchdb_password: "password"
 
 # Other databases configuration
-cassandra_addr: ["172.24.58.115"]
+cassandra_addr: ["10.206.206.5"]
 dynamodb_addr: "http://localhost:8000"
 tikv_addr: ["172.24.58.116:2379"]

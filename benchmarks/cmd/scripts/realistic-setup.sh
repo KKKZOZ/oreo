@@ -35,8 +35,8 @@ if [[ ! "$wl" =~ ^(iot|social|order)$ ]]; then
 fi
 
 # Validate nodeId
-if [[ ! "$nodeId" =~ ^[23]$ ]]; then
-    echo "Error: Invalid nodeId. Must be 2 or 3"
+if [[ ! "$nodeId" =~ ^[2345]$ ]]; then
+    echo "Error: Invalid nodeId. Must be 2 ~ 5"
     exit 1
 fi
 
@@ -57,7 +57,7 @@ deploy_redis() {
     echo "Remove Redis container"
     docker rm -f redis
     echo "Create new Redis container"
-    docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass "kkkzoz"
+    docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass "kkkzoz" --save ""
     # docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
 }
 
@@ -102,11 +102,11 @@ elif [ "$wl" == "order" ]; then
     if [ "$nodeId" == "2" ]; then
         deploy_mongodb
     elif [ "$nodeId" == "3" ]; then
-        deploy_kvrocks
-    elif [ "$nodeId" == "4" ]; then
         deploy_redis
-    elif [ "$nodeId" == "5" ]; then
+    elif [ "$nodeId" == "4" ]; then
         deploy_cassandra
+    elif [ "$nodeId" == "5" ]; then
+        deploy_kvrocks
     fi
 fi
 

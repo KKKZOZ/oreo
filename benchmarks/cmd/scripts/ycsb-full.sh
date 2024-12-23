@@ -18,12 +18,13 @@ round_interval=5
 db_combinations=
 thread=0
 verbose=false
+remote=false
+skip=false
 wl_mode=
 
 declare -g executor_pid
 declare -g time_oracle_pid
-remote=false
-node_list=(s1-ljy s3-ljy)
+node_list=(node2 node3 node4 node5)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -42,6 +43,7 @@ while [[ "$#" -gt 0 ]]; do
         ;;
     -v | --verbose) verbose=true ;;
     -r | --remote) remote=true ;;
+    -s | --skip) skip=true ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -152,12 +154,13 @@ deploy_local() {
 }
 
 deploy_remote() {
+    log "Setup timeoracle on node 2" $GREEN
+    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
 
     for node in "${node_list[@]}"; do
-        log "Setup $node"
-        ssh -t $node "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh"
+        log "Setup $node" $GREEN
+        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
     done
-
 }
 
 main() {
@@ -181,12 +184,16 @@ main() {
 
     log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $YELLOW
 
-    if [ "$remote" = true ]; then
-        echo "Running remotely"
-        deploy_remote
+    if [ "$skip" = true ]; then
+        log "Skipping deployment" $YELLOW
     else
-        echo "Running locally"
-        deploy_local
+        if [ "$remote" = true ]; then
+            echo "Running remotely"
+            deploy_remote
+        else
+            echo "Running locally"
+            deploy_local
+        fi
     fi
 
     if [ ! -f "$tar_dir/${wl_type}-load" ]; then

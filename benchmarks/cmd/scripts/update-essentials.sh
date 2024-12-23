@@ -2,7 +2,7 @@
 
 # nodes=(s1-ljy s3-ljy)
 
-nodes=("liujinyi@172.24.58.116" "liujinyi@172.24.58.115")
+nodes=(node2 node3 node4 node5)
 
 main(){
     cd "$(dirname "$0")" && cd ..
