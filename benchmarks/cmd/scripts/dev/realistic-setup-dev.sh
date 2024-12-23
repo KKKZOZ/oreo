@@ -95,17 +95,14 @@ elif [ "$wl" == "social" ]; then
         deploy_mongodb
     elif [ "$nodeId" == "3" ]; then
         deploy_redis
-    elif [ "$nodeId" == "4" ]; then
         deploy_cassandra
     fi
 elif [ "$wl" == "order" ]; then
     if [ "$nodeId" == "2" ]; then
         deploy_mongodb
-    elif [ "$nodeId" == "3" ]; then
         deploy_kvrocks
-    elif [ "$nodeId" == "4" ]; then
+    elif [ "$nodeId" == "3" ]; then
         deploy_redis
-    elif [ "$nodeId" == "5" ]; then
         deploy_cassandra
     fi
 fi

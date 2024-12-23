@@ -74,32 +74,6 @@ func createDatastoreGenerator(wp *WorkloadParameter) *generator.Discrete {
 	return datastoreChooser
 }
 
-// func createDatastoreGenerator(wp *WorkloadParameter) *generator.Discrete {
-// 	redis1Proportion := wp.Redis1Proportion
-// 	mongo1Proportion := wp.Mongo1Proportion
-// 	mongo2Proportion := wp.Mongo2Proportion
-// 	couch1Proportion := wp.CouchDBProportion
-
-// 	datastoreChooser := generator.NewDiscrete()
-// 	if redis1Proportion > 0 {
-// 		datastoreChooser.Add(redis1Proportion, int64(redisDatastore1))
-// 	}
-
-// 	if mongo1Proportion > 0 {
-// 		datastoreChooser.Add(mongo1Proportion, int64(mongoDatastore1))
-// 	}
-
-// 	if mongo2Proportion > 0 {
-// 		datastoreChooser.Add(mongo2Proportion, int64(mongoDatastore2))
-// 	}
-
-// 	if couch1Proportion > 0 {
-// 		datastoreChooser.Add(couch1Proportion, int64(couchDatastore1))
-// 	}
-
-// 	return datastoreChooser
-// }
-
 func createTaskGenerator(wp *WorkloadParameter) *generator.Discrete {
 
 	taskChooser := generator.NewDiscrete()
@@ -113,6 +87,14 @@ func createTaskGenerator(wp *WorkloadParameter) *generator.Discrete {
 
 	if wp.Task3Proportion > 0 {
 		taskChooser.Add(wp.Task3Proportion, 3)
+	}
+
+	if wp.Task4Proportion > 0 {
+		taskChooser.Add(wp.Task4Proportion, 4)
+	}
+
+	if wp.Task5Proportion > 0 {
+		taskChooser.Add(wp.Task5Proportion, 5)
 	}
 
 	return taskChooser

@@ -23,8 +23,7 @@ wl_mode=
 declare -g executor_pid
 declare -g time_oracle_pid
 remote=false
-node2=s1-ljy
-node3=s3-ljy
+node_list=(s1-ljy s3-ljy)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -138,7 +137,7 @@ clear_up() {
     fi
 }
 
-deploy_local(){
+deploy_local() {
     kill_process_on_port "$executor_port"
     kill_process_on_port "$timeoracle_port"
 
@@ -152,12 +151,12 @@ deploy_local(){
     time_oracle_pid=$!
 }
 
-deploy_remote(){
-    log "Setup node 2"
-    ssh -t $node2 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh && sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
+deploy_remote() {
 
-    log "Setup node 3"
-    ssh -t $node3 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
+    for node in "${node_list[@]}"; do
+        log "Setup $node"
+        ssh -t $node "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh"
+    done
 
 }
 

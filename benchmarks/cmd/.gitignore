@@ -13,6 +13,7 @@ iot/
 order/
 social/
 ycsb/
+read/
 
 # Executables and binaries
 iot-load

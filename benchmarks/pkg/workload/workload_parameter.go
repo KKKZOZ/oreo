@@ -41,6 +41,8 @@ type WorkloadParameter struct {
 	Task1Proportion float64 `yaml:"task1proportion"`
 	Task2Proportion float64 `yaml:"task2proportion"`
 	Task3Proportion float64 `yaml:"task3proportion"`
+	Task4Proportion float64 `yaml:"task4proportion"`
+	Task5Proportion float64 `yaml:"task5proportion"`
 }
 
 // ----------------------------------------------------------------------------

@@ -24,6 +24,7 @@ type SocialWorkload struct {
 	task1Count              int
 	task2Count              int
 	task3Count              int
+	task4Count              int
 }
 
 var _ Workload = (*SocialWorkload)(nil)
@@ -70,6 +71,21 @@ func (wl *SocialWorkload) ProfileUpdate(ctx context.Context, db ycsb.Transaction
 	user_id := wl.NextKeyName()
 	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, user_id), wl.RandomValue())
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, user_id), wl.RandomValue())
+	db.Commit()
+}
+
+func (wl *SocialWorkload) UserInteraction(ctx context.Context, db ycsb.TransactionDB) {
+	db.Start()
+
+	post_id := wl.NextKeyName()
+	user_id := wl.NextKeyName()
+
+	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v:interactions", wl.CassandraNamespace, post_id), wl.RandomValue())
+
+	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v:activities", wl.MongoDBNamespace, user_id), wl.RandomValue())
+
+	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v:stats", wl.RedisNamespaceAnalytics, post_id), wl.RandomValue())
+
 	db.Commit()
 }
 
@@ -122,6 +138,8 @@ func (wl *SocialWorkload) Run(ctx context.Context, opCount int,
 			wl.ContentCreation(ctx, txnDB)
 		case 3:
 			wl.ProfileUpdate(ctx, txnDB)
+		case 4:
+			wl.UserInteraction(ctx, txnDB)
 		default:
 			panic("Invalid task")
 		}
@@ -146,6 +164,7 @@ func (wl *SocialWorkload) DisplayCheckResult() {
 	fmt.Printf("Task 1 count: %v\n", wl.task1Count)
 	fmt.Printf("Task 2 count: %v\n", wl.task2Count)
 	fmt.Printf("Task 3 count: %v\n", wl.task3Count)
+	fmt.Printf("Task 4 count: %v\n", wl.task4Count)
 }
 
 func (wl *SocialWorkload) NextTask() int64 {
@@ -159,6 +178,8 @@ func (wl *SocialWorkload) NextTask() int64 {
 		wl.task2Count++
 	case 3:
 		wl.task3Count++
+	case 4:
+		wl.task4Count++
 	default:
 		panic("Invalid task")
 	}
