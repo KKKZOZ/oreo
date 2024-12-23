@@ -17,13 +17,16 @@ type OrderWorkload struct {
 	Randomizer
 	taskChooser        *generator.Discrete
 	wp                 *WorkloadParameter
-	MongoDBNamespace   string
+	MongoDBNamespace1  string
+	MongoDBNamespace2  string
 	CassandraNamespace string
 	RedisNamespace     string
 	KVRocksNamespace   string
 	task1Count         int
 	task2Count         int
 	task3Count         int
+	task4Count         int
+	task5Count         int
 }
 
 var _ Workload = (*OrderWorkload)(nil)
@@ -34,7 +37,8 @@ func NewOrderWorkload(wp *WorkloadParameter) *OrderWorkload {
 		Randomizer:         *NewRandomizer(wp),
 		taskChooser:        createTaskGenerator(wp),
 		wp:                 wp,
-		MongoDBNamespace:   "products",
+		MongoDBNamespace1:  "products",
+		MongoDBNamespace2:  "reviews",
 		CassandraNamespace: "orders",
 		RedisNamespace:     "sessions",
 		KVRocksNamespace:   "inventory",
@@ -48,7 +52,7 @@ func (wl *OrderWorkload) ProductBrowsing(ctx context.Context, db ycsb.Transactio
 	session_id := wl.NextKeyName()
 	product_id := wl.NextKeyName()
 	_, _ = db.Read(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, session_id))
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, product_id))
+	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace1, product_id))
 	_ = db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, session_id), wl.RandomValue())
 
 	db.Commit()
@@ -92,7 +96,42 @@ func (wl *OrderWorkload) InventoryRestocking(ctx context.Context, db ycsb.Transa
 	quantity := util.ToInt(quantityStr)
 	quantity += 10
 	db.Update(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, product_id), util.ToString(quantity))
-	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, product_id), wl.RandomValue())
+	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace1, product_id), wl.RandomValue())
+	db.Commit()
+}
+
+func (wl *OrderWorkload) OrderTracking(ctx context.Context, db ycsb.TransactionDB) {
+	db.Start()
+
+	// 获取订单信息
+	order_id := wl.NextKeyName()
+	session_id := wl.NextKeyName()
+
+	// 从Cassandra读取订单详情
+	_, _ = db.Read(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, order_id))
+
+	// 更新用户会话信息
+	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, session_id), wl.RandomValue())
+
+	db.Commit()
+}
+
+func (wl *OrderWorkload) CustomerReview(ctx context.Context, db ycsb.TransactionDB) {
+	db.Start()
+
+	order_id := wl.NextKeyName()
+	product_id := wl.NextKeyName()
+	session_id := wl.NextKeyName()
+
+	// 检查订单是否存在
+	_, _ = db.Read(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, order_id))
+
+	// 更新产品评价信息
+	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace2, product_id), wl.RandomValue())
+
+	// 更新会话信息
+	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, session_id), wl.RandomValue())
+
 	db.Commit()
 }
 
@@ -115,7 +154,7 @@ func (wl *OrderWorkload) Load(ctx context.Context, opCount int,
 		for j := 0; j < benconfig.MaxLoadBatchSize; j++ {
 			key := wl.NextKeyNameFromSequence()
 			txnDB.Insert(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, key), wl.RandomValue())
-			txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, key), wl.RandomValue())
+			txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace1, key), wl.RandomValue())
 			txnDB.Insert(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, key), wl.RandomValue())
 		}
 		err := txnDB.Commit()
@@ -146,6 +185,10 @@ func (wl *OrderWorkload) Run(ctx context.Context, opCount int,
 			wl.OrderPlacement(ctx, txnDB)
 		case 3:
 			wl.InventoryRestocking(ctx, txnDB)
+		case 4:
+			wl.OrderTracking(ctx, txnDB)
+		case 5:
+			wl.CustomerReview(ctx, txnDB)
 		default:
 			panic("Invalid task")
 		}
@@ -170,6 +213,8 @@ func (wl *OrderWorkload) DisplayCheckResult() {
 	fmt.Printf("Task 1 count: %v\n", wl.task1Count)
 	fmt.Printf("Task 2 count: %v\n", wl.task2Count)
 	fmt.Printf("Task 3 count: %v\n", wl.task3Count)
+	fmt.Printf("Task 4 count: %v\n", wl.task4Count)
+	fmt.Printf("Task 5 count: %v\n", wl.task5Count)
 }
 
 func (wl *OrderWorkload) NextTask() int64 {
@@ -183,6 +228,10 @@ func (wl *OrderWorkload) NextTask() int64 {
 		wl.task2Count++
 	case 3:
 		wl.task3Count++
+	case 4:
+		wl.task4Count++
+	case 5:
+		wl.task5Count++
 	default:
 		panic("Invalid task")
 	}

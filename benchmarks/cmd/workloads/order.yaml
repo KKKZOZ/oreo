@@ -1,5 +1,5 @@
 # Total number of records to be generated
-recordcount: 100000
+recordcount: 1000000
 
 # Total number of operations to be performed
 operationcount: 2000
@@ -22,5 +22,7 @@ mongo2proportion: 0 # Proportion of operations on MongoDB instance 2
 couchdbproportion: 0 # Proportion of operations on CouchDB
 
 task1proportion: 0.4 # Proportion of operations on task 1
-task2proportion: 0.5 # Proportion of operations on task 2
-task3proportion: 0.1 # Proportion of operations on task 3
+task2proportion: 0.2 # Proportion of operations on task 2
+task3proportion: 0.2 # Proportion of operations on task 3
+task4proportion: 0.2 # Proportion of operations on task 4
+

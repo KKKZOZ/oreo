@@ -13,12 +13,13 @@ timeoracle_port=8010
 thread_load=50
 threads=(8 16 32 48 64 80 96)
 round_interval=5
-bc=./BenConfig_realistic.yaml
+bc=./BenConfig_realistic-dev.yaml
 
 wl_type=
 verbose=false
 remote=false
-node_list=(s1-ljy s3-ljy)
+node2=s1-ljy
+node3=s3-ljy
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -142,17 +143,17 @@ deploy_local() {
 }
 
 deploy_remote() {
+    log "Setup node 2" $GREEN
+    ssh -t $node2 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh && sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
 
-    for node in "${node_list[@]}"; do
-        log "Setup $node" $GREEN
-        ssh -t $node "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh && sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
-    done
+    log "Setup node 3" $GREEN
+    ssh -t $node3 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
 }
 
 main() {
 
-    # Go to the script root directory
-    cd "$(dirname "$0")" && cd ..
+    # Go to the cmd root directory
+    cd "$(dirname "$0")" && cd ../..
 
     # check if config file exists
     if [ ! -f "$config_file" ]; then
