@@ -23,8 +23,8 @@ force=false
 declare -g executor_pid
 declare -g time_oracle_pid
 remote=false
-node2=s1-ljy
-node3=s3-ljy
+skip=false
+node_list=(node2 node3)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -39,6 +39,7 @@ while [[ "$#" -gt 0 ]]; do
         ;;
     -v | --verbose) verbose=true ;;
     -r | --remote) remote=true ;;
+    -s | --skip) skip=true ;;
     -f | --force) force=true ;;
     *)
         echo "Unknown parameter passed: $1"
@@ -161,13 +162,14 @@ deploy_local(){
     time_oracle_pid=$!
 }
 
-deploy_remote(){
-    log "Setup node 2"
-    ssh -t $node2 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh && sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
+deploy_remote() {
+    log "Setup timeoracle on node 2" $GREEN
+    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
 
-    log "Setup node 3"
-    ssh -t $node3 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
-
+    for node in "${node_list[@]}"; do
+        log "Setup $node" $GREEN
+        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
+    done
 }
 
 main() {
@@ -191,12 +193,16 @@ main() {
 
     log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $YELLOW
 
-    if [ "$remote" = true ]; then
-        echo "Running remotely"
-        deploy_remote
+    if [ "$skip" = true ]; then
+        log "Skipping deployment" $YELLOW
     else
-        echo "Running locally"
-        deploy_local
+        if [ "$remote" = true ]; then
+            echo "Running remotely"
+            deploy_remote
+        else
+            echo "Running locally"
+            deploy_local
+        fi
     fi
 
     if [ ! -f "$tar_dir/${wl_type}-load" ]; then

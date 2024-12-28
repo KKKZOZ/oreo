@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
 type Client struct {
@@ -111,6 +113,8 @@ func (c *Client) RunBenchmark() {
 	fmt.Printf("Run finished, takes %.8fs\n", time.Since(start).Seconds())
 	measurement.Output()
 	errrecord.Summary()
+	fmt.Println("----------------------------------")
+	fmt.Printf("AssumptionCount: %v\n", config.Debug.AssumptionCount)
 
 	// if c.wp.WorkloadName == "ycsb" {
 	// 	fmt.Printf("Check record distribution\n")

@@ -154,13 +154,13 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 
 			// r.invisibleSet[item.Key()] = true
 
-			// if prev is empty
-			if item.Prev() == "" {
-				return nil, txn.Normal, errors.New("key not found")
-			}
-			// get the previous record
-			preItem, err := r.getPrevItem(item)
-			return preItem, txn.Normal, err
+			// // if prev is empty
+			// if item.Prev() == "" {
+			// 	return nil, txn.Normal, errors.New("key not found")
+			// }
+			// // get the previous record
+			// preItem, err := r.getPrevItem(item)
+			// return preItem, txn.Normal, err
 		}
 
 		if cfg.ReadStrategy == config.Pessimistic {

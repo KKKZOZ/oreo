@@ -81,6 +81,7 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 			// AssumeCommit: all group keys are committed
 			if cfg.ReadStrategy == config.AssumeCommit {
 				if txn.CommittedForAll(groupKey) {
+					fmt.Printf("txn.CommittedForAll(groupKey) is true, groupKey: %v\n", groupKey)
 					return nil
 				} else {
 					return errors.New("validation failed due to false assumption")

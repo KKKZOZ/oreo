@@ -725,6 +725,10 @@ func (r *Datastore) prepareInRemote(items []DataItem) (int64, error) {
 		}
 	}
 
+	if len(r.validationSet) != 0 {
+		config.Debug.AssumptionCount++
+	}
+
 	verMap, tCommit, err := r.Txn.RemotePrepare(r.Name, items, r.validationSet)
 	logger.Log.Debugw("Remote prepare Result",
 		"TxnId", r.Txn.TxnId, "verMap", verMap, "err", err, "Latency", time.Since(r.Txn.debugStart), "Topic", "CheckPoint")
@@ -970,4 +974,5 @@ func (r *Datastore) clear() {
 	r.writeCache = make(map[string]DataItem)
 	// r.writtenSet = util.NewConcurrentMap[bool]()
 	r.invisibleSet = make(map[string]bool)
+	r.validationSet = make(map[string]PredicateInfo)
 }
