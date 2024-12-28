@@ -8,8 +8,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
 	"math/rand"
+	"sync"
 )
 
 type IotWorkload struct {
@@ -172,6 +172,6 @@ func (wl *IotWorkload) NextTask() int64 {
 
 func (wl *IotWorkload) RandomValue() string {
 	// value := wl.r.Intn(10000)
-	value:=rand.Intn(10000)
+	value := rand.Intn(10000)
 	return util.ToString(value)
 }

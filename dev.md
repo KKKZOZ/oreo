@@ -1,6 +1,7 @@
 ## 安装 Docker
 
-dnf config-manager --add-repo=<https://mirrors.cloud.tencent.com/docker-ce/linux/centos/docker-ce.repo>
+```
+dnf config-manager --add-repo="https://mirrors.cloud.tencent.com/docker-ce/linux/centos/docker-ce.repo"
 
 dnf list docker-ce
 
@@ -9,6 +10,7 @@ dnf install -y docker-ce --nobest
 systemctl start docker
 
 docker info
+```
 
 ### Docker 命令
 
@@ -50,9 +52,10 @@ docker run -d -p 5432:5432 --restart=always --name="apiary-postgres" --env POSTG
 
 ## 安装 Golang
 
-wget <https://go.dev/dl/go1.22.3.linux-amd64.tar.gz>
+```shell
+wget https://go.dev/dl/go1.23.3.linux-amd64.tar.gz
 
-rm -rf /usr/local/go && tar -C /usr/local -xzf go1.22.3.linux-amd64.tar.gz
+rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.3.linux-amd64.tar.gz
 
 vim .bashrc
 
@@ -61,6 +64,8 @@ export PATH=$PATH:/usr/local/go/bin
 source .bashrc
 
 go env -w GOPROXY=https://goproxy.cn,direct
+
+```
 
 ## 安装 Java
 
