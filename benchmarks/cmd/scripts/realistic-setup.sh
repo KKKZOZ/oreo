@@ -80,7 +80,7 @@ deploy_kvrocks() {
     echo "Remove KVRocks container"
     docker rm -f kvrocks
     echo "Create new KVRocks container"
-    docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass password
+    docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass kkkzoz
 }
 
 # Deploy based on workload and nodeId

@@ -60,6 +60,8 @@ type debug struct {
 	HTTPAdditionalLatency time.Duration
 
 	ConnAdditionalLatency time.Duration
+
+	AssumptionCount int32
 }
 
 type config struct {
@@ -117,6 +119,7 @@ var Debug = debug{
 	NativeMode:            false,
 	HTTPAdditionalLatency: 0,
 	ConnAdditionalLatency: 0,
+	AssumptionCount:       0,
 }
 
 func GetMaxDebugLatency() time.Duration {

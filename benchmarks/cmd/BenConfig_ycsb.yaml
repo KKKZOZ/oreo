@@ -11,7 +11,7 @@ executor_address_map:
 
 # deploy time oracle on node2
 time_oracle_url: "http://10.206.206.3:8010"
-zipfian_constant: 0.9
+zipfian_constant: 0.8
 latency_value: 10
 
 # Redis configuration
@@ -26,7 +26,7 @@ mongodb_password: "password"
 
 # KVRocks configuration
 kvrocks_addr: "172.24.58.116:6666"
-kvrocks_password: "password"
+kvrocks_password: "kkkzoz"
 
 # CouchDB configuration
 couchdb_addr: "http://localhost:5984"

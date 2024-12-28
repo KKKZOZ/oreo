@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 executor_port=8001
 timeoracle_port=8010
 thread_load=100
-threads=(8 16 32 48 64 80 96)
+threads=(64 80 96 112 138 156 172 180)
 round_interval=2
 
 thread=0
@@ -23,8 +23,7 @@ skip=false
 declare -g executor_pid
 declare -g time_oracle_pid
 remote=false
-node2=s1-ljy
-node3=s3-ljy
+node_list=(node2 node3)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -79,7 +78,7 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4 read_strategy=$5
     log "Running $wl_type-$wl_mode $profile thread=$thread readStrategy=$read_strategy" $BLUE
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -read "$read_strategy" -t "$thread" >"$output"
+    go run . -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -read "$read_strategy" -t "$thread" >"$output"
 }
 
 load_data() {
@@ -162,13 +161,14 @@ deploy_local(){
     time_oracle_pid=$!
 }
 
-deploy_remote(){
-    log "Setup node 2"
-    ssh -t $node2 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh && sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
+deploy_remote() {
+    log "Setup timeoracle on node 2" $GREEN
+    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
 
-    log "Setup node 3"
-    ssh -t $node3 "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
-
+    for node in "${node_list[@]}"; do
+        log "Setup $node" $GREEN
+        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
+    done
 }
 
 main() {

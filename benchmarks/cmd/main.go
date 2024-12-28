@@ -147,6 +147,7 @@ func main() {
 	if mode == "load" {
 		time.Sleep(2 * time.Second)
 	}
+
 }
 
 // func warmUpHttpClient() {
