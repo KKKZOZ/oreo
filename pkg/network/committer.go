@@ -59,7 +59,7 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 			groupKey, err := c.reader.getGroupKey(urlList)
 			if err != nil {
 				// For AssumeAbort
-				if config.Config.ReadStrategy == config.AssumeAbort {
+				if cfg.ReadStrategy == config.AssumeAbort {
 					if pred.LeaseTime.Before(time.Now()) {
 						key := pred.ItemKey
 						err := c.rollbackFromConn(dsName, key)
@@ -81,7 +81,7 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 			// AssumeCommit: all group keys are committed
 			if cfg.ReadStrategy == config.AssumeCommit {
 				if txn.CommittedForAll(groupKey) {
-					fmt.Printf("txn.CommittedForAll(groupKey) is true, groupKey: %v\n", groupKey)
+					fmt.Printf("all group keys are committed, key: %v\n", pred.ItemKey)
 					return nil
 				} else {
 					return errors.New("validation failed due to false assumption")
@@ -141,7 +141,7 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 				doCreate = false
 			} else {
 				// else we do a txn Read to determine its version
-				dbItem, _, err := c.reader.Read(dsName, item.Key(), startTime, cfg, false)
+				dbItem, _, _, err := c.reader.Read(dsName, item.Key(), startTime, cfg, false)
 				if err != nil && err.Error() != "key not found" {
 					logger.Log.Errorw("Read error", "error", err)
 					return err
@@ -157,14 +157,7 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 
 			// add TCommit to the item
 			item.SetTValid(tCommit)
-
-			logger.Log.Debugw("Before c.connMap[dsName].ConditionalUpdate", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 			ver, err := c.connMap[dsName].ConditionalUpdate(item.Key(), item, doCreate)
-			logger.Log.Debugw("After c.connMap[dsName].ConditionalUpdate", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
-
-			// if err != nil {
-			// 	logger.Log.Errorw("ConditionalUpdate error", "error", err)
-			// }
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -174,6 +167,9 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	}
 	err = taskGroup.Wait()
 	if err != nil {
+		if cfg.AblationLevel >= 4 {
+			_ = c.createGroupKey(dsName, itemList[0], config.ABORTED, tCommit)
+		}
 		return nil, 0, err
 	}
 	logger.Log.Debugw("After eg.Wait()", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
@@ -181,11 +177,7 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	if cfg.AblationLevel >= 4 {
 		// create the corresponding group key
 		if len(itemList) > 0 {
-			// txnId := strings.Split(itemList[0].GroupKeyList(), ":")[1]
-			singleGK := strings.Split(itemList[0].GroupKeyList(), ",")[0]
-			txnId := strings.Split(singleGK, ":")[1]
-			url := dsName + ":" + txnId
-			err = c.reader.createSingleGroupKey(url, config.COMMITTED, tCommit)
+			err = c.createGroupKey(dsName, itemList[0], config.COMMITTED, tCommit)
 			if err != nil {
 				return nil, tCommit, fmt.Errorf("failed to create the group key: %v", err)
 			}
@@ -194,6 +186,13 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	}
 
 	return versionMap, tCommit, nil
+}
+
+func (c *Committer) createGroupKey(dsName string, item txn.DataItem, state config.State, tCommit int64) error {
+	singleGK := strings.Split(item.GroupKeyList(), ",")[0]
+	txnId := strings.Split(singleGK, ":")[1]
+	url := dsName + ":" + txnId
+	return c.reader.createSingleGroupKey(url, state, tCommit)
 }
 
 func (c *Committer) Abort(dsName string, keyList []string, groupKeyList string) error {

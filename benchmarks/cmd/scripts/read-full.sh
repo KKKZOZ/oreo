@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 executor_port=8001
 timeoracle_port=8010
 thread_load=100
-threads=(64 80 96 112 138 156 172 180)
+threads=(32 64 80 96 112 138)
 round_interval=2
 
 thread=0
@@ -84,7 +84,7 @@ run_workload() {
 load_data() {
     for profile in cg oreo; do
         log "Loading to ${wl_type} $profile" $BLUE
-        ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
+        go run . -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
     done
     touch "$tar_dir/${wl_type}-load"
@@ -105,6 +105,8 @@ get_metrics() {
     error_cnt=$((error_cnt + $(rg 'validation failed due to false assumption' "$file" | rg -o '[0-9]+' || echo 0)))
 
     error_cnt=$((error_cnt + $(rg 'validation failed due to unknown status' "$file" | rg -o '[0-9]+' || echo 0)))
+
+    error_cnt=$((error_cnt + $(rg 'rollback failed due to wrong state' "$file" | rg -o '[0-9]+' || echo 0)))
 
     echo "$duration $latency $error_cnt"
 

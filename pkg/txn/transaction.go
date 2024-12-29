@@ -559,9 +559,9 @@ func (t *Transaction) getTime(mode string) (int64, error) {
 	return t.timeSource.GetTime(mode)
 }
 
-func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDataStrategy, error) {
+func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDataStrategy, string, error) {
 	if !t.isRemote {
-		return nil, Normal, errors.New("not a remote transaction")
+		return nil, Normal, "", errors.New("not a remote transaction")
 	}
 
 	// globalName := t.groupKeyMaintainer.(Datastorer).GetName()

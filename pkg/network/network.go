@@ -27,6 +27,7 @@ type ReadResponse struct {
 	DataStrategy txn.RemoteDataStrategy
 	ItemType     txn.ItemType
 	Data         txn.DataItem
+	GroupKey     string
 }
 
 type ReadRequest struct {

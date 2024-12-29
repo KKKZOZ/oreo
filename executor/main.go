@@ -102,7 +102,7 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 
 	Log.Infow("Read request", "dsName", req.DsName, "key", req.Key, "startTime", req.StartTime, "config", req.Config)
 
-	item, dataType, err := s.reader.Read(req.DsName, req.Key, req.StartTime, req.Config, true)
+	item, dataType, gk, err := s.reader.Read(req.DsName, req.Key, req.StartTime, req.Config, true)
 
 	var response network.ReadResponse
 	if err != nil {
@@ -129,6 +129,7 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 			Status:       "OK",
 			DataStrategy: dataType,
 			Data:         item,
+			GroupKey:     gk,
 			ItemType:     network.GetItemType(req.DsName),
 		}
 		// fmt.Printf("Read response: %v\n", response)

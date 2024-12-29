@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # 服务器列表
-servers=("10.206.206.3" "10.206.206.4" "10.206.206.5" "10.206.206.6")
+# servers=("10.206.206.3" "10.206.206.4" "10.206.206.5" "10.206.206.6")
+servers=("10.206.206.4" "10.206.206.6")
 
 # 用户名
 user="root"
@@ -28,8 +29,7 @@ for server in "${servers[@]}"; do
         exit 1
     fi
 
-    sudo yum install -y fish
-    sudo yum install -y htop
+    sudo yum install -y fish htop
 
     # 创建 /etc/docker 目录
     echo "执行命令: mkdir -p /etc/docker"
