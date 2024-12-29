@@ -43,7 +43,7 @@ type RecordConfig struct {
 }
 
 type RemoteClient interface {
-	Read(dsName string, key string, ts int64, config RecordConfig) (DataItem, RemoteDataStrategy, error)
+	Read(dsName string, key string, ts int64, config RecordConfig) (DataItem, RemoteDataStrategy, string, error)
 	Prepare(dsName string, itemList []DataItem,
 		startTime int64,
 		config RecordConfig, validationMap map[string]PredicateInfo) (map[string]string, int64, error)

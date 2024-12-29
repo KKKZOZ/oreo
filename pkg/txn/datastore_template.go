@@ -115,19 +115,19 @@ func (r *Datastore) Read(key string, value any) error {
 }
 
 func (r *Datastore) readFromRemote(key string, value any) error {
-	item, readStrategy, err := r.Txn.RemoteRead(r.Name, key)
+	item, readStrategy, groupKeyList, err := r.Txn.RemoteRead(r.Name, key)
 	if err != nil {
 		return errors.Join(errors.New("Remote read failed"), err)
 	}
 	// fmt.Printf("item: %v\n readStrategy: %v\n error: %v", item, readStrategy, err)
 	switch readStrategy {
 	case AssumeCommit:
-		r.validationSet[item.GroupKeyList()] = PredicateInfo{
+		r.validationSet[groupKeyList] = PredicateInfo{
 			ItemKey: item.Key(),
 			State:   config.COMMITTED,
 		}
 	case AssumeAbort:
-		r.validationSet[item.GroupKeyList()] = PredicateInfo{
+		r.validationSet[groupKeyList] = PredicateInfo{
 			ItemKey: item.Key(),
 			State:   config.ABORTED,
 		}

@@ -40,24 +40,36 @@ func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory
 //
 // Let the upper layer decide what to do with it
 func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
-	isRemoteCall bool) (txn.DataItem, txn.RemoteDataStrategy, error) {
+	isRemoteCall bool) (txn.DataItem, txn.RemoteDataStrategy, string, error) {
 	dataType := txn.Normal
 
 	conn, ok := r.connMap[dsName]
 	if !ok {
-		return nil, dataType, fmt.Errorf("Reader: connector to %s is not found", dsName)
+		return nil, dataType, "", fmt.Errorf("Reader: connector to %s is not found", dsName)
 	}
 
 	item, err := conn.GetItem(key)
 	logger.Log.Infow("Read", "key", key, "item", item)
 	if err != nil {
-		return nil, dataType, err
+		return nil, dataType, "", err
 	}
 
+	var targetItem txn.DataItem
 	resItem, dataType, err := r.basicVisibilityProcessor(dsName, item, ts, cfg)
 	if err != nil {
-		return nil, dataType, err
+		return nil, dataType, "", err
 	}
+	targetItem = resItem
+	if dataType == txn.AssumeAbort {
+		if resItem.Prev() == "" {
+			return nil, txn.AssumeAbort, "", errors.New("key not found in AssumeAbort")
+		}
+		targetItem, err = r.getPrevItem(resItem)
+		if err != nil {
+			return nil, dataType, "", err
+		}
+	}
+
 	logicFunc := func(curItem txn.DataItem, isFound bool) (txn.DataItem, error) {
 		if !isFound {
 			if curItem.IsDeleted() {
@@ -72,8 +84,8 @@ func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
 		return curItem, nil
 	}
 
-	item, err = r.treatAsCommitted(resItem, ts, logicFunc, cfg)
-	return item, dataType, err
+	item, err = r.treatAsCommitted(targetItem, ts, logicFunc, cfg)
+	return item, dataType, resItem.GroupKeyList(), err
 	// return r.treatAsCommitted(resItem, ts, logicFunc, cfg)
 }
 
@@ -154,7 +166,7 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 
 			// r.invisibleSet[item.Key()] = true
 
-			// // if prev is empty
+			// if prev is empty
 			// if item.Prev() == "" {
 			// 	return nil, txn.Normal, errors.New("key not found")
 			// }
@@ -170,11 +182,12 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 			case config.AssumeCommit:
 				return item, txn.AssumeCommit, nil
 			case config.AssumeAbort:
-				if item.Prev() == "" {
-					return nil, txn.Normal, errors.New("key not found in AssumeAbort")
-				}
-				preItem, err := r.getPrevItem(item)
-				return preItem, txn.AssumeAbort, err
+				return item, txn.AssumeAbort, nil
+				// if item.Prev() == "" {
+				// 	return nil, txn.Normal, errors.New("key not found in AssumeAbort")
+				// }
+				// preItem, err := r.getPrevItem(item)
+				// return preItem, txn.AssumeAbort, err
 			}
 		}
 

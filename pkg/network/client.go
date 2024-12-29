@@ -70,7 +70,7 @@ func (c *Client) GetServerAddr(dsName string) string {
 	return addr
 }
 
-func (c *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataStrategy, error) {
+func (c *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataStrategy, string, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
@@ -103,7 +103,7 @@ func (c *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig)
 	}
 
 	if resp.StatusCode() != fasthttp.StatusOK {
-		return nil, txn.Normal, errors.New("unexpected status code")
+		return nil, txn.Normal, "", errors.New("unexpected status code")
 	}
 
 	body := resp.Body()
@@ -115,10 +115,10 @@ func (c *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig)
 	}
 
 	if response.Status == "OK" {
-		return response.Data, response.DataStrategy, nil
+		return response.Data, response.DataStrategy, response.GroupKey, nil
 	} else {
 		errMsg := response.ErrMsg
-		return nil, txn.Normal, errors.New(errMsg)
+		return nil, txn.Normal, "", errors.New(errMsg)
 	}
 }
 
