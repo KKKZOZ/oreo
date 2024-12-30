@@ -100,13 +100,9 @@ get_metrics() {
 
     error_cnt=0
 
-    error_cnt=$((error_cnt + $(rg 'read failed due to unknown txn status' "$file" | rg -o '[0-9]+' || echo 0)))
+    error_cnt=$((error_cnt + $(rg 'key not found in given RecordLen' "$file" | rg -o '[0-9]+' || echo 0)))
 
-    error_cnt=$((error_cnt + $(rg 'validation failed due to false assumption' "$file" | rg -o '[0-9]+' || echo 0)))
-
-    error_cnt=$((error_cnt + $(rg 'validation failed due to unknown status' "$file" | rg -o '[0-9]+' || echo 0)))
-
-    error_cnt=$((error_cnt + $(rg 'rollback failed due to wrong state' "$file" | rg -o '[0-9]+' || echo 0)))
+    error_cnt=$((error_cnt + $(rg 'key not found prev is empty' "$file" | rg -o '[0-9]+' || echo 0)))
 
     echo "$duration $latency $error_cnt"
 

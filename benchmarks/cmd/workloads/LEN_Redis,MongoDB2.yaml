@@ -3,10 +3,10 @@ recordcount: 10000
 max_load_batch_size: 50
 
 # Total number of operations to be performed
-operationcount: 5000
+operationcount: 10000
 
 # Number of operations in each transaction group
-txnoperationgroup: 8
+txnoperationgroup: 4
 postcheckinterval: 1000
 
 # Proportions of different operations
