@@ -14,6 +14,7 @@ order/
 social/
 ycsb/
 read/
+length/
 
 # Executables and binaries
 iot-load
@@ -22,6 +23,7 @@ order-load
 ycsb-load
 opt-load
 read-load
+length-load
 
 executor
 timeoracle
