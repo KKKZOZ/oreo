@@ -11,7 +11,7 @@ NC='\033[0m' # No Color
 executor_port=8001
 timeoracle_port=8010
 thread_load=100
-threads=(32 64 80 96 112 138)
+threads=(16 32 64 80 96 112 138)
 round_interval=2
 
 thread=0

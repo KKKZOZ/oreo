@@ -1,26 +1,26 @@
 # Benchmark system configuration
 executor_address_map:
   "Redis":
-    - "http://10.206.206.4:8001"
+    - "http://10.206.206.3:8001"
   "MongoDB1":
     - "http://10.206.206.3:8001"
   "MongoDB2":
-    - "http://10.206.206.6:8001"
+    - "http://10.206.206.4:8001"
   "Cassandra":
     - "http://10.206.206.4:8001"
 
 # deploy time oracle on node2
-time_oracle_url: "http://10.206.206.4:8010"
+time_oracle_url: "http://10.206.206.3:8010"
 zipfian_constant: 0.99
 latency_value: 10
 
 # Redis configuration
-redis_addr: "10.206.206.4:6379"
+redis_addr: "10.206.206.3:6379"
 redis_password: "kkkzoz"
 
 # MongoDB configuration
 mongodb_addr1: "mongodb://10.206.206.3:27017"
-mongodb_addr2: "mongodb://10.206.206.6:27018"
+mongodb_addr2: "mongodb://10.206.206.4:27018"
 mongodb_username: "admin"
 mongodb_password: "password"
 
