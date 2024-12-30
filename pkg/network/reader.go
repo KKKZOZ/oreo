@@ -75,7 +75,7 @@ func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
 			if curItem.IsDeleted() {
 				return nil, errors.New("key not found, item is deleted")
 			}
-			return nil, errors.New("key not found")
+			return nil, errors.New("key not found prev is empty")
 		}
 		if isRemoteCall && cfg.MaxRecordLen > 2 {
 			curItem.SetPrev("")
@@ -192,7 +192,7 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		}
 
 	}
-	return nil, txn.Normal, errors.New("key not found")
+	return nil, txn.Normal, errors.New("key not found(unreachable code in basicVisibilityProcessor)")
 }
 
 // rollback overwrites the record with the application data
