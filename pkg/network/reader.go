@@ -423,7 +423,7 @@ func (r *Reader) treatAsCommitted(item txn.DataItem,
 		}
 		curItem = preItem
 	}
-	return nil, errors.New("key not found")
+	return nil, errors.New("key not found in given RecordLen")
 }
 
 func (r *Reader) GetCacheStatistic() string {
