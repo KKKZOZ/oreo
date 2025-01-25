@@ -429,3 +429,7 @@ func (r *Reader) treatAsCommitted(item txn.DataItem,
 func (r *Reader) GetCacheStatistic() string {
 	return r.Cacher.Statistic()
 }
+
+func (r *Reader) ClearCache() {
+	r.Cacher.Clear()
+}

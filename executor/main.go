@@ -72,6 +72,8 @@ func (s *Server) Run() {
 			s.commitHandler(ctx)
 		case "/abort":
 			s.abortHandler(ctx)
+		case "/cache":
+			s.cacheHandler(ctx)
 		default:
 			ctx.Error("Unsupported path", fasthttp.StatusNotFound)
 		}
@@ -85,6 +87,30 @@ func (s *Server) Run() {
 
 func (s *Server) pingHandler(ctx *fasthttp.RequestCtx) {
 	ctx.WriteString("pong")
+}
+
+func (s *Server) cacheHandler(ctx *fasthttp.RequestCtx) {
+
+	method := string(ctx.Method())
+
+	if method == "GET" {
+		status := s.reader.GetCacheStatistic()
+		ctx.SetStatusCode(fasthttp.StatusOK)
+		ctx.SetBodyString(status)
+		return
+	}
+
+	if method == "POST" {
+		s.reader.ClearCache()
+		ctx.SetStatusCode(fasthttp.StatusOK)
+		ctx.SetBodyString("Cache cleared successfully")
+		return
+	}
+
+	// 处理不支持的请求方法
+	ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
+	ctx.SetBodyString("Method not allowed")
+
 }
 
 func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
