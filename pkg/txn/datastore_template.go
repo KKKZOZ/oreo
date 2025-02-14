@@ -919,42 +919,6 @@ func (r *Datastore) SetSerializer(se serializer.Serializer) {
 	r.se = se
 }
 
-// func (r *Datastore) CreateGroupKeyList(key string, txnState config.State, tCommit int64) (config.State, error) {
-
-// 	if config.Debug.DebugMode {
-// 		time.Sleep(config.Debug.HTTPAdditionalLatency)
-// 	}
-// 	groupKeyItem := GroupKeyItem{
-// 		TxnState: txnState,
-// 		TCommit:  tCommit,
-// 	}
-// 	groupKeyStr, err := json.Marshal(groupKeyItem)
-
-// 	if err != nil {
-// 		return -1, errors.Join(errors.New("GroupKey marshal failed"), err)
-// 	}
-
-// 	existValue, err := r.conn.AtomicCreate(key, util.ToString(groupKeyStr))
-// 	if err != nil {
-// 		if err.Error() == "key exists" {
-// 			existKeyItem := GroupKeyItem{}
-// 			err := json.Unmarshal([]byte(existValue), &existKeyItem)
-// 			if err != nil {
-// 				return -1, err
-// 			}
-// 			oldState := config.State(existKeyItem.TxnState)
-// 			return oldState, errors.New(KeyExists)
-// 		} else {
-// 			return -1, err
-// 		}
-// 	}
-// 	return -1, nil
-// }
-
-// func (r *Datastore) DeleteGroupKeyList(key string) error {
-// 	return r.conn.Delete(key)
-// }
-
 // Copy returns a new instance of Datastore with the same name and connection.
 // It is used to create a copy of the Datastore object.
 func (r *Datastore) Copy() Datastorer {

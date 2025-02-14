@@ -3,7 +3,6 @@ package redis
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -11,13 +10,15 @@ import (
 	"github.com/oreo-dtx-lab/oreo/internal/testutil"
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
+	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	trxn "github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
 // NewDefaultRedisConnection creates and connect a new RedisConnection with default connection options.
 // It uses the localhost address and the default Redis port (6379).
-func NewDefaultRedisConnection() *RedisConnection {
+func NewDefaultRedisConnection() txn.Connector {
 	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
@@ -29,28 +30,20 @@ func NewDefaultRedisConnection() *RedisConnection {
 // It initializes a Redis connection, creates a new transaction, and adds a Redis datastore to the transaction.
 // The Redis connection is established with the provided address.
 // The created transaction is returned.
-func NewTransactionWithSetup() *trxn.Transaction {
+func NewTransactionWithSetup() (*trxn.Transaction, txn.Connector) {
 	conn := NewRedisConnection(&ConnectionOptions{
 		Address: "localhost:6379",
 	})
-	txn := trxn.NewTransaction()
+	txn := trxn.NewTransactionWithOracle(timesource.NewSimpleTimeSource())
 	rds := NewRedisDatastore("redis", conn)
 	txn.AddDatastore(rds)
 	txn.SetGlobalDatastore(rds)
-	return txn
+	return txn, conn
 }
 
 func TestSimpleReadWhenCommitted(t *testing.T) {
-	startTime := time.Now()
 
-	txn := trxn.NewTransaction()
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
-	})
-	rds := NewRedisDatastore("redis", conn)
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
-	fmt.Printf("Time to create transaction: %v\n", time.Since(startTime))
+	txn, conn := NewTransactionWithSetup()
 
 	// initialize the redis database
 	expected := testutil.Person{
@@ -69,14 +62,12 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 
 	key := "John"
 	conn.PutItem(key, expectedRedisItem)
-	fmt.Printf("Time to put item: %v\n", time.Since(startTime))
 
 	// Start the transaction
 	err := txn.Start()
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
 	}
-	fmt.Printf("Time to start transaction: %v\n", time.Since(startTime))
 
 	// Read the value
 	var result testutil.Person
@@ -93,13 +84,7 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 
 func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 
-	txn1 := trxn.NewTransaction()
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
-	})
-	rds := NewRedisDatastore("redis", conn)
-	txn1.AddDatastore(rds)
-	txn1.SetGlobalDatastore(rds)
+	txn1, conn := NewTransactionWithSetup()
 
 	// initialize the redis database
 	expected := testutil.Person{
@@ -133,16 +118,7 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 }
 
 func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
-	// Create a new transaction
-	txn := trxn.NewTransaction()
-
-	// Create a new redis datastore
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
-	})
-	rds := NewRedisDatastore("redis", conn)
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
+	txn, conn := NewTransactionWithSetup()
 
 	// initialize the redis database
 	expected := testutil.Person{
@@ -196,14 +172,7 @@ func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
 }
 
 func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
-	// Create a new redis datastore
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
-	})
-	rds := NewRedisDatastore("redis", conn)
-	txn := trxn.NewTransaction()
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
+	txn, conn := NewTransactionWithSetup()
 
 	// initialize the redis database
 	expected := testutil.Person{
@@ -254,13 +223,7 @@ func TestSimpleReadWhenCommittedFindNone(t *testing.T) {
 // TestSimpleReadWhenPreparedWithTSRInCOMMITTED tests the scenario where a simple read operation is performed
 // on a record which is in PREPARED state and has a TSR in COMMITTED state.
 func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
-	})
-	rds := NewRedisDatastore("redis", conn)
-	txn := trxn.NewTransaction()
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
+	txn, conn := NewTransactionWithSetup()
 
 	// initialize the redis database
 	expected := testutil.Person{
@@ -272,7 +235,7 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 		RValue:        util.ToJSONString(expected),
 		RGroupKeyList: "100",
 		RTxnState:     config.PREPARED,
-		RTValid:       time.Now(),
+		RTValid:       time.Now().UnixMicro(),
 		RTLease:       time.Now(),
 		RVersion:      "2",
 	}
@@ -307,13 +270,7 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 // TestSimpleReadWhenPreparedWithTSRInABORTED tests the scenario where a simple read operation is performed
 // on a record which is in PREPARED state and has a TSR in ABORTED state.
 func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
-	conn := NewRedisConnection(&ConnectionOptions{
-		Address: "localhost:6379",
-	})
-	rds := NewRedisDatastore("redis", conn)
-	txn := trxn.NewTransaction()
-	txn.AddDatastore(rds)
-	txn.SetGlobalDatastore(rds)
+	txn, conn := NewTransactionWithSetup()
 
 	// initialize the redis database
 	tarMemItem := &RedisItem{
@@ -331,7 +288,7 @@ func TestSimpleReadWhenPreparedWithTSRInABORTED(t *testing.T) {
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-prepared")),
 		RGroupKeyList: "TestSimpleReadWhenPreparedWithTSRInABORTED",
 		RTxnState:     config.PREPARED,
-		RTValid:       time.Now().Add(-5 * time.Second),
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(-4 * time.Second),
 		RPrev:         util.ToJSONString(tarMemItem),
 		RVersion:      "2",
@@ -401,7 +358,7 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 		RValue:        util.ToJSONString(curPerson),
 		RGroupKeyList: "101",
 		RTxnState:     config.PREPARED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       time.Now().Add(-3 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(-1 * time.Second),
 		RVersion:      "3",
 		RPrev:         expectedStr,
@@ -435,7 +392,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
 		RGroupKeyList: "TestSimpleReadWhenPrepareNotExpired1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-2 * time.Second),
+		RTValid:       time.Now().Add(-2 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(-1 * time.Second),
 		RLinkedLen:    1,
 		RVersion:      "1",
@@ -446,7 +403,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
 		RGroupKeyList: "TestSimpleReadWhenPrepareNotExpired2",
 		RTxnState:     config.PREPARED,
-		RTValid:       time.Now().Add(1 * time.Second),
+		RTValid:       time.Now().Add(1 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(2 * time.Second),
 		RPrev:         util.ToJSONString(dbItem1),
 		RLinkedLen:    2,
@@ -457,7 +414,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		conn := NewDefaultRedisConnection()
 		conn.PutItem("item1", dbItem2)
 
-		txn1 := NewTransactionWithSetup()
+		txn1, _ := NewTransactionWithSetup()
 		txn1.Start()
 		var item testutil.TestItem
 		err := txn1.Read("redis", "item1", &item)
@@ -472,7 +429,7 @@ func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
 		dbItem.SetLinkedLen(1)
 		conn.PutItem("item1", dbItem)
 
-		txn1 := NewTransactionWithSetup()
+		txn1, _ := NewTransactionWithSetup()
 		txn1.Start()
 		var item testutil.TestItem
 		err := txn1.Read("redis", "item1", &item)
@@ -486,7 +443,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 		RKey:       "item2",
 		RValue:     util.ToJSONString(testutil.NewTestItem("item2-db")),
 		RTxnState:  config.COMMITTED,
-		RTValid:    time.Now().Add(-2 * time.Second),
+		RTValid:    time.Now().Add(-2 * time.Second).UnixMicro(),
 		RTLease:    time.Now().Add(-1 * time.Second),
 		RLinkedLen: 1,
 		RVersion:   "1",
@@ -495,7 +452,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 
 	conn.PutItem(dbItem.Key(), dbItem)
 
-	txn1 := NewTransactionWithSetup()
+	txn1, _ := NewTransactionWithSetup()
 	txn1.Start()
 
 	var item testutil.TestItem
@@ -506,7 +463,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 func TestSimpleWriteAndRead(t *testing.T) {
 
 	// Start the transaction
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	err := txn.Start()
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
@@ -541,7 +498,7 @@ func TestSimpleDirectWrite(t *testing.T) {
 	conn := NewDefaultRedisConnection()
 	conn.Delete("John")
 
-	preTxn := NewTransactionWithSetup()
+	preTxn, _ := NewTransactionWithSetup()
 	preTxn.Start()
 	key := "John"
 	prePerson := testutil.NewPerson("John-pre")
@@ -550,7 +507,7 @@ func TestSimpleDirectWrite(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Start the transaction
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	err = txn.Start()
 	if err != nil {
 		t.Errorf("Error starting transaction: %s", err)
@@ -836,14 +793,14 @@ func TestDeleteWithRead(t *testing.T) {
 	// clear the test data
 	conn.Delete("John")
 
-	preTxn := NewTransactionWithSetup()
+	preTxn, _ := NewTransactionWithSetup()
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("redis", "John", dataPerson)
 	err := preTxn.Commit()
 	assert.NoError(t, err)
 
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	txn.Start()
 	var person testutil.Person
 	err = txn.Read("redis", "John", &person)
@@ -857,13 +814,13 @@ func TestDeleteWithRead(t *testing.T) {
 
 func TestDeleteWithoutRead(t *testing.T) {
 
-	preTxn := NewTransactionWithSetup()
+	preTxn, _ := NewTransactionWithSetup()
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
 	preTxn.Write("redis", "John", dataPerson)
 	preTxn.Commit()
 
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	txn.Start()
 	err := txn.Delete("redis", "John")
 	if err != nil {
@@ -1019,7 +976,7 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 		conn.Delete(item.Value)
 	}
 
-	preTxn := NewTransactionWithSetup()
+	preTxn, _ := NewTransactionWithSetup()
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
 		preTxn.Write("redis", item.Value, item)
@@ -1034,7 +991,7 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 
 	for i := 1; i <= concurrentCount; i++ {
 		go func(id int) {
-			txn := NewTransactionWithSetup()
+			txn, _ := NewTransactionWithSetup()
 			txn.Start()
 			for _, item := range testutil.InputItemList {
 				var res testutil.TestItem
@@ -1069,7 +1026,7 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 
 	assert.Equal(t, 1, commitCount)
 
-	postTxn := NewTransactionWithSetup()
+	postTxn, _ := NewTransactionWithSetup()
 	postTxn.Start()
 	for _, item := range testutil.InputItemList {
 		var res testutil.TestItem
@@ -1088,14 +1045,14 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 	conn.Delete("item1")
 	conn.Delete("item2")
 
-	preTxn := NewTransactionWithSetup()
+	preTxn, _ := NewTransactionWithSetup()
 	preTxn.Start()
 	preTxn.Write("redis", "item1", testutil.NewTestItem("item1"))
 	preTxn.Write("redis", "item2", testutil.NewTestItem("item2"))
 	err := preTxn.Commit()
 	assert.Nil(t, err)
 
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	txn.Start()
 	var item testutil.TestItem
 	txn.Read("redis", "item1", &item)
@@ -1109,7 +1066,7 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 	err = txn.Commit()
 	assert.Nil(t, err)
 
-	postTxn := NewTransactionWithSetup()
+	postTxn, _ := NewTransactionWithSetup()
 	postTxn.Start()
 	var resItem testutil.TestItem
 	postTxn.Read("redis", "item1", &resItem)
@@ -1129,7 +1086,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		RValue:        util.ToJSONString(item1_1),
 		RGroupKeyList: "txn1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-10 * time.Second),
+		RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(-9 * time.Second),
 		RVersion:      "1",
 		RLinkedLen:    1,
@@ -1141,7 +1098,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		RValue:        util.ToJSONString(item1_2),
 		RGroupKeyList: "txn2",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(5 * time.Second),
+		RTValid:       time.Now().Add(5 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(6 * time.Second),
 		RVersion:      "2",
 		RPrev:         util.ToJSONString(memItem1_1),
@@ -1154,7 +1111,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		RValue:        util.ToJSONString(item1_3),
 		RGroupKeyList: "txn3",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(10 * time.Second),
+		RTValid:       time.Now().Add(10 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(11 * time.Second),
 		RVersion:      "3",
 		RPrev:         util.ToJSONString(memItem1_2),
@@ -1170,7 +1127,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		assert.NoError(t, err)
 
 		config.Config.MaxRecordLength = 2
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
 		err = txn.Read("redis", "item1", &item)
@@ -1185,7 +1142,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		conn.PutItem("item1", memItem1_3)
 
 		config.Config.MaxRecordLength = 3
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
 		err := txn.Read("redis", "item1", &item)
@@ -1202,7 +1159,7 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 		conn.PutItem("item1", memItem1_3)
 
 		config.Config.MaxRecordLength = 3 + 1
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
 		err := txn.Read("redis", "item1", &item)
@@ -1228,7 +1185,7 @@ func TestLinkedTruncate(t *testing.T) {
 		for i := 1; i <= 4; i++ {
 			time.Sleep(10 * time.Millisecond)
 			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
-			txn := NewTransactionWithSetup()
+			txn, _ := NewTransactionWithSetup()
 			txn.Start()
 			txn.Write("redis", "item1", item)
 			err := txn.Commit()
@@ -1259,7 +1216,7 @@ func TestLinkedTruncate(t *testing.T) {
 			for i := 1; i <= 4; i++ {
 				time.Sleep(10 * time.Millisecond)
 				item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
-				txn := NewTransactionWithSetup()
+				txn, _ := NewTransactionWithSetup()
 				txn.Start()
 				txn.Write("redis", "item1", item)
 				err := txn.Commit()
@@ -1293,7 +1250,7 @@ func TestLinkedTruncate(t *testing.T) {
 		for i := 1; i <= 4; i++ {
 			time.Sleep(10 * time.Millisecond)
 			item := testutil.NewTestItem("item1_" + strconv.Itoa(i))
-			txn := NewTransactionWithSetup()
+			txn, _ := NewTransactionWithSetup()
 			txn.Start()
 			txn.Write("redis", "item1", item)
 			err := txn.Commit()
@@ -1334,7 +1291,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre2")),
 			RGroupKeyList: "99",
 			RTxnState:     config.COMMITTED,
-			RTValid:       time.Now().Add(-10 * time.Second),
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
 			RTLease:       time.Now().Add(-9 * time.Second),
 			RLinkedLen:    1,
 			RVersion:      "1",
@@ -1345,7 +1302,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			RGroupKeyList: "100",
 			RTxnState:     config.PREPARED,
-			RTValid:       time.Now().Add(-5 * time.Second),
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
 			RTLease:       time.Now().Add(-4 * time.Second),
 			RPrev:         util.ToJSONString(tarItem),
 			RLinkedLen:    2,
@@ -1355,7 +1312,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn.PutItem(tarItem.Key(), curItem)
 
 		// Start the transaction
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 
 		// Write the value
@@ -1365,7 +1322,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		assert.NoError(t, err)
 
 		// First, we check the final record's Value
-		postTxn := NewTransactionWithSetup()
+		postTxn, _ := NewTransactionWithSetup()
 		postTxn.Start()
 		var resItem testutil.TestItem
 		err = postTxn.Read("redis", "item1", &resItem)
@@ -1396,7 +1353,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		conn.PutItem(tarItem.Key(), tarItem)
 
 		// Start the transaction
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 
 		// Write the value
@@ -1406,7 +1363,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		assert.NoError(t, err)
 
 		// First, we check the final record's Value
-		postTxn := NewTransactionWithSetup()
+		postTxn, _ := NewTransactionWithSetup()
 		postTxn.Start()
 		var resItem testutil.TestItem
 		err = postTxn.Read("redis", "item1", &resItem)
@@ -1436,7 +1393,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			RValue:        util.ToJSONString(testutil.NewTestItem("item2-pre2")),
 			RGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR2",
 			RTxnState:     config.COMMITTED,
-			RTValid:       time.Now().Add(-10 * time.Second),
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
 			RTLease:       time.Now().Add(-9 * time.Second),
 			RLinkedLen:    1,
 			RVersion:      "1",
@@ -1447,7 +1404,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 			RValue:        util.ToJSONString(testutil.NewTestItem("item2-pre")),
 			RGroupKeyList: "TestDirectWriteOnOutdatedPreparedRecordWithTSR",
 			RTxnState:     config.PREPARED,
-			RTValid:       time.Now().Add(-5 * time.Second),
+			RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
 			RTLease:       time.Now().Add(-4 * time.Second),
 			RLinkedLen:    2,
 			RVersion:      "2",
@@ -1458,7 +1415,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn.Put("TestDirectWriteOnOutdatedPreparedRecordWithTSR", config.COMMITTED)
 
 		// Start the transaction
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 
 		// Write the value
@@ -1468,7 +1425,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		assert.NoError(t, err)
 
 		// First, we check the final record's Value
-		postTxn := NewTransactionWithSetup()
+		postTxn, _ := NewTransactionWithSetup()
 		postTxn.Start()
 		var resItem testutil.TestItem
 		err = postTxn.Read("redis", "item2", &resItem)
@@ -1504,7 +1461,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		conn.Put("TestDirectWriteOnOutdatedPreparedRecordWithTSR", config.COMMITTED)
 
 		// Start the transaction
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 
 		// Write the value
@@ -1514,7 +1471,7 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		assert.NoError(t, err)
 
 		// First, we check the final record's Value
-		postTxn := NewTransactionWithSetup()
+		postTxn, _ := NewTransactionWithSetup()
 		postTxn.Start()
 		var resItem testutil.TestItem
 		err = postTxn.Read("redis", "item1", &resItem)
@@ -1550,7 +1507,7 @@ func TestDirectWriteOnPreparingRecord(t *testing.T) {
 	conn.PutItem(tarItem.Key(), tarItem)
 	conn.Delete("TestDirectWriteOnPreparingRecord")
 
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	txn.Start()
 	item := testutil.NewTestItem("item1-cur")
 	txn.Write("redis", tarItem.Key(), item)
@@ -1566,14 +1523,14 @@ func TestDirectWriteOnInvisibleRecord(t *testing.T) {
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
 		RGroupKeyList: "TestDirectWriteOnInvisibleRecord1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(3 * time.Second),
+		RTValid:       time.Now().Add(3 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(4 * time.Second),
 		RLinkedLen:    1,
 		RVersion:      "2",
 	}
 	conn.PutItem(dbItem1.Key(), dbItem1)
 
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	txn.Start()
 	item := testutil.NewTestItem("item1-cur")
 	txn.Write("redis", dbItem1.Key(), item)
@@ -1609,7 +1566,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1")),
 		RGroupKeyList: "TestRollback",
 		RTxnState:     config.PREPARED,
-		RTValid:       time.Now().Add(-5 * time.Second),
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(-4 * time.Second),
 		RVersion:      "2",
 	}
@@ -1622,7 +1579,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		todoRedisItem.SetLinkedLen(2)
 		conn.PutItem(todoRedisItem.Key(), todoRedisItem)
 
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
 		err := txn.Read("redis", todoRedisItem.Key(), &item)
@@ -1638,7 +1595,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		todoRedisItem.SetLinkedLen(2)
 		conn.PutItem(todoRedisItem.Key(), todoRedisItem)
 
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
 		err := txn.Read("redis", todoRedisItem.Key(), &item)
@@ -1650,7 +1607,7 @@ func TestRollbackWhenReading(t *testing.T) {
 		item1.SetPrev("")
 		conn.PutItem(item1.Key(), item1)
 
-		txn1 := NewTransactionWithSetup()
+		txn1, _ := NewTransactionWithSetup()
 		txn1.Start()
 		var item testutil.TestItem
 		err := txn1.Read("redis", item1.Key(), &item)
@@ -1674,7 +1631,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1")),
 		RGroupKeyList: "TestRollback",
 		RTxnState:     config.PREPARED,
-		RTValid:       time.Now().Add(-5 * time.Second),
+		RTValid:       time.Now().Add(-5 * time.Second).UnixMicro(),
 		RTLease:       time.Now().Add(-4 * time.Second),
 		RVersion:      "2",
 	}
@@ -1687,7 +1644,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		todoRedisItem.SetLinkedLen(2)
 		conn.PutItem(todoRedisItem.Key(), todoRedisItem)
 
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		item := testutil.NewTestItem("item1-cur")
 		txn.Write("redis", todoRedisItem.Key(), item)
@@ -1711,7 +1668,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		todoRedisItem.SetLinkedLen(2)
 		conn.PutItem(todoRedisItem.Key(), todoRedisItem)
 
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		item := testutil.NewTestItem("item1-cur")
 		txn.Write("redis", todoRedisItem.Key(), item)
@@ -1725,7 +1682,7 @@ func TestRollbackWhenWriting(t *testing.T) {
 		item1.SetLinkedLen(1)
 		conn.PutItem(item1.Key(), item1)
 
-		txn1 := NewTransactionWithSetup()
+		txn1, _ := NewTransactionWithSetup()
 		txn1.Start()
 		item := testutil.NewTestItem("item1-cur")
 		txn1.Write("redis", item1.Key(), item)
@@ -1761,7 +1718,7 @@ func TestRollForwardWhenReading(t *testing.T) {
 	conn.Put("TestRollForward", config.COMMITTED)
 
 	// the transaction should roll forward the item
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	txn.Start()
 	var item testutil.TestItem
 	err := txn.Read("redis", tarItem.Key(), &item)
@@ -1794,7 +1751,7 @@ func TestRollForwardWhenWriting(t *testing.T) {
 	conn.Put("TestRollForward", config.COMMITTED)
 
 	// the transaction should roll forward the item
-	txn := NewTransactionWithSetup()
+	txn, _ := NewTransactionWithSetup()
 	txn.Start()
 	item := testutil.NewTestItem("item1-cur")
 	txn.Write("redis", tarItem.Key(), item)
@@ -1819,14 +1776,14 @@ func TestItemVersionUpdate(t *testing.T) {
 			RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
 			RGroupKeyList: "TestItemVersionUpdate",
 			RTxnState:     config.COMMITTED,
-			RTValid:       time.Now().Add(-10 * time.Second),
+			RTValid:       time.Now().Add(-10 * time.Second).UnixMicro(),
 			RTLease:       time.Now().Add(-9 * time.Second),
 			RLinkedLen:    1,
 			RVersion:      "1",
 		}
 		conn.PutItem(dbItem.Key(), dbItem)
 
-		txn := NewTransactionWithSetup()
+		txn, _ := NewTransactionWithSetup()
 		txn.Start()
 		var item testutil.TestItem
 		err := txn.Read("redis", dbItem.Key(), &item)

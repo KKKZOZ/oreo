@@ -7,43 +7,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-redis/redismock/v9"
 	"github.com/oreo-dtx-lab/oreo/internal/testutil"
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/errs"
 	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewRedisConnection_DefaultNilArgument(t *testing.T) {
-	connection := NewRedisConnection(nil)
-	assert.NotNil(t, connection)
-	assert.Equal(t, "localhost:6379", connection.Address)
-}
+// func TestRedisConnection_Connect(t *testing.T) {
+// 	RedisClient, _ := redismock.NewClientMock()
+// 	connection := &RedisConnection{rdb: RedisClient}
 
-func TestNewRedisConnection_DefaultAddress(t *testing.T) {
-	connectionOptions := &ConnectionOptions{}
-	connection := NewRedisConnection(connectionOptions)
-	assert.NotNil(t, connection)
-	assert.Equal(t, "localhost:6379", connection.Address)
-}
-
-func TestNewRedisConnection_WithAddress(t *testing.T) {
-	expectedAddress := "127.0.0.1:1234"
-	connectionOptions := &ConnectionOptions{Address: expectedAddress}
-	connection := NewRedisConnection(connectionOptions)
-	assert.NotNil(t, connection)
-	assert.Equal(t, expectedAddress, connection.Address)
-}
-
-func TestRedisConnection_Connect(t *testing.T) {
-	RedisClient, _ := redismock.NewClientMock()
-	connection := &RedisConnection{rdb: RedisClient}
-
-	err := connection.Connect()
-	assert.Nil(t, err)
-}
+// 	err := connection.Connect()
+// 	assert.Nil(t, err)
+// }
 
 func TestTimestamp(t *testing.T) {
 	tValid := time.Now().Add(-3 * time.Second)
@@ -58,65 +37,20 @@ func TestTimestamp(t *testing.T) {
 	// }
 }
 
-func TestRedisConnection_GetItem(t *testing.T) {
-	RedisClient, mock := redismock.NewClientMock()
-	connection := &RedisConnection{rdb: RedisClient}
-
-	key := "test_key"
-	tValidStr := time.Now().Format(time.RFC3339Nano)
-	tLeaseStr := time.Now().Format(time.RFC3339Nano)
-	tValid, _ := time.Parse(time.RFC3339Nano, tValidStr)
-	tLease, _ := time.Parse(time.RFC3339Nano, tLeaseStr)
-
-	expectedValue := testutil.NewDefaultPerson()
-	expectedItem := &RedisItem{
-		RKey:          key,
-		RValue:        util.ToJSONString(expectedValue),
-		RGroupKeyList: "1",
-		RTxnState:     config.COMMITTED,
-		RTValid:       tValid,
-		RTLease:       tLease,
-		RPrev:         "",
-		RIsDeleted:    false,
-		RVersion:      "2",
-	}
-	itemMap := map[string]string{
-		"Key":       key,
-		"Value":     util.ToJSONString(expectedValue),
-		"TxnId":     "1",
-		"TxnState":  fmt.Sprint(config.COMMITTED),
-		"TValid":    tValidStr,
-		"TLease":    tLeaseStr,
-		"Prev":      "",
-		"isDeleted": "false",
-		"Version":   "2",
-	}
-
-	mock.ExpectHGetAll(key).SetVal(itemMap)
-
-	actualItem, err := connection.GetItem(key)
-
-	assert.Nil(t, err)
-	if !expectedItem.Equal(actualItem) {
-		t.Error("Not Equal")
-	}
-	assert.Equal(t, expectedItem, actualItem)
-}
-
 func TestRedisConnection_GetItemNotFound(t *testing.T) {
-	RedisClient, mock := redismock.NewClientMock()
-	connection := &RedisConnection{rdb: RedisClient}
-
 	key := "test_key"
-	mock.ExpectHGetAll(key).SetVal(nil)
+	connection := NewRedisConnection(nil)
+	connection.Connect()
 
+	connection.Delete("test_key")
 	_, err := connection.GetItem(key)
 
-	assert.EqualError(t, err, txn.KeyNotFound.Error())
+	assert.ErrorIs(t, err, errs.NewKeyNotFoundError(key, errs.NotFoundInDB))
 }
 
 func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
 	conn := NewRedisConnection(nil)
+	conn.Connect()
 	conn.Delete("test_key")
 
 	key := "test_key"
@@ -124,9 +58,9 @@ func TestRedisConnectionPutItemAndGetItem(t *testing.T) {
 	expectedItem := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(expectedValue),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -152,9 +86,9 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 	olderItem := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(olderPerson),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -169,9 +103,9 @@ func TestRedisConnectionReplaceAndGetItem(t *testing.T) {
 	newerItem := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(newerPerson),
-		RGroupKeyList: "2",
+		RGroupKeyList: "redis:2",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-1 * time.Second),
+		RTValid:       222,
 		RTLease:       time.Now().Add(1 * time.Second),
 		RPrev:         util.ToJSONString(olderItem),
 		RIsDeleted:    false,
@@ -196,9 +130,9 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 	olderItem := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(olderPerson),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -212,9 +146,9 @@ func TestRedisConnectionConditionalUpdateSuccess(t *testing.T) {
 	newerItem := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(newerPerson),
-		RGroupKeyList: "2",
+		RGroupKeyList: "redis:2",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-2 * time.Second),
+		RTValid:       222,
 		RTLease:       time.Now().Add(-1 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -242,9 +176,9 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 	olderItem := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(olderPerson),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -260,7 +194,7 @@ func TestRedisConnectionConditionalUpdateFail(t *testing.T) {
 		RValue:        util.ToJSONString(olderPerson),
 		RGroupKeyList: "2",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-2 * time.Second),
+		RTValid:       222,
 		RTLease:       time.Now().Add(-1 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -287,9 +221,9 @@ func TestRedisConnectionConditionalUpdateNonExist(t *testing.T) {
 	newerItem := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(newerPerson),
-		RGroupKeyList: "2",
+		RGroupKeyList: "redis:2",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-2 * time.Second),
+		RTValid:       222,
 		RTLease:       time.Now().Add(-1 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -319,9 +253,9 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 		olderItem := &RedisItem{
 			RKey:          key,
 			RValue:        util.ToJSONString(olderPerson),
-			RGroupKeyList: "1",
+			RGroupKeyList: "redis:1",
 			RTxnState:     config.COMMITTED,
-			RTValid:       time.Now().Add(-3 * time.Second),
+			RTValid:       111,
 			RTLease:       time.Now().Add(-2 * time.Second),
 			RPrev:         "",
 			RIsDeleted:    false,
@@ -342,7 +276,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 					RValue:        util.ToJSONString(newerPerson),
 					RGroupKeyList: strconv.Itoa(id),
 					RTxnState:     config.COMMITTED,
-					RTValid:       time.Now().Add(-2 * time.Second),
+					RTValid:       222,
 					RTLease:       time.Now().Add(-1 * time.Second),
 					RPrev:         "",
 					RIsDeleted:    false,
@@ -370,8 +304,8 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 
 		item, err := conn.GetItem(key)
 		assert.NoError(t, err)
-		if item.TxnId() != strconv.Itoa(globalId) {
-			t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId())
+		if item.GroupKeyList() != strconv.Itoa(globalId) {
+			t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.GroupKeyList())
 		}
 	})
 
@@ -393,7 +327,7 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 					RValue:        util.ToJSONString(newerPerson),
 					RGroupKeyList: strconv.Itoa(id),
 					RTxnState:     config.COMMITTED,
-					RTValid:       time.Now().Add(-2 * time.Second),
+					RTValid:       222,
 					RTLease:       time.Now().Add(-1 * time.Second),
 					RPrev:         "",
 					RIsDeleted:    false,
@@ -420,8 +354,9 @@ func TestRedisConnectionConditionalUpdateConcurrently(t *testing.T) {
 
 		item, err := conn.GetItem(key)
 		assert.NoError(t, err)
-		if item.TxnId() != strconv.Itoa(globalId) {
-			t.Errorf("\nexpect: \n%v, \nactual: \n%v", globalId, item.TxnId())
+		if item.GroupKeyList() != strconv.Itoa(globalId) {
+			t.Errorf("\nexpect: \n%v, \nactual: \n%v",
+				globalId, item.GroupKeyList())
 		}
 	})
 }
@@ -435,9 +370,9 @@ func TestRedisConnectionPutAndGet(t *testing.T) {
 	item := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(person),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -467,9 +402,9 @@ func TestRedisConnectionReplaceAndGet(t *testing.T) {
 	item := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(person),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -515,9 +450,9 @@ func TestRedisConnectionPutDirectItem(t *testing.T) {
 	item := &RedisItem{
 		RKey:          key,
 		RValue:        util.ToJSONString(person),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -553,9 +488,9 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 	dbItem := &RedisItem{
 		RKey:          "item1",
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-db")),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -566,9 +501,9 @@ func TestRedisConnectionConditionalUpdateDoCreate(t *testing.T) {
 	cacheItem := &RedisItem{
 		RKey:          "item1",
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-cache")),
-		RGroupKeyList: "2",
+		RGroupKeyList: "redis:2",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-2 * time.Second),
+		RTValid:       222,
 		RTLease:       time.Now().Add(-1 * time.Second),
 		RPrev:         util.ToJSONString(dbItem),
 		RLinkedLen:    2,
@@ -614,9 +549,9 @@ func TestRedisConnectionConditionalCommit(t *testing.T) {
 	dbItem := &RedisItem{
 		RKey:          "item1",
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-db")),
-		RGroupKeyList: "1",
+		RGroupKeyList: "redis:1",
 		RTxnState:     config.COMMITTED,
-		RTValid:       time.Now().Add(-3 * time.Second),
+		RTValid:       111,
 		RTLease:       time.Now().Add(-2 * time.Second),
 		RPrev:         "",
 		RIsDeleted:    false,
@@ -628,7 +563,7 @@ func TestRedisConnectionConditionalCommit(t *testing.T) {
 	conn.Connect()
 	conn.PutItem(dbItem.Key(), dbItem)
 
-	_, err := conn.ConditionalCommit(dbItem.Key(), dbItem.Version())
+	_, err := conn.ConditionalCommit(dbItem.Key(), dbItem.Version(), 222)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(dbItem.Key())

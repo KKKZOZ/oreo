@@ -508,9 +508,6 @@ func (t *Transaction) Abort() error {
 // }
 
 func (t *Transaction) CreateGroupKeyFromItem(item DataItem, txnState config.State) int {
-	// if config.Debug.DebugMode {
-	// 	time.Sleep(config.GetMaxDebugLatency())
-	// }
 	return t.groupKeyMaintainer.CreateGroupKeyList(item, txnState)
 }
 
