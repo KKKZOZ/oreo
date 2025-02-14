@@ -1,12 +1,15 @@
 package client
 
 import (
+	"benchmark/pkg/benconfig"
 	"benchmark/pkg/errrecord"
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"sync"
 	"time"
 
@@ -149,6 +152,7 @@ func (c *Client) RunBenchmark() {
 	}
 
 	c.wl.DisplayCheckResult()
+	c.getCacheState()
 
 	// time.Sleep(5 * time.Second)
 	// if c.wp.DBName == "oreo" {
@@ -191,6 +195,43 @@ func (c *Client) RunBenchmark() {
 	// 	}
 	// 	amountMap["oreo-mongo"] = curTotalAmount
 	// }
+}
+
+func (c *Client) getCacheState() {
+
+	fmt.Println("----------------------------------")
+	set := make(map[string]struct{})
+
+	for _, addresses := range benconfig.ExecutorAddressMap {
+		for _, address := range addresses {
+			set[address] = struct{}{}
+		}
+	}
+
+	var executorUrlList []string
+
+	for address := range set {
+		executorUrlList = append(executorUrlList, address)
+	}
+
+	for _, url := range executorUrlList {
+		tar_url := url + "/cache"
+		resp, err := http.Get(tar_url)
+		if err != nil {
+			fmt.Printf("Failed to send GET request to %s: %v\n", tar_url, err)
+			continue
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Printf("Failed to read response body from %s: %v\n", tar_url, err)
+			continue
+		}
+
+		fmt.Printf("[%s]: %s\n", tar_url, string(body))
+		_, _ = http.Post(tar_url, "application/json", nil)
+	}
 }
 
 // genDBmap generates a map of database instances

@@ -1,0 +1,11 @@
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY ./executor /app/
+
+RUN mkdir -p /app/config
+
+RUN chmod +x /app/executor
+
+ENTRYPOINT ["/app/executor", "-p", "8001"]
