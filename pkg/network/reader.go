@@ -166,7 +166,7 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 
 			// r.invisibleSet[item.Key()] = true
 
-			// if prev is empty
+			// // if prev is empty
 			// if item.Prev() == "" {
 			// 	return nil, txn.Normal, errors.New("key not found")
 			// }

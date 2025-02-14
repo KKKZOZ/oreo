@@ -29,3 +29,5 @@ design-note.md
 # Build output and binaries
 /benchmarks/cmd/cmd
 /component/component
+
+executor/executor
