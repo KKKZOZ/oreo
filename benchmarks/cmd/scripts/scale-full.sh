@@ -52,7 +52,7 @@ wl_type=scale
 tar_dir=./data/scale
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
-bc=./config/BenConfig_ycsb-dev.yaml
+bc=./config/BenConfig_ycsb.yaml
 
 log() {
     local color=${2:-$NC}
@@ -101,9 +101,9 @@ get_metrics() {
 
     error_cnt=0
 
-    error_cnt=$((error_cnt + $(rg 'key not found in given RecordLen' "$file" | rg -o '[0-9]+' || echo 0)))
+    # error_cnt=$((error_cnt + $(rg 'key not found in given RecordLen' "$file" | rg -o '[0-9]+' || echo 0)))
 
-    error_cnt=$((error_cnt + $(rg 'key not found prev is empty' "$file" | rg -o '[0-9]+' || echo 0)))
+    # error_cnt=$((error_cnt + $(rg 'key not found prev is empty' "$file" | rg -o '[0-9]+' || echo 0)))
 
     echo "$duration $latency $error_cnt"
 
@@ -198,7 +198,7 @@ main() {
     mkdir -p "$tar_dir"
 
     # Create/overwrite results file with header
-    # echo "thread,operation,native-p,native-p_p99,native-p_err,cg-p,cg-p_p99,cg-p_err,oreo-p,oreo-p_p99,oreo-p_err" >"$results_file"
+    # echo "thread,operation,oreo,oreo-p,oreo-p_err" >"$results_file"
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
 
     log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $GREEN
@@ -247,7 +247,7 @@ main() {
         # read -r cg cg_p99 cg_err <<<"$(get_metrics "cg" "p-$thread")"
         read -r oreo oreo_p99 oreo_err <<<"$(get_metrics "oreo" "p-$thread")"
 
-        echo "$thread,$operation,${oreo},${oreo_p99},${oreo_err},${oreo},${oreo_p99},${oreo_err}" >>"$results_file"
+        echo "$thread,$operation,${oreo},${oreo_p99},${oreo_err}" >>"$results_file"
 
         # printf "native-p: %s\nnative-p_p99: %s\nnative-p_err: %s\n" ${native} ${native_p99} ${native_err}
         # printf "cg-p: %s\ncg-p_p99: %s\ncg-p_err: %s\n" ${cg} ${cg_p99} ${cg_err}

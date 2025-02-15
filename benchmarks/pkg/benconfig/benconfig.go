@@ -1,6 +1,10 @@
 package benconfig
 
-import "time"
+import (
+	"time"
+
+	"github.com/oreo-dtx-lab/oreo/pkg/network"
+)
 
 var (
 	ExecutorAddressMap = map[string][]string{"ALL": {"localhost:8000"}}
@@ -8,6 +12,7 @@ var (
 	ZipfianConstant    = 0.9
 	Latency            = 10 * time.Millisecond
 	MaxLoadBatchSize   = 100
+	Client             = network.NewClient(ExecutorAddressMap)
 )
 
 type BenchmarkConfig struct {

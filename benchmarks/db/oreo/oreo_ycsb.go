@@ -11,7 +11,6 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/tikv"
-	"github.com/oreo-dtx-lab/oreo/pkg/network"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
@@ -54,7 +53,8 @@ func (r *OreoYCSBDatastore) Start() error {
 	// oracle := timesource.NewLocalTimeSource()
 	// oracle := timesource.NewSimpleTimeSource()
 	if r.mode == "oreo" {
-		client := network.NewClient(benconfig.ExecutorAddressMap)
+		client := benconfig.Client
+		// client := network.NewClient(benconfig.ExecutorAddressMap)
 		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {
 		txn1 = txn.NewTransactionWithOracle(oracle)

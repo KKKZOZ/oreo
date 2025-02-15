@@ -2,16 +2,30 @@
 executor_address_map:
   "Redis":
     - "http://10.206.206.3:8001"
+    - "http://10.206.206.3:8002"
+    - "http://10.206.206.3:8003"
+    - "http://10.206.206.3:8004"
+    - "http://10.206.206.3:8005"
+    - "http://10.206.206.3:8006"
+    - "http://10.206.206.3:8007"
+    - "http://10.206.206.3:8008"
   "MongoDB1":
     - "http://10.206.206.3:8001"
   "MongoDB2":
     - "http://10.206.206.4:8001"
+    - "http://10.206.206.4:8002"
+    - "http://10.206.206.4:8003"
+    - "http://10.206.206.4:8004"
+    - "http://10.206.206.4:8005"
+    - "http://10.206.206.4:8006"
+    - "http://10.206.206.4:8007"
+    - "http://10.206.206.4:8008"
   "Cassandra":
     - "http://10.206.206.4:8001"
 
 # deploy time oracle on node2
 time_oracle_url: "http://10.206.206.3:8010"
-zipfian_constant: 0.99
+zipfian_constant: 0.9
 latency_value: 10
 
 # Redis configuration

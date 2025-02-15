@@ -17,6 +17,7 @@ import (
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	cfg "github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/oreo-dtx-lab/oreo/pkg/network"
 )
 
 var (
@@ -474,6 +475,7 @@ func loadConfig() *workload.WorkloadParameter {
 		return nil
 	}
 	benconfig.MaxLoadBatchSize = wp.MaxLoadBatchSize
+	benconfig.Client = network.NewClient(benconfig.ExecutorAddressMap)
 
 	return wp
 }
