@@ -37,12 +37,12 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [ $wl_mode == "ycsb" ]; then
-    bc=BenConfig_ycsb-dev.yaml
+    bc=BenConfig_ycsb.yaml
 else
     bc=BenConfig_realistic.yaml
 fi
 
-cd /home/liujinyi/oreo-ben || handle_error "oreo-ben directory not found"
+cd ~/oreo-ben || handle_error "oreo-ben directory not found"
 
 ls ./config
 

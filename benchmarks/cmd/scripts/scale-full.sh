@@ -23,8 +23,8 @@ skip=false
 declare -g executor_pid
 declare -g time_oracle_pid
 remote=false
-# node_list=(node2 node3)
-node_list=(s1-ljy s3-ljy)
+node_list=(node2 node3)
+# node_list=(s1-ljy s3-ljy)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -162,8 +162,8 @@ deploy_local() {
 
 deploy_remote() {
     log "Setup timeoracle on node 2" $GREEN
-    # ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
-    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh "
+    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
+    # ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh "
 
     # for node in "${node_list[@]}"; do
     #     log "Setup $node" $GREEN
@@ -172,7 +172,7 @@ deploy_remote() {
 
     for node in "${node_list[@]}"; do
         log "Setup $node" $GREEN
-        ssh -t $node "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor-docker.sh -l -p 8001 -wl ycsb -db $db_combinations"
+        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor-docker.sh -l -p 8001 -wl ycsb -db $db_combinations"
     done
 }
 

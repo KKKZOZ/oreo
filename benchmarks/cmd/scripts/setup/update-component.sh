@@ -13,7 +13,7 @@ handle_error() {
 
 # mv cmd ./bin || handle_error "Failed to move cmd to bin"
 
-PROJECT_ROOT="$(cd "$(dirname "$0")" && cd ../../.. && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")" && cd ../../../.. && pwd)"
 
 components=("executor" "timeoracle")
 
