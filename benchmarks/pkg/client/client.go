@@ -123,6 +123,7 @@ func (c *Client) RunBenchmark() {
 	// 	fmt.Printf("Check record distribution\n")
 	// 	c.wl.DisplayCheckResult()
 	// }
+	c.getCacheState()
 
 	if !c.wl.NeedPostCheck() {
 		return
@@ -152,7 +153,6 @@ func (c *Client) RunBenchmark() {
 	}
 
 	c.wl.DisplayCheckResult()
-	c.getCacheState()
 
 	// time.Sleep(5 * time.Second)
 	// if c.wp.DBName == "oreo" {

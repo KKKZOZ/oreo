@@ -15,6 +15,7 @@ social/
 ycsb/
 read/
 length/
+oreo-ben/
 
 # Executables and binaries
 iot-load
@@ -24,6 +25,7 @@ ycsb-load
 opt-load
 read-load
 length-load
+scale-load
 
 executor
 timeoracle

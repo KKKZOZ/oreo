@@ -25,6 +25,7 @@ wl_mode=
 declare -g executor_pid
 declare -g time_oracle_pid
 node_list=(node2 node3 node4 node5)
+# node_list=(s1-ljy s3-ljy)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -169,6 +170,10 @@ main() {
     # check if config file exists
     if [ ! -f "$config_file" ]; then
         handle_error "Config file $config_file does not exist"
+    fi
+
+    if [ ! -f "$bc" ]; then
+        handle_error "Config file $bc does not exist"
     fi
 
     echo "Building the benchmark executable"

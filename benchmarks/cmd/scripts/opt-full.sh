@@ -180,6 +180,10 @@ main() {
         handle_error "Config file $config_file does not exist"
     fi
 
+    if [ ! -f "$bc" ]; then
+        handle_error "Config file $bc does not exist"
+    fi
+
     echo "Building the benchmark executable"
     go build .
     mv cmd ./bin

@@ -23,7 +23,8 @@ skip=false
 declare -g executor_pid
 declare -g time_oracle_pid
 remote=false
-node_list=(node2 node3)
+# node_list=(node2 node3)
+node_list=(s1-ljy s3-ljy)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -48,10 +49,10 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 wl_type=scale
-tar_dir=./scale/length
+tar_dir=./data/scale
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
-bc=./BenConfig_ycsb.yaml
+bc=./config/BenConfig_ycsb-dev.yaml
 
 log() {
     local color=${2:-$NC}
@@ -82,7 +83,7 @@ run_workload() {
 }
 
 load_data() {
-    for profile in native cg oreo; do
+    for profile in oreo; do
         log "Loading to ${wl_type} $profile" $BLUE
         go run . -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
@@ -161,11 +162,17 @@ deploy_local() {
 
 deploy_remote() {
     log "Setup timeoracle on node 2" $GREEN
-    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
+    # ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
+    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh "
+
+    # for node in "${node_list[@]}"; do
+    #     log "Setup $node" $GREEN
+    #     ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
+    # done
 
     for node in "${node_list[@]}"; do
         log "Setup $node" $GREEN
-        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
+        ssh -t $node "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-executor-docker.sh -l -p 8001 -wl ycsb -db $db_combinations"
     done
 }
 
@@ -175,6 +182,10 @@ main() {
     # check if config file exists
     if [ ! -f "$config_file" ]; then
         handle_error "Config file $config_file does not exist"
+    fi
+
+    if [ ! -f "$bc" ]; then
+        handle_error "Config file $bc does not exist"
     fi
 
     if [ $skip = false ]; then
@@ -232,14 +243,14 @@ main() {
         output="$tar_dir/$wl_type-$wl_mode-$db_combinations-oreo-p-$thread.txt"
         run_workload "run" "oreo" "$thread" "$output" "p"
 
-        read -r native native_p99 native_err <<<"$(get_metrics "native" "p-$thread")"
-        read -r cg cg_p99 cg_err <<<"$(get_metrics "cg" "p-$thread")"
+        # read -r native native_p99 native_err <<<"$(get_metrics "native" "p-$thread")"
+        # read -r cg cg_p99 cg_err <<<"$(get_metrics "cg" "p-$thread")"
         read -r oreo oreo_p99 oreo_err <<<"$(get_metrics "oreo" "p-$thread")"
 
         echo "$thread,$operation,${oreo},${oreo_p99},${oreo_err},${oreo},${oreo_p99},${oreo_err}" >>"$results_file"
 
-        printf "native-p: %s\nnative-p_p99: %s\nnative-p_err: %s\n" ${native} ${native_p99} ${native_err}
-        printf "cg-p: %s\ncg-p_p99: %s\ncg-p_err: %s\n" ${cg} ${cg_p99} ${cg_err}
+        # printf "native-p: %s\nnative-p_p99: %s\nnative-p_err: %s\n" ${native} ${native_p99} ${native_err}
+        # printf "cg-p: %s\ncg-p_p99: %s\ncg-p_err: %s\n" ${cg} ${cg_p99} ${cg_err}
         printf "oreo-p: %s\noreo-p_p99: %s\noreo-p_err: %s\n" ${oreo} ${oreo_p99} ${oreo_err}
 
         # echo "$thread,$operation,$opt1_duration,$opt2_duration,$opt3_duration,$opt4_duration,$opt1_p99,$opt2_p99,$opt3_p99,$opt4_p99,$opt1_ratio,$opt2_ratio,$opt3_ratio,$opt4_ratio" >>"$results_file"
