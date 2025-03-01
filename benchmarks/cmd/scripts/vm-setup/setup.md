@@ -208,8 +208,10 @@ rsync -avP root@49.233.36.106:~/oreo ~/Projects/oreo2
 - Setup
 
 ```shell
+# Node 2
 ./ycsb-setup.sh MongoDB1
-./ycsb-setup.sh Redis
+# Node 3
+./ycsb-setup.sh MongoDB2
 
 ```
 
@@ -278,6 +280,7 @@ docker volume prune
 
 ```shell
 ./opt-setup.sh -id 2
+./opt-setup.sh -id 3
 ```
 
 - Run
@@ -296,6 +299,7 @@ docker volume prune
 
 ```shell
 ./read-setup.sh -id 2
+./read-setup.sh -id 3
 ```
 
 - Run

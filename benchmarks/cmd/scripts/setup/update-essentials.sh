@@ -9,7 +9,7 @@ main(){
 
     cp ./scripts/setup/* ./oreo-ben/
     cp ./config/* ./oreo-ben/config
-    cp ./bin/executor ./bin/timeoracle ./bin/oreo-executor-image.tar.gz ./oreo-ben
+    cp ./bin/executor ./bin/cassandra_util ./bin/timeoracle ./bin/oreo-executor-image.tar.gz ./oreo-ben
 
     tar -czf ./oreo-ben.tar.gz ./oreo-ben
 

@@ -42,9 +42,9 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [ $wl_mode == "ycsb" ]; then
-    bc=./BenConfig_ycsb.yaml
+    bc=./config/BenConfig_ycsb.yaml
 else
-    bc=./BenConfig_realistic.yaml
+    bc=./config/BenConfig_realistic.yaml
 fi
 
 kill_process_on_port() {

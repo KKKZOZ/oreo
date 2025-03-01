@@ -13,13 +13,14 @@ timeoracle_port=8010
 thread_load=50
 threads=(8 16 32 48 64 80 96)
 round_interval=5
-bc=./BenConfig_realistic.yaml
+bc=./config/BenConfig_realistic.yaml
 
 wl_type=
 verbose=false
 remote=false
 skip=false
-node_list=(node2 node3 node4 node5)
+# node_list=(node2 node3 node4 node5)
+node_list=(node2 node3)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do

@@ -44,6 +44,6 @@ esac
 echo "Detected OS: $os ($go_os), architecture: $arch ($go_arch)"
 
 GOOS=$go_os GOARCH=$go_arch CGO_ENABLED=0 go build -ldflags="-w -s" .
-mv util ../../../../../benchmarks/cmd/scripts/cassandra_util
+mv util ../../../../../benchmarks/cmd/bin/cassandra_util
 
 echo "Build complete for $go_os/$go_arch"

@@ -24,7 +24,7 @@ wl_mode=
 
 declare -g executor_pid
 declare -g time_oracle_pid
-node_list=(node2 node3 node4 node5)
+node_list=(node2 node3)
 # node_list=(s1-ljy s3-ljy)
 PASSWORD=kkkzoz
 
@@ -57,7 +57,7 @@ wl_type=ycsb
 tar_dir=./data/ycsb
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
-bc=./BenConfig_ycsb.yaml
+bc=./config/BenConfig_ycsb.yaml
 
 log() {
     local color=${2:-$NC}
