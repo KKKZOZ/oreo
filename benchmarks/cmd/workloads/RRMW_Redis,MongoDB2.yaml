@@ -1,5 +1,5 @@
 # Total number of records to be generated
-recordcount: 10000
+recordcount: 1000000
 max_load_batch_size: 100
 
 # Total number of operations to be performed

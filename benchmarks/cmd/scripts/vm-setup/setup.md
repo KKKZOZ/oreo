@@ -252,6 +252,8 @@ docker volume prune
 
 ```shell
 ./realistic-setup.sh -wl social -id 2
+./realistic-setup.sh -wl social -id 3
+./realistic-setup.sh -wl social -id 4
 ```
 
 - Run
@@ -266,6 +268,9 @@ docker volume prune
 
 ```shell
 ./realistic-setup.sh -wl order -id 2
+./realistic-setup.sh -wl order -id 3
+./realistic-setup.sh -wl order -id 4
+./realistic-setup.sh -wl order -id 5
 ```
 
 - Run
@@ -287,6 +292,9 @@ docker volume prune
 
 > 注意查看配置文件中的 TxnOperationGroup, zipfian 等参数
 
+- TxnOperationGroup = 8
+- zipfian_constant  = 0.8
+
 ```shell
 ./opt-full.sh -wl RMW -v -r
 
@@ -304,6 +312,12 @@ docker volume prune
 
 - Run
 
+> 注意查看配置文件中的 TxnOperationGroup, zipfian 等参数
+> 因为在 OPT 部分修改过
+
+- TxnOperationGroup = 6
+- zipfian_constant  = 0.9
+
 ```shell
 ./read-full.sh -wl RMW -v -r
 
@@ -312,7 +326,28 @@ docker volume prune
 
 修改 `read-full.sh`，只运行 `readStrategy=p` 的部分，手动修改 `Chain Length`
 
-- cache 数据
+
+### Scalability
+
+> 需要换服务器 32 vcpu, 3 台
+
+#### Vertical
+
+```shell
+./scale-full.sh -wl RMW -v -r
+```
+
+
+```shell
+docker update --cpus=1 executor
+```
+
+
+#### Horizontal
+
+```shell
+./scale-full.sh -wl RMW -v -r
+```
 
 ```shell
 
