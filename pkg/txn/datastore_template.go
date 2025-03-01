@@ -487,77 +487,78 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 // Finally, it returns the last popped DataItem as the truncated DataItem.
 //
 // If the length of the linked list is less than or equal to the maximum record length, it returns the input DataItem as is.
-func (r *Datastore) truncate(newItem DataItem) (DataItem, error) {
-	maxLen := config.Config.MaxRecordLength
+func (r *Datastore) truncate(item DataItem, targetLen int) (DataItem, error) {
 
-	if newItem.LinkedLen() > maxLen {
-		stack := util.NewStack[DataItem]()
-		stack.Push(newItem)
-		curItem := &newItem
-		for i := 1; i <= maxLen-1; i++ {
-			preItem, err := r.getPrevItem(*curItem)
-			if err != nil {
-				return nil, errors.New("Unmarshal error: " + err.Error())
-			}
-			curItem = &preItem
-			stack.Push(*curItem)
+	if item.LinkedLen() <= targetLen {
+		return item, nil
+	}
+
+	stack := util.NewStack[DataItem]()
+	stack.Push(item)
+	curItem := &item
+
+	for i := 1; i <= targetLen-1; i++ {
+		preItem, err := r.getPrevItem(*curItem)
+		if err != nil {
+			return nil, errors.New("Unmarshal error: " + err.Error())
 		}
+		curItem = &preItem
+		stack.Push(*curItem)
+	}
 
-		tarItem, err := stack.Pop()
+	tarItem, err := stack.Pop()
+	if err != nil {
+		return nil, errors.New("Pop error: " + err.Error())
+	}
+	tarItem.SetPrev("")
+	tarItem.SetLinkedLen(1)
+
+	for !stack.IsEmpty() {
+		item, err := stack.Pop()
 		if err != nil {
 			return nil, errors.New("Pop error: " + err.Error())
 		}
-		tarItem.SetPrev("")
-		tarItem.SetLinkedLen(1)
-
-		for !stack.IsEmpty() {
-			item, err := stack.Pop()
-			if err != nil {
-				return nil, errors.New("Pop error: " + err.Error())
-			}
-			bs, err := r.se.Serialize(tarItem)
-			if err != nil {
-				return nil, errors.New("Serialize error: " + err.Error())
-			}
-			item.SetPrev(string(bs))
-			item.SetLinkedLen(tarItem.LinkedLen() + 1)
-			tarItem = item
+		bs, err := r.se.Serialize(tarItem)
+		if err != nil {
+			return nil, errors.New("Serialize error: " + err.Error())
 		}
-		return tarItem, nil
-	} else {
-		return newItem, nil
+		item.SetPrev(string(bs))
+		item.SetLinkedLen(tarItem.LinkedLen() + 1)
+		tarItem = item
 	}
+	return tarItem, nil
+
 }
 
 // updateMetadata updates the metadata of a DataItem by comparing it with the oldItem.
-//
-// If the oldItem is empty, it sets the LinkedLen of the newItem to 1.
-// Otherwise, it increments the LinkedLen of the newItem by 1 and sets the Prev and Version fields based on the oldItem.
-//
-// It then truncates the record using the truncate method and sets the TxnState, TValid, and TLease fields of the newItem.
-// Finally, it returns the updated newItem and any error that occurred during the process.
 func (r *Datastore) updateMetadata(newItem DataItem, oldItem DataItem) (DataItem, error) {
+
+	maxLen := config.Config.MaxRecordLength
+
 	if oldItem == nil {
 		newItem.SetLinkedLen(1)
-	} else {
-		newItem.SetLinkedLen(oldItem.LinkedLen() + 1)
-		bs, err := r.se.Serialize(oldItem)
-		if err != nil {
-			return nil, err
-		}
-		newItem.SetPrev(string(bs))
-		newItem.SetVersion(oldItem.Version())
+		newItem.SetTxnState(config.PREPARED)
+		newItem.SetTValid(r.Txn.TxnCommitTime)
+		// TODO: time.Now() is temporary
+		newItem.SetTLease(time.Now().Add(config.Config.LeaseTime))
+		return newItem, nil
 	}
-
-	// truncate the record
-	newItem, err := r.truncate(newItem)
+	// 提前将 oldItem 截断到 maxLen-1
+	truncatedOld, err := r.truncate(oldItem, maxLen-1)
 	if err != nil {
 		return nil, err
 	}
 
+	// 直接合并截断后的 oldItem
+	newItem.SetLinkedLen(truncatedOld.LinkedLen() + 1)
+	bs, err := r.se.Serialize(truncatedOld)
+	if err != nil {
+		return nil, err
+	}
+	newItem.SetPrev(string(bs))
+	newItem.SetVersion(truncatedOld.Version())
 	newItem.SetTxnState(config.PREPARED)
 	newItem.SetTValid(r.Txn.TxnCommitTime)
-	// TODO: time.Now() is temporary
 	newItem.SetTLease(time.Now().Add(config.Config.LeaseTime))
 	return newItem, nil
 }

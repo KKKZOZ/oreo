@@ -16,11 +16,11 @@ mkdir -p ~/.ssh
 echo "Configuring passwordless login to public IP..."
 sshpass -p "${PASSWORD}" ssh-copy-id -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519.pub root@${PUBLIC_IP}
 scp ~/.ssh/id_ed25519 root@${PUBLIC_IP}:~/.ssh/
-scp ~/go1.23.3.linux-amd64.tar.gz ~/.tmux.conf root@${PUBLIC_IP}:~/
 
 # 2. 登录并安装必要软件
 echo "Installing required software..."
-ssh root@${PUBLIC_IP} <<'EOF'
+ssh root@${PUBLIC_IP} <<EOF
+export PASSWORD="${PASSWORD}"
 yum install -y docker-ce git ripgrep fish tmux sshpass
 systemctl start docker
 
@@ -52,6 +52,7 @@ git config --global user.name "KKKZOZ"
 git clone git@github.com:KKKZOZ/oreo.git --depth=1
 
 # 6. 安装 Golang
+scp ~/go1.23.3.linux-amd64.tar.gz ~/.tmux.conf root@${PUBLIC_IP}:~/
 rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.3.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 source ~/.bashrc
