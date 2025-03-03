@@ -145,11 +145,18 @@ deploy_local() {
 }
 
 deploy_remote() {
-    log "Setup timeoracle on node 2" $GREEN
+
+    if [ "$wl_type" = "iot" ]; then
+        node_list=(node2 node3)
+    elif [ "$wl_type" == "social" ]; then
+        node_list=(node2 node3 node4)
+    fi
+
+    log "Setup timeoracle on node 2" "$GREEN"
     ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
 
     for node in "${node_list[@]}"; do
-        log "Setup $node" $GREEN
+        log "Setup $node" "$GREEN"
         ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
     done
 }
@@ -172,7 +179,7 @@ main() {
         handle_error "Workload type is not provided"
     fi
 
-    log "Building the benchmark" $GREEN
+    log "Building the benchmark" "$GREEN"
     go build .
     mv cmd ./bin
 

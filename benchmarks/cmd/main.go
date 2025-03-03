@@ -117,7 +117,6 @@ func main() {
 	// 	warmUpHttpClient()
 	// }
 	// warmupTimeSourceClient()
-	displayBenchmarkInfo()
 
 	switch mode {
 	case "load":
@@ -133,11 +132,13 @@ func main() {
 			fmt.Printf("No support load mode for multi-ycsb\n")
 			return
 		}
+		displayBenchmarkInfo()
 		fmt.Println("Start to load data")
 		client.RunLoad()
 		fmt.Println("Load finished")
 	case "run":
 		wp.DoBenchmark = true
+		displayBenchmarkInfo()
 		fmt.Println("Start to run benchmark")
 		measurement.EnableWarmUp(false)
 		client.RunBenchmark()
