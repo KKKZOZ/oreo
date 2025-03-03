@@ -17,7 +17,7 @@ round_interval=2
 thread=0
 verbose=false
 wl_mode=
-db_combinations='Redis,MongoDB2'
+db_combinations='MongoDB1,Cassandra'
 skip=false
 
 declare -g executor_pid

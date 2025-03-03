@@ -330,22 +330,47 @@ docker volume prune
 
 > 需要换服务器 32 vcpu, 3 台
 
+```shell
+# Redis,MongoDB2
+# node 2
+./ycsb-setup.sh Redis
+
+# node 3
+./ycsb-setup.sh MongoDB2
+
+
+# MongoDB1,Cassandra
+# node 2
+./ycsb-setup.sh MongoDB1
+
+# node 3
+./ycsb-setup.sh Cassandra
+
+```
+
 #### Vertical
 
+> 注意如果直接启动的话, load data 这一步骤会非常慢, 建议先在 scale-full 脚本
+> 中的 deploy_remote 中把 `start-exeuctor-docker.sh` 的 `-l` 参数删掉
+> 数据加载完成后再加回来, 然后执行 `docker rm -f executor-8001`
+
+> 记得记录 Executor cpu usage
+
+
 ```shell
-./scale-full.sh -wl RMW -v -r
+./scale-full.sh -wl RMW -t 256 -v -r
 ```
 
 ```shell
-docker update --cpus=1 executor
-docker update --cpus=2 executor
-docker update --cpus=4 executor
-docker update --cpus=6 executor
-docker update --cpus=8 executor
-docker update --cpus=10 executor
-docker update --cpus=12 executor
-docker update --cpus=14 executor
-docker update --cpus=16 executor
+docker update --cpus=1 executor-8001 && htop
+docker update --cpus=2 executor-8001 && htop
+docker update --cpus=4 executor-8001 && htop
+docker update --cpus=6 executor-8001 && htop
+docker update --cpus=8 executor-8001 && htop
+docker update --cpus=10 executor-8001 && htop
+docker update --cpus=12 executor-8001 && htop
+docker update --cpus=14 executor-8001 && htop
+docker update --cpus=16 executor-8001 && htop
 ```
 
 #### Horizontal
@@ -357,11 +382,11 @@ docker update --cpus=16 executor
 > 记得修改 `BenchmarkConfig_ycsb.yaml` 中的 executor_address_map
 
 ```shell
-./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8002
-./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8003
-./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8004
-./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8005
-./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8006
-./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8007
-./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8008
+./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8002
+./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8003
+./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8004
+./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8005
+./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8006
+./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8007
+./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8008
 ```
