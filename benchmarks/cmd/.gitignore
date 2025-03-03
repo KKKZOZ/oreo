@@ -4,6 +4,7 @@
 *.out
 *.prof
 *.png
+*.tar.gz
 
 tikv-deploy
 

@@ -326,7 +326,6 @@ docker volume prune
 
 修改 `read-full.sh`，只运行 `readStrategy=p` 的部分，手动修改 `Chain Length`
 
-
 ### Scalability
 
 > 需要换服务器 32 vcpu, 3 台
@@ -337,11 +336,17 @@ docker volume prune
 ./scale-full.sh -wl RMW -v -r
 ```
 
-
 ```shell
 docker update --cpus=1 executor
+docker update --cpus=2 executor
+docker update --cpus=4 executor
+docker update --cpus=6 executor
+docker update --cpus=8 executor
+docker update --cpus=10 executor
+docker update --cpus=12 executor
+docker update --cpus=14 executor
+docker update --cpus=16 executor
 ```
-
 
 #### Horizontal
 
@@ -349,6 +354,14 @@ docker update --cpus=1 executor
 ./scale-full.sh -wl RMW -v -r
 ```
 
-```shell
+> 记得修改 `BenchmarkConfig_ycsb.yaml` 中的 executor_address_map
 
+```shell
+./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8002
+./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8003
+./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8004
+./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8005
+./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8006
+./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8007
+./start-executor-docker -l  -wl ycsb -db Redis,MongoDB2 -p 8008
 ```
