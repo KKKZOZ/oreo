@@ -38,10 +38,10 @@ func NewOrderWorkload(wp *WorkloadParameter) *OrderWorkload {
 		taskChooser:        createTaskGenerator(wp),
 		wp:                 wp,
 		MongoDBNamespace1:  "products",
-		MongoDBNamespace2:  "reviews",
+		MongoDBNamespace2:  "inventory",
 		CassandraNamespace: "orders",
 		RedisNamespace:     "sessions",
-		KVRocksNamespace:   "inventory",
+		KVRocksNamespace:   "reviews",
 	}
 }
 
@@ -66,14 +66,14 @@ func (wl *OrderWorkload) OrderPlacement(ctx context.Context, db ycsb.Transaction
 
 	for i := 1; i <= orderNum; i++ {
 		product_id := wl.NextKeyName()
-		quantityStr, err := db.Read(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, product_id))
+		quantityStr, err := db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace2, product_id))
 		if err != nil {
 			return
 		}
 		quantity := util.ToInt(quantityStr)
 		if quantity > 0 {
 			quantity--
-			db.Update(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, product_id), util.ToString(quantity))
+			db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace2, product_id), util.ToString(quantity))
 
 			order_id := wl.NextKeyName()
 			db.Insert(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, order_id), wl.RandomValue())
@@ -89,13 +89,13 @@ func (wl *OrderWorkload) InventoryRestocking(ctx context.Context, db ycsb.Transa
 
 	db.Start()
 	product_id := wl.NextKeyName()
-	quantityStr, err := db.Read(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, product_id))
+	quantityStr, err := db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace2, product_id))
 	if err != nil {
 		return
 	}
 	quantity := util.ToInt(quantityStr)
 	quantity += 10
-	db.Update(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, product_id), util.ToString(quantity))
+	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace2, product_id), util.ToString(quantity))
 	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace1, product_id), wl.RandomValue())
 	db.Commit()
 }
@@ -127,7 +127,7 @@ func (wl *OrderWorkload) CustomerReview(ctx context.Context, db ycsb.Transaction
 	_, _ = db.Read(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, order_id))
 
 	// 更新产品评价信息
-	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace2, product_id), wl.RandomValue())
+	db.Update(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, product_id), wl.RandomValue())
 
 	// 更新会话信息
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, session_id), wl.RandomValue())
@@ -155,7 +155,7 @@ func (wl *OrderWorkload) Load(ctx context.Context, opCount int,
 			key := wl.NextKeyNameFromSequence()
 			txnDB.Insert(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespace, key), wl.RandomValue())
 			txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace1, key), wl.RandomValue())
-			txnDB.Insert(ctx, "KVRocks", fmt.Sprintf("%v:%v", wl.KVRocksNamespace, key), wl.RandomValue())
+			txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace2, key), wl.RandomValue())
 		}
 		err := txnDB.Commit()
 		if err != nil {
