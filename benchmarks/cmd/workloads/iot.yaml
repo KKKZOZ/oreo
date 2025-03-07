@@ -22,6 +22,6 @@ mongo1proportion: 0 # Proportion of operations on MongoDB instance 1
 mongo2proportion: 0 # Proportion of operations on MongoDB instance 2
 couchdbproportion: 0 # Proportion of operations on CouchDB
 
-task1proportion: 0.85 # Proportion of operations on task 1
-task2proportion: 0.1 # Proportion of operations on task 2
-task3proportion: 0.05 # Proportion of operations on task 3
+task1proportion: 0.6 # Proportion of operations on task 1
+task2proportion: 0.2 # Proportion of operations on task 2
+task3proportion: 0.2 # Proportion of operations on task 3

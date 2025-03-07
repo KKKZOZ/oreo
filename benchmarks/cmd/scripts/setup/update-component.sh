@@ -15,6 +15,8 @@ handle_error() {
 
 PROJECT_ROOT="$(cd "$(dirname "$0")" && cd ../../../.. && pwd)"
 
+mkdir -p "${PROJECT_ROOT}/benchmarks/cmd/bin"
+
 components=("executor" "timeoracle")
 
 for component in "${components[@]}"; do

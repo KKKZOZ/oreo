@@ -92,7 +92,7 @@ func main() {
 		cfg.Config.AsyncLevel = 2
 	}
 	cfg.Config.LeaseTime = 1000 * time.Millisecond
-	cfg.Config.MaxRecordLength = 4
+	cfg.Config.MaxRecordLength = 2
 
 	switch readStrategy {
 	case "p":

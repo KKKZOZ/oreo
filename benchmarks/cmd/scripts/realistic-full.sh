@@ -19,8 +19,8 @@ wl_type=
 verbose=false
 remote=false
 skip=false
-# node_list=(node2 node3 node4 node5)
-node_list=(node2 node3)
+node_list=(node2 node3 node4 node5)
+# node_list=(node2 node3)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do

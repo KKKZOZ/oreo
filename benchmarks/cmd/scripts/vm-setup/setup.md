@@ -213,6 +213,10 @@ rsync -avP root@49.233.36.106:~/oreo ~/Projects/oreo2
 # Node 3
 ./ycsb-setup.sh MongoDB2
 
+
+./ycsb-setup.sh Redis
+./ycsb-setup.sh Cassandra
+
 ```
 
 - Run

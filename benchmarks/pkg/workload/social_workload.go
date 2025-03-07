@@ -35,8 +35,8 @@ func NewSocialWorkload(wp *WorkloadParameter) *SocialWorkload {
 		Randomizer:              *NewRandomizer(wp),
 		taskChooser:             createTaskGenerator(wp),
 		wp:                      wp,
-		MongoDBNamespace:        "users",
-		CassandraNamespace:      "posts",
+		MongoDBNamespace:        "posts",
+		CassandraNamespace:      "users",
 		RedisNamespaceAnalytics: "analytics",
 		RedisNamespaceSession:   "session",
 	}
@@ -47,7 +47,7 @@ func (wl *SocialWorkload) ContentFeedRetrieval(ctx context.Context, db ycsb.Tran
 	db.Start()
 
 	post_id := wl.NextKeyName()
-	_, _ = db.Read(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, post_id))
+	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, post_id))
 	_, _ = db.Read(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, post_id))
 
 	db.Commit()
@@ -58,7 +58,7 @@ func (wl *SocialWorkload) ContentCreation(ctx context.Context, db ycsb.Transacti
 	db.Start()
 
 	post_id := wl.NextKeyName()
-	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, post_id), wl.RandomValue())
+	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, post_id), wl.RandomValue())
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, post_id), wl.RandomValue())
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, post_id), wl.RandomValue())
 
@@ -69,7 +69,7 @@ func (wl *SocialWorkload) ProfileUpdate(ctx context.Context, db ycsb.Transaction
 
 	db.Start()
 	user_id := wl.NextKeyName()
-	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, user_id), wl.RandomValue())
+	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, user_id), wl.RandomValue())
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, user_id), wl.RandomValue())
 	db.Commit()
 }
@@ -80,9 +80,9 @@ func (wl *SocialWorkload) UserInteraction(ctx context.Context, db ycsb.Transacti
 	post_id := wl.NextKeyName()
 	user_id := wl.NextKeyName()
 
-	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v:interactions", wl.CassandraNamespace, post_id), wl.RandomValue())
+	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v:interactions", wl.MongoDBNamespace, post_id), wl.RandomValue())
 
-	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v:activities", wl.MongoDBNamespace, user_id), wl.RandomValue())
+	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v:activities", wl.CassandraNamespace, user_id), wl.RandomValue())
 
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v:stats", wl.RedisNamespaceAnalytics, post_id), wl.RandomValue())
 
@@ -187,6 +187,8 @@ func (wl *SocialWorkload) NextTask() int64 {
 }
 
 func (wl *SocialWorkload) RandomValue() string {
-	value := wl.r.Intn(10000)
+	wl.mu.Lock()
+	defer wl.mu.Unlock()
+	value := wl.r.Intn(100000)
 	return util.ToString(value)
 }

@@ -12,7 +12,7 @@ executor_address_map:
 # deploy time oracle on node2
 time_oracle_url: "http://10.206.206.3:8010"
 zipfian_constant: 0.9
-latency_value: 5
+latency_value: 3
 
 # Redis configuration
 redis_addr: "10.206.206.4:6379"
