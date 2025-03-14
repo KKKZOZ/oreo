@@ -77,7 +77,7 @@ scp go1.23.3.linux-amd64.tar.gz .tmux.conf root@49.233.36.106:~/
 
 scp oreo.tar.gz root@49.233.36.106:~/
 
-scp jdk-17_linux-x64.tar.gz website-0.0.1-SNAPSHOT.jar root@49.233.36.106:~/
+scp jdk-17_linux-x64.tar.gz epoxy-3m2.jar root@49.233.36.106:~/
 ```
 
 2. 运行以下指令安装并运行 Docker
@@ -174,7 +174,7 @@ go env -w GOPROXY=https://goproxy.cn,direct
 
 - 安装 Java
 
-tar -xzvf jdk-17_linux-x64.tar.gz
+tar -xzf jdk-17_linux-x64.tar.gz
 
 export JAVA_HOME=/root/jdk-17.0.11
 

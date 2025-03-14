@@ -49,7 +49,7 @@ done
 
 wl_type=read
 tar_dir=./data/read
-config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
+config_file="./workloads/read/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
 bc=./config/BenConfig_ycsb.yaml
 

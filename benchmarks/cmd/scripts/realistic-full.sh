@@ -51,7 +51,7 @@ if [[ ! "$wl_type" =~ ^(iot|social|order)$ ]]; then
 fi
 
 tar_dir=./data/$wl_type
-config_file="./workloads/${wl_type}.yaml"
+config_file="./workloads/realistic/${wl_type}.yaml"
 results_file="$tar_dir/${wl_type}_benchmark_results.csv"
 
 log() {

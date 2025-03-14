@@ -51,7 +51,7 @@ done
 
 wl_type=opt
 tar_dir=./data/opt
-config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
+config_file="./workloads/opt/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
 bc=./config/BenConfig_ycsb.yaml
 

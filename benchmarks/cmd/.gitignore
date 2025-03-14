@@ -8,16 +8,6 @@
 
 tikv-deploy
 
-# Data folders
-opt/
-iot/
-order/
-social/
-ycsb/
-read/
-length/
-oreo-ben/
-
 # Executables and binaries
 iot-load
 social-load

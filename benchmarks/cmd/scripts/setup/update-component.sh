@@ -17,6 +17,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")" && cd ../../../.. && pwd)"
 
 mkdir -p "${PROJECT_ROOT}/benchmarks/cmd/bin"
 
+
 components=("executor" "timeoracle")
 
 for component in "${components[@]}"; do
@@ -26,6 +27,10 @@ for component in "${components[@]}"; do
 
     if ! bash compile-dev.sh; then
         handle_error "Failed to compile ${component}"
+    fi
+
+    if [[ "$component" == "executor" ]]; then
+        bash build-docker-image.sh
     fi
 
     echo "Successfully updated ${component}"
