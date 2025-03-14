@@ -98,7 +98,7 @@ ssh-keygen -t rsa
 ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.3
 ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.4
 ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.5
-ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.6
+ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.6 
 ```
 
 4. 设置 `~/.ssh/config`
@@ -161,9 +161,11 @@ git config --global user.name "KKKZOZ"
 ```shell
 rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.3.linux-amd64.tar.gz
 
-vim .bashrc
+# vim .bashrc
+# export PATH=$PATH:/usr/local/go/bin
 
-export PATH=$PATH:/usr/local/go/bin
+
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 
 source .bashrc
 
@@ -179,8 +181,7 @@ export JAVA_HOME=/root/jdk-17.0.11
 7. 执行 `setup.sh` 完成对其他服务器的配置
 
 ```shell
-cd oreo
-cd .xxx/cmd/scripts/setup
+cd oreo/benchmarks/cmd/scripts/vm-setup
 ./setup.sh
 ```
 
@@ -359,7 +360,6 @@ docker volume prune
 > 数据加载完成后再加回来, 然后执行 `docker rm -f executor-8001`
 
 > 记得记录 Executor cpu usage
-
 
 ```shell
 ./scale-full.sh -wl RMW -t 256 -v -r
