@@ -103,6 +103,8 @@ ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.6
 
 4. 设置 `~/.ssh/config`
 
+> vim ~/.ssh/config
+
 - 3 个节点
 
 ```config
@@ -146,7 +148,7 @@ Host node5
 
 ```
 
-5. Git Clone
+1. Git Clone
 
 ```shell
 git clone git@github.com:KKKZOZ/oreo.git --depth=1

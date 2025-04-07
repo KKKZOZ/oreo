@@ -23,6 +23,7 @@ elif [ "$db" == "MongoDB1" ]; then
         -e MONGO_INITDB_ROOT_USERNAME=admin \
         -e MONGO_INITDB_ROOT_PASSWORD=password \
         --restart=always \
+        -v /data/mongo1_data:/data/db \
         mongo
 elif [ "$db" == "MongoDB2" ]; then
     echo "Remove mongoDB2 container"
@@ -34,22 +35,30 @@ elif [ "$db" == "MongoDB2" ]; then
         -e MONGO_INITDB_ROOT_USERNAME=admin \
         -e MONGO_INITDB_ROOT_PASSWORD=password \
         --restart=always \
+        -v /data/mongo2_data:/data/db \
         mongo
 elif [ "$db" == "KVRocks" ]; then
     echo "Remove kv-rocks container"
     docker rm -f kvrocks
     echo "Create new kv-rocks container"
-    docker run --name kvrocks --restart=always -d -p 6666:6666 apache/kvrocks --bind 0.0.0.0 --requirepass password
+    docker run --name kvrocks --restart=always -d -p 6666:6666 -v /data/kvrocks_data:/data apache/kvrocks --bind 0.0.0.0 --requirepass password
 elif [ "$db" == "CouchDB" ]; then
     echo "Remove couchDB container"
     docker rm -f couch
     echo "Create new couchDB container"
-    docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -d couchdb
+    docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -v /data/couchdb_data:/opt/couchdb/data \ -d couchdb
 elif [ "$db" == "Cassandra" ]; then
     echo "Remove cassandra container"
     docker rm -f cassandra
     echo "Create new cassandra container"
-    docker run -d --name cassandra -p 9042:9042 cassandra
+    # docker run -d --name cassandra -p 9042:9042 cassandra
+    docker run -d \
+        --name cassandra -p 9042:9042 \
+        -v /data/cassandra_data:/var/lib/cassandra/data \
+        -v /data/cassandra_commitlog:/var/lib/cassandra/commitlog \
+        -v /data/cassandra_saved_caches:/var/lib/cassandra/saved_caches \
+        cassandra
+
     if [ ! -f "cassandra_util" ]; then
         echo "ERROR: cassandra_util not found"
         exit 1
