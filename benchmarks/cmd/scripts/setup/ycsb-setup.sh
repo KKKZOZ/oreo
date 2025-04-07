@@ -11,7 +11,8 @@ if [ "$db" == "Redis" ]; then
     echo "Remove redis container"
     docker rm -f redis
     echo "Create new redis container"
-    docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass "kkkzoz"
+    docker run --name redis --network=host --restart=always -d redis redis-server --requirepass "kkkzoz"
+    # docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass "kkkzoz"
     # docker run --name redis -p 6379:6379 --restart=always -d redis redis-server --requirepass password --save 60 1 --loglevel warning
 elif [ "$db" == "MongoDB1" ]; then
     echo "Remove mongoDB1 container"
@@ -53,7 +54,7 @@ elif [ "$db" == "Cassandra" ]; then
     echo "Create new cassandra container"
     # docker run -d --name cassandra -p 9042:9042 cassandra
     docker run -d \
-        --name cassandra -p 9042:9042 \
+        --name cassandra --network=host \
         -v /data/cassandra_data:/var/lib/cassandra/data \
         -v /data/cassandra_commitlog:/var/lib/cassandra/commitlog \
         -v /data/cassandra_saved_caches:/var/lib/cassandra/saved_caches \
