@@ -14,7 +14,7 @@ for server in "${servers[@]}"; do
     echo "========================================"
 
     # 使用ssh连接到服务器并执行命令
-    ssh -o StrictHostKeyChecking=no "$user"@"$server" <<EOF
+    ssh -i ~/.ssh/otc_dse "$user"@"$server" <<EOF
     echo "执行命令: sudo yum install -y docker-ce"
     sudo yum install -y docker-ce
     if [ $? -ne 0 ]; then
@@ -58,6 +58,15 @@ for server in "${servers[@]}"; do
         echo "命令执行失败: sudo systemctl restart docker"
         exit 1
     fi
+
+    echo "创建 data 文件夹"
+    mkdir /data/mongo1_data
+    mkdir /data/mongo2_data
+    mkdir /data/kvrocks_data
+    mkdir /data/cassandra_data
+    mkdir /data/cassandra_commitlog
+    mkdir /data/cassandra_saved_caches
+    mkdir /data/couchdb_data
 
     echo "在 $server 上执行命令完成"
     exit

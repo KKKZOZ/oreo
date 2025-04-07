@@ -187,6 +187,20 @@ cd oreo/benchmarks/cmd/scripts/vm-setup
 ./setup.sh
 ```
 
+8. 配置 docker mirror
+
+```shell
+sudo mkdir -p /etc/docker
+
+echo '{
+  "registry-mirrors": [
+    "https://mirror.ccs.tencentyun.com"
+  ]
+}' | sudo tee /etc/docker/daemon.json
+
+sudo systemctl restart docker
+```
+
 8. 在执行 Workload 之前, 需要手动配置各个服务器目前运行的数据库
 
 - Postgres
@@ -198,10 +212,10 @@ docker run -d -p 5432:5432 --rm --name="apiary-postgres" --env POSTGRES_PASSWORD
 1. 同步数据
 
 ```shell
-rsync -avP root@49.233.36.106:~/oreo/benchmarks/cmd/data/ ~/Projects/oreo/benchmarks/cmd/data/
+rsync -avP root@FILL:~/oreo/benchmarks/cmd/data/ ~/Projects/oreo/benchmarks/cmd/data/
 
 
-rsync -avP root@49.233.36.106:~/oreo ~/Projects/oreo2
+rsync -avP root@FILL:~/oreo ~/Projects/oreo2
 ```
 
 ## Run Evaluation

@@ -20,6 +20,7 @@ thread=0
 verbose=false
 remote=false
 skip=false
+loaded=false
 wl_mode=
 
 declare -g executor_pid
@@ -45,6 +46,7 @@ while [[ "$#" -gt 0 ]]; do
     -v | --verbose) verbose=true ;;
     -r | --remote) remote=true ;;
     -s | --skip) skip=true ;;
+    -l | --loaded) loaded=true ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -201,10 +203,14 @@ main() {
         fi
     fi
 
-    if [ ! -f "$tar_dir/${wl_type}-load" ]; then
-        log "Ready to load data" $YELLOW
+    if [ "$loaded" = true ]; then
+        log "Skipping data loading" $YELLOW
     else
-        log "Data has been already loaded" $YELLOW
+        if [ ! -f "$tar_dir/${wl_type}-load" ]; then
+            log "Ready to load data" $YELLOW
+        else
+            log "Data has been already loaded" $YELLOW
+        fi
     fi
 
     read -p "Do you want to continue? (y/n): " continue_choice
