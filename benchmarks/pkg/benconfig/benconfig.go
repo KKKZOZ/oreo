@@ -12,7 +12,7 @@ var (
 	ZipfianConstant    = 0.9
 	Latency            = 10 * time.Millisecond
 	MaxLoadBatchSize   = 100
-	Client             = network.NewClient(ExecutorAddressMap)
+	Client, _          = network.NewClient("localhost:9000")
 )
 
 type BenchmarkConfig struct {

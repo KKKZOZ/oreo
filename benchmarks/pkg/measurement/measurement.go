@@ -3,6 +3,7 @@ package measurement
 import (
 	"benchmark/ycsb"
 	"bufio"
+	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -69,6 +70,9 @@ func InitMeasure() {
 	default:
 		panic("unsupported measurement type: " + measurementType)
 	}
+
+	faultToleranceMeasure = new(measurement)
+	faultToleranceMeasure.measurer = InitFCSV()
 	// EnableWarmUp(p.GetInt64(prop.WarmUpTime, 0) > 0)
 }
 
@@ -76,6 +80,9 @@ func InitMeasure() {
 func Output() {
 	globalMeasure.measurer.GenerateExtendedOutputs()
 	globalMeasure.output()
+	fmt.Println("##################################################")
+	faultToleranceMeasure.measurer.GenerateExtendedOutputs()
+	faultToleranceMeasure.output()
 }
 
 // Summary prints the measurement summary.
@@ -104,5 +111,10 @@ func Measure(op string, start time.Time, lan time.Duration) {
 	}
 }
 
+func FMeasure(op string, end time.Time, lan time.Duration) {
+	faultToleranceMeasure.measure(op, end, lan)
+}
+
 var globalMeasure *measurement
+var faultToleranceMeasure *measurement
 var warmUp int32 // use as bool, 1 means in warmup progress, 0 means warmup finished.

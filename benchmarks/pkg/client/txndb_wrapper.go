@@ -2,8 +2,10 @@ package client
 
 import (
 	"benchmark/pkg/errrecord"
+	"benchmark/pkg/measurement"
 	"benchmark/ycsb"
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -29,11 +31,9 @@ func (db *TxnDbWrapper) Start() (err error) {
 func (db *TxnDbWrapper) Commit() (err error) {
 	start := time.Now()
 	defer func() {
-		// if err != nil {
-		// 	fmt.Println("Error in Commit(): ", err)
-		// }
 		measure(start, "COMMIT", err)
 		measure(db.TxnStart, "TXN", err)
+		fmeasure(db.TxnStart, "TXN", err)
 		errrecord.Record("COMMIT", err)
 	}()
 	return db.DB.Commit()
@@ -180,6 +180,17 @@ func (db *TxnDbWrapper) BatchDelete(ctx context.Context, table string, keys []st
 		}
 	}
 	return nil
+}
+
+func fmeasure(start time.Time, op string, err error) {
+	endTime := time.Now()
+	lan := endTime.Sub(start)
+	if err != nil {
+		measurement.FMeasure(fmt.Sprintf("%s_ERROR", op), endTime, lan)
+		return
+	} else {
+		measurement.FMeasure(fmt.Sprintf("%s_OK", op), endTime, lan)
+	}
 }
 
 // func (db DbWrapper) Analyze(ctx context.Context, table string) error {

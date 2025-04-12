@@ -476,7 +476,7 @@ func loadConfig() *workload.WorkloadParameter {
 		return nil
 	}
 	benconfig.MaxLoadBatchSize = wp.MaxLoadBatchSize
-	benconfig.Client = network.NewClient(benconfig.ExecutorAddressMap)
+	benconfig.Client, _ = network.NewClient("localhost:9000")
 
 	return wp
 }
