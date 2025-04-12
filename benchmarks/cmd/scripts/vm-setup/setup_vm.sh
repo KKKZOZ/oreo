@@ -7,7 +7,7 @@ if [ $# -ne 1 ]; then
 fi
 
 PUBLIC_IP=$1
-PASSWORD="Qwert12345??"
+# PASSWORD="Qwert12345??"
 
 # 确保 .ssh 目录存在
 mkdir -p ~/.ssh
@@ -15,7 +15,7 @@ mkdir -p ~/.ssh
 # 1. 配置免密登录到公网 IP
 echo "Configuring passwordless login to public IP..."
 sshpass -p "${PASSWORD}" ssh-copy-id -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519.pub root@${PUBLIC_IP}
-scp ~/.ssh/id_ed25519 root@${PUBLIC_IP}:~/.ssh/
+scp ~/.ssh/otc_dse root@${PUBLIC_IP}:~/.ssh/
 
 # 2. 登录并安装必要软件
 echo "Installing required software..."

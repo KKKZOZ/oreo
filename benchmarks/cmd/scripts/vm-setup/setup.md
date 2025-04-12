@@ -71,24 +71,29 @@ echo "Setup completed successfully!"
 1. 使用公网 IP 登录 Node1
 
 ```shell
-ssh-copy-id -i ~/.ssh/id_ed25519.pub root@49.233.36.106
-scp id_ed25519 root@49.233.36.106:~/.ssh
-scp go1.23.3.linux-amd64.tar.gz .tmux.conf root@49.233.36.106:~/
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@FILL
 
-scp oreo.tar.gz root@49.233.36.106:~/
+ssh -i ~/.ssh/otc_dse root@FILL
 
-scp jdk-17_linux-x64.tar.gz epoxy-3m2.jar root@49.233.36.106:~/
+scp -i ~/.ssh/otc_dse otc_dse root@FILL:~/.ssh
+scp -i ~/.ssh/otc_dse go1.23.3.linux-amd64.tar.gz .tmux.conf root@FILL:~/
+
+scp -i ~/.ssh/otc_dse oreo.tar.gz root@FILL:~/
+
+scp -i ~/.ssh/otc_dse jdk-17_linux-x64.tar.gz epoxy-3m2.jar root@FILL:~/
 ```
 
 2. 运行以下指令安装并运行 Docker
 
 ```shell
-ssh root@49.233.36.106
+ssh -i ~/.ssh/otc_dse root@FILL
 
 sudo yum install -y docker-ce git ripgrep fish tmux
 
 sudo systemctl start docker
 ```
+
+> Do we need this step?
 
 3. 配置其他几台服务器的免密登录
 
@@ -111,15 +116,15 @@ ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.6
 Host node1
     HostName 10.206.206.2
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 Host node2
     HostName 10.206.206.3
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 Host node3
     HostName 10.206.206.4
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 ```
 
 - 5 个节点
@@ -128,23 +133,23 @@ Host node3
 Host node1
     HostName 10.206.206.2
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 Host node2
     HostName 10.206.206.3
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 Host node3
     HostName 10.206.206.4
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 Host node4
     HostName 10.206.206.5
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 Host node5
     HostName 10.206.206.6
     User root
-    IdentityFile ~/.ssh/id_rsa
+    IdentityFile ~/.ssh/otc_dse
 
 ```
 
