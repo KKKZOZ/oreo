@@ -20,7 +20,10 @@ scale-load
 
 executor
 timeoracle
+ft-executor
+ft-timeoracle
 cassandra_util
+getip
 cmd
 
 # Python environment
