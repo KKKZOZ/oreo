@@ -201,7 +201,7 @@ func (c *Client) getCacheState() {
 
 	fmt.Println("----------------------------------")
 
-	executorUrlList := benconfig.Client.GetExecutorAddrList()
+	executorUrlList := benconfig.GlobalClient.GetExecutorAddrList()
 
 	client := &http.Client{
 		Timeout: 1 * time.Second,

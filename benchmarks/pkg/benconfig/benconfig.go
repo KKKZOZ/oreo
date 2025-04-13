@@ -12,11 +12,12 @@ var (
 	ZipfianConstant                     = 0.9
 	GlobalLatency                       = 3 * time.Millisecond
 	MaxLoadBatchSize                    = 100
-	Client, _                           = network.NewClient("localhost:9000")
 	RegistryAddr                        = "localhost:9000"
 	GlobalIsFaultTolerance              = false
 	GlobalFaultToleranceRequestInterval = 0 * time.Millisecond
 )
+
+var GlobalClient *network.Client
 
 type BenchmarkConfig struct {
 	RegistryAddr       string              `yaml:"registry_addr"`

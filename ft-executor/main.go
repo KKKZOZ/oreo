@@ -30,7 +30,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/tikv"
-	"github.com/oreo-dtx-lab/oreo/pkg/network" // Assuming client.go is in this package
+	"github.com/oreo-dtx-lab/oreo/pkg/network"
 	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -88,8 +88,8 @@ func NewServer(port int, advertiseAddr, registryAddr string, handledDsNames []st
 // --- Registry Interaction ---
 
 const (
-	registryTimeout   = 5 * time.Second
-	heartbeatInterval = 10 * time.Second // Should be less than registry TTL
+	registryTimeout   = 1 * time.Second
+	heartbeatInterval = 1 * time.Second
 )
 
 func (s *Server) registerWithRegistry() error {
@@ -196,14 +196,14 @@ func (s *Server) startHeartbeat() {
 		// Handle initial marshalling error - likely fatal if it persists
 		if err != nil {
 			Log.Errorw("CRITICAL: Failed to marshal heartbeat request on startup, heartbeat disabled", "error", err)
-			return // Stop the heartbeat goroutine
+			return
 		}
 
 		for {
 			select {
 			case <-ticker.C:
 				// Create a new context for each request attempt
-				reqCtx, reqCancel := context.WithTimeout(s.heartbeatCtx, registryTimeout) // Child of main heartbeat context
+				reqCtx, reqCancel := context.WithTimeout(s.heartbeatCtx, registryTimeout)
 
 				// Create request using standard net/http
 				req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, s.registryAddr+"/heartbeat", bytes.NewBuffer(jsonData))
@@ -266,10 +266,10 @@ func (s *Server) RunAndBlock() {
 		// Decide if failure is fatal based on application requirements
 		Log.Errorw("Failed to register with registry on startup, continuing without registration/heartbeat", "error", err)
 		// To make it fatal: Log.Fatalw("Failed to register with registry on startup", "error", err)
-	} else {
-		// 2. Start heartbeat only if registration was attempted/successful (or if optional)
-		s.startHeartbeat()
 	}
+
+	// Executor starts before registry
+	s.startHeartbeat()
 
 	// 3. Setup fasthttp router
 	router := func(ctx *fasthttp.RequestCtx) {
@@ -598,6 +598,12 @@ func main() {
 	flag.Parse() // Parse flags early
 	newLogger()  // Setup logger immediately after parsing
 
+	// Load benchmark configuration from YAML
+	err := loadConfig(*benConfigPath)
+	if err != nil {
+		Log.Fatalw("Failed to load benchmark configuration", "path", *benConfigPath, "error", err)
+	}
+
 	// Validate required flags
 	if *benConfigPath == "" {
 		Log.Fatal("Benchmark Configuration Path (--bc) must be specified")
@@ -620,12 +626,6 @@ func main() {
 			Log.Fatal("Registry address not specified in benchmark config, please provide --registry-addr or set it in the config")
 		}
 		*registryAddrFlag = benConfig.RegistryAddr
-	}
-
-	// Load benchmark configuration from YAML
-	err := loadConfig(*benConfigPath)
-	if err != nil {
-		Log.Fatalw("Failed to load benchmark configuration", "path", *benConfigPath, "error", err)
 	}
 
 	// Setup profiling and tracing if enabled

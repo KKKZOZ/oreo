@@ -24,11 +24,10 @@ func (m *measurement) measure(op string, start time.Time, lan time.Duration) {
 	m.Unlock()
 }
 
-func (m *measurement) output() {
+func (m *measurement) output(outFile string) {
 	m.RLock()
 	defer m.RUnlock()
 
-	outFile := ""
 	var w *bufio.Writer
 	if outFile == "" {
 		w = bufio.NewWriter(os.Stdout)
@@ -41,7 +40,7 @@ func (m *measurement) output() {
 		w = bufio.NewWriter(f)
 	}
 
-	err := globalMeasure.measurer.Output(w)
+	err := m.measurer.Output(w)
 	if err != nil {
 		panic("failed to write output: " + err.Error())
 	}
@@ -79,10 +78,10 @@ func InitMeasure() {
 // Output prints the complete measurements.
 func Output() {
 	globalMeasure.measurer.GenerateExtendedOutputs()
-	globalMeasure.output()
+	globalMeasure.output("")
 	fmt.Println("##################################################")
 	faultToleranceMeasure.measurer.GenerateExtendedOutputs()
-	faultToleranceMeasure.output()
+	faultToleranceMeasure.output("timeline.csv")
 }
 
 // Summary prints the measurement summary.

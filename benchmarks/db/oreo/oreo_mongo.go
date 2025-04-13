@@ -53,7 +53,7 @@ func (r *MongoDatastore) Start() error {
 	var txn1 *txn.Transaction
 	if r.isRemote {
 		oracle := timesource.NewGlobalTimeSource(benconfig.TimeOracleUrl)
-		txn1 = txn.NewTransactionWithRemote(benconfig.Client, oracle)
+		txn1 = txn.NewTransactionWithRemote(benconfig.GlobalClient, oracle)
 	} else {
 		txn1 = txn.NewTransaction()
 	}

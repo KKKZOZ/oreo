@@ -53,7 +53,7 @@ func (r *OreoYCSBDatastore) Start() error {
 	// oracle := timesource.NewLocalTimeSource()
 	// oracle := timesource.NewSimpleTimeSource()
 	if r.mode == "oreo" {
-		client := benconfig.Client
+		client := benconfig.GlobalClient
 		// client := network.NewClient(benconfig.ExecutorAddressMap)
 		txn1 = txn.NewTransactionWithRemote(client, oracle)
 	} else {

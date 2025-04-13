@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # nodes=(s1-ljy s3-ljy)
-nodes=(node2 node3)
+nodes=(node2 node3 node4)
 
 main() {
     cd "$(dirname "$0")" && cd ../..
@@ -17,6 +17,7 @@ main() {
         scp ./oreo-ben.tar.gz "$node":~
         ssh -t "$node" "rm -rf ~/oreo-ben"
         ssh -t "$node" "tar -xzf ~/oreo-ben.tar.gz && rm ~/oreo-ben.tar.gz"
+        ssh -t "$node" "cd ~/oreo-ben && docker load < oreo-executor-image.tar.gz && docker load < oreo-ft-executor-image.tar.gz"
     done
 
     rm ./oreo-ben.tar.gz && rm -rf ./oreo-ben

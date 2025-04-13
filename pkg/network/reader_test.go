@@ -44,7 +44,7 @@ func NewTransactionWithSetup() *trxn.Transaction {
 		Address:  "localhost:6380",
 		Password: "@ljy123456",
 	})
-	client := NewClient(ExecutorAddrMap)
+	client, _ := NewClient("localhost:9000")
 	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)
@@ -955,7 +955,7 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 	successId := 0
 
 	concurrentCount := 1000
-	client := NewClient(ExecutorAddrMap)
+	client, _ := NewClient("localhost:9000")
 	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)

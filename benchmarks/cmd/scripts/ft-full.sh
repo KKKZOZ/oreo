@@ -25,7 +25,7 @@ wl_mode=
 
 declare -g executor_pid
 declare -g time_oracle_pid
-node_list=(node2 node3)
+node_list=(node2 node3 node4)
 # node_list=(s1-ljy s3-ljy)
 PASSWORD=kkkzoz
 
@@ -59,7 +59,7 @@ wl_type=ycsb
 tar_dir=./data/ft
 config_file="./workloads/ft/ft.yaml"
 results_file="$tar_dir/ft_benchmark_results.csv"
-bc=./config/BenConfig_ycsb.yaml
+bc=./config/BenConfig_ft.yaml
 
 log() {
     local color=${2:-$NC}
@@ -86,13 +86,13 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
     log "Running $wl_type-$wl_mode $profile thread=$thread" $BLUE
-    ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -t "$thread" >"$output"
+    ./bin/cmd -ft -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -t "$thread" >"$output"
 }
 
 load_data() {
     for profile in oreo; do
         log "Loading to ${wl_type} $profile" $BLUE
-        ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
+        ./bin/cmd -ft -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
     done
     touch "$tar_dir/${wl_type}-load"
@@ -165,7 +165,7 @@ deploy_remote() {
 
     for node in "${node_list[@]}"; do
         log "Setup $node" "$GREEN"
-        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations"
+        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations -r"
         ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8002 -wl $wl_type -db $db_combinations"
     done
 }
@@ -245,6 +245,10 @@ main() {
 
         sleep $round_interval
     done
+
+    mv timeline.csv "$tar_dir/timeline.csv"
+
+    python3 ./analysis/process_timeline_logs.py --file ./data/ft/timeline.csv --span 100
 
     clear_up
 }

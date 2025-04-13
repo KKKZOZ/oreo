@@ -68,6 +68,13 @@ func main() {
 
 	wp := loadConfig()
 
+	if isFaultTolerance {
+		// Wait for executor connections
+		log.Println("Running under fault tolerance mode")
+		log.Println("Waiting 5s for executor connections...")
+		time.Sleep(5 * time.Second)
+	}
+
 	switch preset {
 	case "cg":
 		fmt.Printf("Running under Cherry Garcia Mode\n")
@@ -482,7 +489,7 @@ func loadConfig() *workload.WorkloadParameter {
 		return nil
 	}
 	benconfig.MaxLoadBatchSize = wp.MaxLoadBatchSize
-	benconfig.Client, _ = network.NewClient("localhost:9000")
+	benconfig.GlobalClient, _ = network.NewClient(":9000")
 
 	return wp
 }

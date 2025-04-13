@@ -1,0 +1,42 @@
+# Benchmark system configuration
+registry_addr: "http://10.206.206.2:9000"
+executor_address_map:
+  "Redis":
+    - "http://10.206.206.3:8001"
+  "MongoDB1":
+    - "http://10.206.206.4:8001"
+  "MongoDB2":
+    - "http://10.206.206.4:8001"
+  "Cassandra":
+    - "http://10.206.206.5:8001"
+
+fault_tolerance_request_interval_value: 1
+# deploy time oracle on node2
+time_oracle_url: "http://10.206.206.3:8009"
+zipfian_constant: 0.9
+latency_value: 3
+
+# Redis configuration
+redis_addr: "10.206.206.3:6379"
+redis_password: "kkkzoz"
+
+# MongoDB configuration
+mongodb_addr1: "mongodb://10.206.206.4:27017"
+mongodb_addr2: "mongodb://10.206.206.4:27018"
+mongodb_username: "admin"
+mongodb_password: "password"
+
+# KVRocks configuration
+kvrocks_addr: "172.24.58.116:6666"
+kvrocks_password: "kkkzoz"
+
+# CouchDB configuration
+couchdb_addr: "http://localhost:5984"
+couchdb_username: "admin"
+couchdb_password: "password"
+
+# Other databases configuration
+cassandra_addr: ["10.206.206.5"]
+
+dynamodb_addr: "http://localhost:8000"
+tikv_addr: ["172.24.58.116:2379"]

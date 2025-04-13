@@ -2,7 +2,7 @@
 
 # 服务器列表
 # servers=("10.206.206.3" "10.206.206.4" "10.206.206.5" "10.206.206.6")
-servers=("10.206.206.3" "10.206.206.4")
+servers=("10.206.206.3" "10.206.206.4" "10.206.206.5")
 
 # 用户名
 user="root"
@@ -14,7 +14,7 @@ for server in "${servers[@]}"; do
     echo "========================================"
 
     # 使用ssh连接到服务器并执行命令
-    ssh -i ~/.ssh/otc_dse "$user"@"$server" <<EOF
+    ssh "$user"@"$server" <<EOF
     echo "执行命令: sudo yum install -y docker-ce"
     sudo yum install -y docker-ce
     if [ $? -ne 0 ]; then

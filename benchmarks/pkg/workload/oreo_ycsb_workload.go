@@ -188,9 +188,6 @@ func getDatabases(wp WorkloadParameter) []string {
 				if fieldValue > 0 {
 					if dbName, ok := field.Tag.Lookup("oreo"); ok && dbName != "" {
 						dbList = append(dbList, dbName)
-					} else {
-						// Optional: Warn if proportion > 0 but no tag
-						log.Printf("Warning: Field %s has proportion %f > 0 but no 'oreo' tag or tag is empty.", field.Name, fieldValue)
 					}
 				}
 			}
@@ -263,7 +260,7 @@ func (wl *OreoYCSBWorkload) doTxn(ctx context.Context, db ycsb.TransactionDB) {
 	err := db.Commit()
 	if err != nil {
 		// Decide how to handle commit errors, e.g., log, metric, etc.
-		fmt.Printf("Error committing transaction: %v\n", err)
+		// fmt.Printf("Error committing transaction: %v\n", err)
 	}
 }
 

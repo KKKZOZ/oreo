@@ -57,7 +57,7 @@ func (r *OreoRealisticDatastore) Start() error {
 	// oracle := timesource.NewLocalTimeSource()
 	// oracle := timesource.NewSimpleTimeSource()
 	if r.isRemote {
-		txn1 = txn.NewTransactionWithRemote(benconfig.Client, oracle)
+		txn1 = txn.NewTransactionWithRemote(benconfig.GlobalClient, oracle)
 	} else {
 		txn1 = txn.NewTransactionWithOracle(oracle)
 	}

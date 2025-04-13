@@ -62,9 +62,9 @@ type Client struct {
 const (
 	ALL = "ALL" // Special DsName indicating an instance handles all datastores
 	// Default TTL if not provided (should be longer than executor's heartbeatInterval)
-	defaultInstanceTTL = 35 * time.Second
+	defaultInstanceTTL = 6 * time.Second
 	// How often the registry checks for stale instances
-	cleanupInterval = 15 * time.Second
+	cleanupInterval = 3 * time.Second
 )
 
 // NewRegistryClient initializes the combined client, starts the registry HTTP server,
