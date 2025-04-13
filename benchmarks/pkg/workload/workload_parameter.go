@@ -28,6 +28,7 @@ type WorkloadParameter struct {
 	PostCheckWorkerThread int `yaml:"postcheckworkerthread"`
 
 	// These parameters are for the data distribution test
+	InvolvedDBNum       int     `yaml:"involveddbnum"`
 	GlobalDatastoreName string  `yaml:"globaldatastorename"`
 	Redis1Proportion    float64 `yaml:"redis1proportion" oreo:"Redis"`
 	Mongo1Proportion    float64 `yaml:"mongo1proportion" oreo:"MongoDB1"`

@@ -200,19 +200,8 @@ func (c *Client) RunBenchmark() {
 func (c *Client) getCacheState() {
 
 	fmt.Println("----------------------------------")
-	set := make(map[string]struct{})
 
-	for _, addresses := range benconfig.ExecutorAddressMap {
-		for _, address := range addresses {
-			set[address] = struct{}{}
-		}
-	}
-
-	var executorUrlList []string
-
-	for address := range set {
-		executorUrlList = append(executorUrlList, address)
-	}
+	executorUrlList := benconfig.Client.GetExecutorAddrList()
 
 	client := &http.Client{
 		Timeout: 1 * time.Second,

@@ -17,8 +17,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")" && cd ../../../.. && pwd)"
 
 mkdir -p "${PROJECT_ROOT}/benchmarks/cmd/bin"
 
-
-components=("executor" "timeoracle")
+components=("executor" "timeoracle" "ft-executor" "ft-timeoracle" "bin-util/getip" "bin-util/cassandra_util")
 
 for component in "${components[@]}"; do
     echo "Updating ${component}..."
@@ -36,15 +35,5 @@ for component in "${components[@]}"; do
     echo "Successfully updated ${component}"
     echo
 done
-
-echo "Updating cassandra util"
-
-cd "${PROJECT_ROOT}/pkg/datastore/cassandra/cmd/util" || handle_error "Failed to enter cassandra util directory"
-
-if ! bash compile-dev.sh; then
-    handle_error "Failed to compile cassandra util"
-fi
-
-echo "Successfully updated cassandra util"
 
 echo "All components updated successfully"

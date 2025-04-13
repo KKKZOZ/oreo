@@ -7,7 +7,6 @@ import (
 
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
-	"github.com/oreo-dtx-lab/oreo/pkg/network"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
@@ -47,9 +46,8 @@ func NewOreoDatastore(connMap map[string]txn.Connector, globalDatastoreName stri
 func (r *OreoDatastore) Start() error {
 	var txn1 *txn.Transaction
 	if r.isRemote {
-		client := network.NewClient(benconfig.ExecutorAddressMap)
 		oracle := timesource.NewGlobalTimeSource(benconfig.TimeOracleUrl)
-		txn1 = txn.NewTransactionWithRemote(client, oracle)
+		txn1 = txn.NewTransactionWithRemote(benconfig.Client, oracle)
 	} else {
 		txn1 = txn.NewTransaction()
 	}

@@ -1,8 +1,8 @@
-# Ben TimeOracle
+# README
 
 A simple implementation of primary-backup time oracle
 
-## Usage
+## How to run
 
 ```shell
 go run . -role primary -p 8010 -type hybrid -max-skew 50ms

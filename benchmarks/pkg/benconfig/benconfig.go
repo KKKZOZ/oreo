@@ -7,21 +7,29 @@ import (
 )
 
 var (
-	ExecutorAddressMap = map[string][]string{"ALL": {"localhost:8000"}}
-	TimeOracleUrl      = "http://localhost:8010"
-	ZipfianConstant    = 0.9
-	Latency            = 10 * time.Millisecond
-	MaxLoadBatchSize   = 100
-	Client, _          = network.NewClient("localhost:9000")
+	ExecutorAddressMap                  = map[string][]string{"ALL": {"localhost:8000"}}
+	TimeOracleUrl                       = "http://localhost:8010"
+	ZipfianConstant                     = 0.9
+	GlobalLatency                       = 3 * time.Millisecond
+	MaxLoadBatchSize                    = 100
+	Client, _                           = network.NewClient("localhost:9000")
+	RegistryAddr                        = "localhost:9000"
+	GlobalIsFaultTolerance              = false
+	GlobalFaultToleranceRequestInterval = 0 * time.Millisecond
 )
 
 type BenchmarkConfig struct {
+	RegistryAddr       string              `yaml:"registry_addr"`
 	ExecutorAddressMap map[string][]string `yaml:"executor_address_map"`
 	TimeOracleUrl      string              `yaml:"time_oracle_url"`
 	ZipfianConstant    float64             `yaml:"zipfian_constant"`
 	Latency            time.Duration       `yaml:"latency"`
 	LatencyValue       int                 `yaml:"latency_value"`
 	MaxLoadBatchSize   int                 `yaml:"max_load_batch_size"`
+
+	FaultToleranceRequestInterval time.Duration `yaml:"fault_tolerance_request_interval"`
+
+	FaultToleranceRequestIntervalValue int `yaml:"fault_tolerance_request_interval_value"`
 
 	RedisAddr     string `yaml:"redis_addr"`
 	RedisPassword string `yaml:"redis_password"`

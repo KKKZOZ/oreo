@@ -609,6 +609,19 @@ func main() {
 		Log.Fatal("Database Combination (--db) must be specified for YCSB workload")
 	}
 
+	if *advertiseAddrFlag == "" {
+		Log.Fatal("Advertise address (--advertise-addr) not specified")
+	}
+
+	if *registryAddrFlag == "" {
+		Log.Info("Registry address (--registry-addr) not specified, will load from benchmark config")
+
+		if benConfig.RegistryAddr == "" {
+			Log.Fatal("Registry address not specified in benchmark config, please provide --registry-addr or set it in the config")
+		}
+		*registryAddrFlag = benConfig.RegistryAddr
+	}
+
 	// Load benchmark configuration from YAML
 	err := loadConfig(*benConfigPath)
 	if err != nil {
@@ -618,7 +631,6 @@ func main() {
 	// Setup profiling and tracing if enabled
 	if *pprofFlag {
 		startCPUProfile()
-		// Optionally add memory profiling setup here
 	}
 	if *traceFlag {
 		stopTrace := startTrace()
@@ -645,15 +657,6 @@ func main() {
 	}
 	Log.Infow("Executor configured to handle datastores", "dsNames", handledDsNames)
 
-	// Determine the address to advertise to the registry
-	finalAdvertiseAddr := *advertiseAddrFlag
-	if finalAdvertiseAddr == "" {
-		// Default to localhost:port - may not be reachable externally!
-		finalAdvertiseAddr = fmt.Sprintf("localhost:%d", *port)
-		Log.Warnw("Advertise address (--advertise-addr) not specified, defaulting to loopback address", "address", finalAdvertiseAddr)
-	}
-	// Optional: Add logic here to determine public IP if needed
-
 	// Validate registry address format
 	if *registryAddrFlag != "" && !strings.HasPrefix(*registryAddrFlag, "http://") && !strings.HasPrefix(*registryAddrFlag, "https://") {
 		Log.Warnw("Registry address might be missing scheme (http:// or https://), assuming http://", "registry-addr", *registryAddrFlag)
@@ -664,7 +667,7 @@ func main() {
 	oracle := timesource.NewGlobalTimeSource(benConfig.TimeOracleUrl)
 
 	// Create the main Server instance
-	server := NewServer(*port, finalAdvertiseAddr, *registryAddrFlag, handledDsNames, connMap, &redis.RedisItemFactory{}, oracle)
+	server := NewServer(*port, *advertiseAddrFlag, *registryAddrFlag, handledDsNames, connMap, &redis.RedisItemFactory{}, oracle)
 
 	// Run the server (this includes registration, heartbeat, fasthttp server, and blocks until shutdown)
 	server.RunAndBlock()

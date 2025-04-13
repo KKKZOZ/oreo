@@ -32,6 +32,10 @@ while [[ "$#" -gt 0 ]]; do
         db_combinations="$2"
         shift
         ;;
+    -p | --port)
+        executor_port="$2"
+        shift
+        ;;
     -v | --verbose) verbose=true ;;
     *)
         echo "Unknown parameter passed: $1"
@@ -71,9 +75,16 @@ main() {
         exit 1
     fi
 
+    if [ ! -f "getip" ]; then
+        echo "Error: getip binary not found. Please build it first."
+        exit 1
+    fi
+
+    ip=$(./getip)
+
     kill_process_on_port "$executor_port"
     echo "Starting executor"
-    nohup ./executor -p "$executor_port" -w "$wl_mode" -bc "$bc" -db "$db_combinations" 2>./executor.log &
+    nohup ./ft-executor -p "$executor_port" --advertise-addr "$ip" -w "$wl_mode" -bc "$bc" -db "$db_combinations" 2>./executor.log &
 
     sleep 3
     echo "Executor started"

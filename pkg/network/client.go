@@ -791,3 +791,22 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 		return errors.New(errMsg)
 	}
 }
+
+func (rc *Client) GetExecutorAddrList() []string {
+	rc.registryMutex.RLock() // Use read lock to access the dsNameIndex
+	defer rc.registryMutex.RUnlock()
+
+	// Collect all unique addresses from the instances map
+	addressSet := make(map[string]struct{})
+	for _, instance := range rc.instances {
+		addressSet[instance.Address] = struct{}{}
+	}
+
+	// Convert set to slice
+	addressList := make([]string, 0, len(addressSet))
+	for addr := range addressSet {
+		addressList = append(addressList, addr)
+	}
+
+	return addressList
+}

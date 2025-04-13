@@ -3,17 +3,17 @@
 # nodes=(s1-ljy s3-ljy)
 nodes=(node2 node3)
 
-main(){
+main() {
     cd "$(dirname "$0")" && cd ../..
     mkdir -p ./oreo-ben/config
 
     cp ./scripts/setup/* ./oreo-ben/
     cp ./config/* ./oreo-ben/config
-    cp ./bin/executor ./bin/cassandra_util ./bin/timeoracle ./bin/oreo-executor-image.tar.gz ./oreo-ben
+    cp ./bin/* ./oreo-ben
 
     tar -czf ./oreo-ben.tar.gz ./oreo-ben
 
-    for node in "${nodes[@]}"; do 
+    for node in "${nodes[@]}"; do
         scp ./oreo-ben.tar.gz "$node":~
         ssh -t "$node" "rm -rf ~/oreo-ben"
         ssh -t "$node" "tar -xzf ~/oreo-ben.tar.gz && rm ~/oreo-ben.tar.gz"

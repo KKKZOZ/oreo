@@ -1,7 +1,8 @@
 # Benchmark system configuration
+registry_addr: "http://10.206.206.2:9000"
 executor_address_map:
   "MongoDB":
-    - "http://10.206.206.3:8001"  
+    - "http://10.206.206.3:8001"
   "Redis":
     - "http://10.206.206.4:8001"
   "Cassandra":

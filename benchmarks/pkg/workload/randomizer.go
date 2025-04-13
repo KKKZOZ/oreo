@@ -175,3 +175,9 @@ func (r *Randomizer) BuildRandomValue() string {
 	util.RandBytes(r.r, buf)
 	return string(buf)
 }
+
+func (r *Randomizer) Intn(n int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.r.Intn(n)
+}

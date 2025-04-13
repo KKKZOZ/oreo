@@ -37,6 +37,7 @@ var isRemote = false
 var preset = ""
 var readStrategy = ""
 var ablationLevel = 4
+var isFaultTolerance = false
 
 func main() {
 	parseAndValidateFlag()
@@ -402,6 +403,7 @@ func parseAndValidateFlag() {
 	flag.StringVar(&preset, "ps", "", "Preset configuration for evaluation")
 	flag.StringVar(&readStrategy, "read", "p", "Read Strategy")
 	flag.IntVar(&ablationLevel, "ab", 4, "Ablation level")
+	flag.BoolVar(&isFaultTolerance, "ft", false, "Enable fault tolerance benchmark mode")
 	flag.Parse()
 
 	if *help {
@@ -416,6 +418,8 @@ func parseAndValidateFlag() {
 	if threadNum <= 0 {
 		panic("ThreadNum should be a positive integer")
 	}
+	benconfig.GlobalIsFaultTolerance = isFaultTolerance
+
 }
 
 func displayBenchmarkInfo() {
@@ -455,6 +459,8 @@ func loadConfig() *workload.WorkloadParameter {
 	}
 
 	benConfig.Latency = time.Duration(benConfig.LatencyValue) * time.Millisecond
+	benConfig.FaultToleranceRequestInterval = time.Duration(benConfig.FaultToleranceRequestIntervalValue) * time.Millisecond
+
 	benconfig.ExecutorAddressMap = benConfig.ExecutorAddressMap
 	benconfig.TimeOracleUrl = benConfig.TimeOracleUrl
 	benconfig.ZipfianConstant = benConfig.ZipfianConstant

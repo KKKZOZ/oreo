@@ -1,4 +1,5 @@
 # Benchmark system configuration
+registry_addr: "http://10.206.206.2:9000"
 executor_address_map:
   "Redis":
     - "http://10.206.206.3:8001"
@@ -22,6 +23,8 @@ executor_address_map:
     # - "http://10.206.206.4:8006"
     # - "http://10.206.206.4:8007"
     # - "http://10.206.206.4:8008"
+
+fault_tolerance_request_interval_value: 1
 
 # deploy time oracle on node2
 time_oracle_url: "http://10.206.206.3:8010"
