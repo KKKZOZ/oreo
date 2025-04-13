@@ -1,5 +1,7 @@
 # README
 
+Simple implementation of fault tolerant executor
+
 ## How to run
 
 ```shell

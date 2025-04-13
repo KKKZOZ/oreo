@@ -11,9 +11,9 @@ NC='\033[0m' # No Color
 executor_port=8001
 timeoracle_port=8010
 thread_load=100
-threads=(8 16 32 48 64 80 96)
+# threads=(8 16 32 48 64 80 96)
 round_interval=5
-# threads=(8 16 32)
+threads=(80)
 
 db_combinations=Redis,MongoDB1,Cassandra
 thread=0
@@ -90,7 +90,7 @@ run_workload() {
 }
 
 load_data() {
-    for profile in native cg oreo; do
+    for profile in oreo; do
         log "Loading to ${wl_type} $profile" $BLUE
         ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
@@ -118,19 +118,22 @@ get_metrics() {
 }
 
 print_summary() {
-    local thread=$1 native_duration=$2 cg_duration=$3 oreo_duration=$4 native_p99=$5 cg_p99=$6 oreo_p99=$7
-    local native_ratio=$8 cg_ratio=$9 oreo_ratio=${10}
+    local thread=$1 oreo_duration=$2 oreo_p99=$3 oreo_ratio=$4
 
-    printf "%s:\nnative:%s\ncg    :%s\noreo  :%s\n" "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}"
+    printf "%s:\n" "${thread}"
+    printf "Oreo: %s\n" "${oreo_duration}"
+    printf "Oreo 99th: %s\n" "${oreo_p99}"
+    printf "Oreo error ratio: %s\n" "${oreo_ratio}"
+    # printf "%s:\nnative:%s\ncg    :%s\noreo  :%s\n" "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}"
 
-    local relative_native relative_cg
-    relative_native=$(bc <<<"scale=5;${oreo_duration} / ${native_duration}")
-    relative_cg=$(bc <<<"scale=5;${oreo_duration} / ${cg_duration}")
+    # local relative_native relative_cg
+    # relative_native=$(bc <<<"scale=5;${oreo_duration} / ${native_duration}")
+    # relative_cg=$(bc <<<"scale=5;${oreo_duration} / ${cg_duration}")
 
-    printf "Oreo:native = %s\nOreo:cg     = %s\n" "${relative_native}" "${relative_cg}"
-    printf "native 99th: %s\ncg     99th: %s\noreo   99th: %s\n" "${native_p99}" "${cg_p99}" "${oreo_p99}"
-    printf "Error ratio:\nnative = %s\ncg = %s\noreo = %s\n" "${native_ratio}" "${cg_ratio}" "${oreo_ratio}"
-    echo "---------------------------------"
+    # printf "Oreo:native = %s\nOreo:cg     = %s\n" "${relative_native}" "${relative_cg}"
+    # printf "native 99th: %s\ncg     99th: %s\noreo   99th: %s\n" "${native_p99}" "${cg_p99}" "${oreo_p99}"
+    # printf "Error ratio:\nnative = %s\ncg = %s\noreo = %s\n" "${native_ratio}" "${cg_ratio}" "${oreo_ratio}"
+    # echo "---------------------------------"
 }
 
 clear_up() {
@@ -157,12 +160,13 @@ deploy_local() {
 }
 
 deploy_remote() {
-    log "Setup timeoracle on node 2" $GREEN
-    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
+    log "Setup timeoracle on node 2" "$GREEN"
+    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-timeoracle.sh "
 
     for node in "${node_list[@]}"; do
-        log "Setup $node" $GREEN
-        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
+        log "Setup $node" "$GREEN"
+        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations"
+        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8002 -wl $wl_type -db $db_combinations"
     done
 }
 
@@ -186,7 +190,7 @@ main() {
     mkdir -p "$tar_dir"
 
     # Create/overwrite results file with header
-    echo "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99,native_err,cg_err,oreo_err" >"$results_file"
+    echo "thread,operation,oreo,oreo_p99,oreo_err" >"$results_file"
     operation=$(rg '^operationcount' "$config_file" | rg -o '[0-9.]+')
 
     log "Running benchmark for [$wl_type] workload with [$db_combinations] database combinations" $YELLOW
@@ -226,18 +230,18 @@ main() {
 
     for thread in "${threads[@]}"; do
 
-        for profile in native cg oreo; do
+        for profile in oreo; do
             output="$tar_dir/$wl_type-$wl_mode-$db_combinations-$profile-$thread.txt"
             run_workload "run" "$profile" "$thread" "$output"
         done
 
-        read -r native_duration native_p99 native_ratio <<<"$(get_metrics "native" "$thread")"
-        read -r cg_duration cg_p99 cg_ratio <<<"$(get_metrics "cg" "$thread")"
+        # read -r native_duration native_p99 native_ratio <<<"$(get_metrics "native" "$thread")"
+        # read -r cg_duration cg_p99 cg_ratio <<<"$(get_metrics "cg" "$thread")"
         read -r oreo_duration oreo_p99 oreo_ratio <<<"$(get_metrics "oreo" "$thread")"
 
-        echo "$thread,$operation,$native_duration,$cg_duration,$oreo_duration,$native_p99,$cg_p99,$oreo_p99,$native_ratio,$cg_ratio,$oreo_ratio" >>"$results_file"
+        echo "$thread,$operation,$oreo_duration,$oreo_p99,$oreo_ratio" >>"$results_file"
 
-        print_summary "${thread}" "${native_duration}" "${cg_duration}" "${oreo_duration}" "${native_p99}" "${cg_p99}" "${oreo_p99}" "${native_ratio}" "${cg_ratio}" "${oreo_ratio}"
+        print_summary "${thread}" "${oreo_duration}" "${oreo_p99}" "${oreo_ratio}"
 
         sleep $round_interval
     done

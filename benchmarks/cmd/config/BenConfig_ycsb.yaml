@@ -25,7 +25,6 @@ executor_address_map:
     # - "http://10.206.206.4:8008"
 
 fault_tolerance_request_interval_value: 1
-
 # deploy time oracle on node2
 time_oracle_url: "http://10.206.206.3:8010"
 zipfian_constant: 0.9

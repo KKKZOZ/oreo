@@ -32,6 +32,10 @@ for component in "${components[@]}"; do
         bash build-docker-image.sh
     fi
 
+    if [[ "$component" == "ft-executor" ]]; then
+        bash build-docker-image.sh
+    fi
+
     echo "Successfully updated ${component}"
     echo
 done

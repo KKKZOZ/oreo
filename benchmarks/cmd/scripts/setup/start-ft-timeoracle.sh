@@ -2,7 +2,7 @@
 
 timeoracle_primary_port=8010
 timeoracle_backup_port=8011
-max_skew=50ms
+max_skew=1s
 
 kill_process_on_port() {
     local port=$1
@@ -33,9 +33,9 @@ main() {
 
     nohup ./ft-timeoracle -role backup -p 8011 -type hybrid -max-skew "$max_skew" \
         -primary-addr http://localhost:"$timeoracle_primary_port" \
-        -health-check-interval 2s \
-        -health-check-timeout 1s \
-        -failure-threshold 3 \
+        -health-check-interval 0.5s \
+        -health-check-timeout 0.5s \
+        -failure-threshold 1 \
         >/dev/null 2>./backup_timeoracle.log &
 
     sleep 1
