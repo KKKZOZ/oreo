@@ -64,6 +64,6 @@ docker run --name="ft-executor-$port" --network=host -d \
     -bc "/app/config/$bc" \
     -db "$db_combinations"
 
-sleep 3
+sleep 1
 echo "Executor started"
 lsof -i ":$port"

@@ -246,7 +246,7 @@ main() {
         sleep $round_interval
     done
 
-    mv timeline.csv "$tar_dir/timeline.csv"
+    mv timeline.csv "./data/ft/timeline.csv"
 
     python3 ./analysis/process_timeline_logs.py --file ./data/ft/timeline.csv --span 100
 

@@ -35,15 +35,15 @@ main() {
     log "Stopping primary timeoracle on ${node_list[0]}" "$GREEN"
     ssh -t "${node_list[0]}" "pkill -f 'ft-timeoracle -role primary'"
 
-    sleep 2
+    sleep 8
     log "Stopping MongoDB1 on ${node_list[1]}" "$GREEN"
-    ssh -t "${node_list[1]}" "docker stop MongoDB1"
+    ssh -t "${node_list[1]}" "docker rm -f mongo1"
 
-    sleep 1
-    log "Starting MongoDB1 on ${node_list[1]}" "$GREEN"
-    ssh -t "${node_list[1]}" "docker start MongoDB1"
+    # sleep 8
+    # log "Starting MongoDB1 on ${node_list[1]}" "$GREEN"
+    # ssh -t "${node_list[1]}" "docker unpause mongo1"
 
-    sleep 1
+    sleep 2
     log "Finish Fault Tolerance Process" "$GREEN"
 }
 

@@ -73,6 +73,7 @@ func main() {
 		log.Println("Running under fault tolerance mode")
 		log.Println("Waiting 5s for executor connections...")
 		time.Sleep(5 * time.Second)
+		log.Println("RUN!!!!")
 	}
 
 	switch preset {
