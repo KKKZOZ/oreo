@@ -561,7 +561,16 @@ func (t *Transaction) getTime(mode string) (int64, error) {
 		// used in benchmark
 		time.Sleep(config.GetMaxDebugLatency())
 	}
-	return t.timeSource.GetTime(mode)
+	retryTimes := 3
+	for i := 0; i < retryTimes; i++ {
+		gotTime, err := t.timeSource.GetTime(mode)
+		if err == nil {
+			return gotTime, nil
+		}
+		time.Sleep(500 * time.Millisecond) // wait for 100ms before retrying
+	}
+	ErrMsg := fmt.Sprintf("failed to get time after %d retries", retryTimes)
+	return 0, errors.New(ErrMsg)
 }
 
 func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDataStrategy, string, error) {

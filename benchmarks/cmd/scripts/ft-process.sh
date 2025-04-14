@@ -18,7 +18,7 @@ log() {
 main() {
     log "Start Fault Tolerance Process" "$GREEN"
 
-    sleep 10
+    sleep 14
     for node in "${node_list[@]}"; do
         log "Stopping ft-executor-8002 on $node" "$GREEN"
         ssh -t "$node" "docker stop ft-executor-8002"
@@ -37,7 +37,7 @@ main() {
     log "Stopping primary timeoracle on ${node_list[0]}" "$GREEN"
     ssh -t "${node_list[0]}" "pkill -f 'ft-timeoracle -role primary'"
 
-    sleep 8
+    sleep 12
     log "Stopping MongoDB1 on ${node_list[1]}" "$GREEN"
     ssh -t "${node_list[1]}" "docker rm -f mongo1"
 

@@ -33,8 +33,8 @@ main() {
 
     nohup ./ft-timeoracle -role backup -p 8011 -type hybrid -max-skew "$max_skew" \
         -primary-addr http://localhost:"$timeoracle_primary_port" \
-        -health-check-interval 0.5s \
-        -health-check-timeout 0.5s \
+        -health-check-interval 0.25s \
+        -health-check-timeout 0.25s \
         -failure-threshold 1 \
         >/dev/null 2>./backup_timeoracle.log &
 
