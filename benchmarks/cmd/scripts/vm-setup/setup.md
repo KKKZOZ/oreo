@@ -71,29 +71,35 @@ echo "Setup completed successfully!"
 1. 使用公网 IP 登录 Node1
 
 ```shell
-ssh-copy-id -i ~/.ssh/id_ed25519.pub root@FILL
+ssh root@FILL
 
-ssh -i ~/.ssh/otc_dse root@FILL
+scp id_ed25519 root@FILL:~/.ssh
+scp go1.23.3.linux-amd64.tar.gz .tmux.conf root@FILL:~/
 
-scp -i ~/.ssh/otc_dse otc_dse root@FILL:~/.ssh
-scp -i ~/.ssh/otc_dse go1.23.3.linux-amd64.tar.gz .tmux.conf root@FILL:~/
+scp oreo.tar.gz root@FILL:~/
 
-scp -i ~/.ssh/otc_dse oreo.tar.gz root@FILL:~/
-
-scp -i ~/.ssh/otc_dse jdk-17_linux-x64.tar.gz epoxy-3m2.jar root@FILL:~/
+scp jdk-17_linux-x64.tar.gz epoxy-3m2.jar root@FILL:~/
 ```
 
 2. 运行以下指令安装并运行 Docker
 
 ```shell
-ssh -i ~/.ssh/otc_dse root@FILL
+ssh root@FILL
 
 sudo yum install -y docker-ce git ripgrep fish tmux
+
+sudo mkdir -p /etc/docker
+
+echo '{
+  "registry-mirrors": [
+    "https://mirror.ccs.tencentyun.com"
+  ]
+}' | sudo tee /etc/docker/daemon.json
 
 sudo systemctl start docker
 ```
 
-> Do we need this step?
+> 如果服务器已经配置了秘钥登录, 则下面的第三步不需要执行
 
 3. 配置其他几台服务器的免密登录
 
@@ -116,15 +122,12 @@ ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.6
 Host node1
     HostName 10.206.206.2
     User root
-    IdentityFile ~/.ssh/otc_dse
 Host node2
     HostName 10.206.206.3
     User root
-    IdentityFile ~/.ssh/otc_dse
 Host node3
     HostName 10.206.206.4
     User root
-    IdentityFile ~/.ssh/otc_dse
 ```
 
 - 5 个节点
@@ -133,23 +136,18 @@ Host node3
 Host node1
     HostName 10.206.206.2
     User root
-    IdentityFile ~/.ssh/otc_dse
 Host node2
     HostName 10.206.206.3
     User root
-    IdentityFile ~/.ssh/otc_dse
 Host node3
     HostName 10.206.206.4
     User root
-    IdentityFile ~/.ssh/otc_dse
 Host node4
     HostName 10.206.206.5
     User root
-    IdentityFile ~/.ssh/otc_dse
 Host node5
     HostName 10.206.206.6
     User root
-    IdentityFile ~/.ssh/otc_dse
 
 ```
 
@@ -158,9 +156,7 @@ Host node5
 ```shell
 git clone git@github.com:KKKZOZ/oreo.git --depth=1
 
-git config --global user.email "1206668472@qq.com"
-
-git config --global user.name "KKKZOZ"
+git config --global user.email "1206668472@qq.com" && git config --global user.name "KKKZOZ"
 ```
 
 6. 安装 Golang
@@ -174,9 +170,7 @@ rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.3.linux-amd64.tar.gz
 
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 
-source .bashrc
-
-go env -w GOPROXY=https://goproxy.cn,direct
+source .bashrc && go env -w GOPROXY=https://goproxy.cn,direct
 ```
 
 - 安装 Java
@@ -192,21 +186,7 @@ cd oreo/benchmarks/cmd/scripts/vm-setup
 ./setup.sh
 ```
 
-8. 配置 docker mirror
-
-```shell
-sudo mkdir -p /etc/docker
-
-echo '{
-  "registry-mirrors": [
-    "https://mirror.ccs.tencentyun.com"
-  ]
-}' | sudo tee /etc/docker/daemon.json
-
-sudo systemctl restart docker
-```
-
-8. 在执行 Workload 之前, 需要手动配置各个服务器目前运行的数据库
+1. 在执行 Workload 之前, 需要手动配置各个服务器目前运行的数据库
 
 - Postgres
 
