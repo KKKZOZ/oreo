@@ -6,6 +6,7 @@ import (
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -22,6 +23,12 @@ func (db *TxnDbWrapper) Start() (err error) {
 	db.TxnStart = time.Now()
 	start := time.Now()
 	defer func() {
+
+		if err != nil {
+			log.Printf("Error in Start: %v\n", err)
+			fmeasure(db.TxnStart, "TXN", err)
+		}
+
 		measure(start, "Start", err)
 		errrecord.Record("Start", err)
 	}()
@@ -62,9 +69,10 @@ func (db *TxnDbWrapper) CleanupThread(ctx context.Context) {
 func (db *TxnDbWrapper) Read(ctx context.Context, table string, key string) (_ string, err error) {
 	start := time.Now()
 	defer func() {
-		// if err != nil {
-		// 	fmt.Println("Error in Read: ", err)
-		// }
+		if err != nil {
+			log.Printf("Error in Read: %v\n", err)
+			fmeasure(db.TxnStart, "TXN", err)
+		}
 		measure(start, "READ", err)
 		errrecord.Record("READ", err)
 	}()

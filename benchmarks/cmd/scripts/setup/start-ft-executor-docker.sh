@@ -24,6 +24,7 @@ while [[ "$#" -gt 0 ]]; do
         shift
         ;;
     -r | --remove) remove_all=true ;;
+    -l | --limited) limited=true ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -64,6 +65,6 @@ docker run --name="ft-executor-$port" --network=host -d \
     -bc "/app/config/$bc" \
     -db "$db_combinations"
 
-sleep 1
+# sleep 0.5
 echo "Executor started"
 lsof -i ":$port"

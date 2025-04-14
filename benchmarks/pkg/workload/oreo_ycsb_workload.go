@@ -44,8 +44,7 @@ func (wl *OreoYCSBWorkload) PostCheck(ctx context.Context, db ycsb.DB, resChan c
 // Subtle: this method shadows the method (Randomizer).ResetKeySequence of OreoYCSBWorkload.Randomizer.
 func (wl *OreoYCSBWorkload) ResetKeySequence() {}
 
-// TODO: here!
-var _ Workload = (*OreoYCSBWorkload)(nil) // Keep the original interface check if YCSBWorkload exists
+var _ Workload = (*OreoYCSBWorkload)(nil)
 
 func NewOreoYCSBWorkload(wp *WorkloadParameter) *OreoYCSBWorkload {
 	activeDBs := getDatabases(*wp)
@@ -120,7 +119,7 @@ func (wl *OreoYCSBWorkload) doLoad(ctx context.Context, db ycsb.TransactionDB, d
 	}
 	// Allow opCount not divisible by batch size, handle remainder
 	// if opCount%benconfig.MaxLoadBatchSize != 0 {
-	// 	log.Printf("Warning: opCount (%d) is not a multiple of MaxLoadBatchSize (%d). The last batch will be smaller.", opCount, benconfig.MaxLoadBatchSize)
+	//  log.Printf("Warning: opCount (%d) is not a multiple of MaxLoadBatchSize (%d). The last batch will be smaller.", opCount, benconfig.MaxLoadBatchSize)
 	// }
 
 	numBatches := opCount / benconfig.MaxLoadBatchSize
@@ -202,6 +201,7 @@ func getDatabases(wp WorkloadParameter) []string {
 // --- Run and doTxn are modified ---
 
 func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
+
 	if len(wl.dbCombinations) == 0 {
 		fmt.Println("Error: No database combinations available for Run phase. Check configuration and InvolvedDBNum.")
 		return
@@ -214,7 +214,6 @@ func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 	}
 
 	for i := 0; i < opCount; i++ {
-		// TODO: add interval here
 		if benconfig.GlobalIsFaultTolerance {
 			time.Sleep(benconfig.GlobalFaultToleranceRequestInterval)
 		}
@@ -223,14 +222,25 @@ func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 }
 
 func (wl *OreoYCSBWorkload) doTxn(ctx context.Context, db ycsb.TransactionDB) {
+
+	threadID := ctx.Value("threadID").(int)
 	// 1. Select a combination of databases for this transaction uniformly.
 	// Use the workload's random source for reproducibility if seeded.
-	selectedCombination := wl.dbCombinations[wl.Intn(len(wl.dbCombinations))]
+	// selectedCombination := wl.dbCombinations[wl.Intn(len(wl.dbCombinations))]
 
-	db.Start()
+	// selectedCombination := []string{"Redis", "Cassandra"}
+	selectedCombination := wl.dbCombinations[threadID%len(wl.dbCombinations)] // Use threadID for reproducibility
+
+	// log.Printf("Thread %d selected combination: %v", threadID, selectedCombination)
+
+	err := db.Start()
+	if err != nil {
+		log.Printf("Error starting transaction: %v\n", err)
+		return
+	}
 	for i := 0; i < wl.wp.TxnOperationGroup; i++ {
 		// 2. Select an operation type based on its proportion.
-		operation := wl.NextOperation() // Assumes this still works based on wp proportions
+		operation := wl.NextOperation()
 
 		// 3. Select a database *from the chosen combination* for this specific operation.
 		// We select uniformly from the combination to ensure fair distribution among them within the transaction.
@@ -257,7 +267,7 @@ func (wl *OreoYCSBWorkload) doTxn(ctx context.Context, db ycsb.TransactionDB) {
 			log.Fatalf("Unknown operation encountered in doTxn: %v", operation)
 		}
 	}
-	err := db.Commit()
+	err = db.Commit()
 	if err != nil {
 		// Decide how to handle commit errors, e.g., log, metric, etc.
 		// fmt.Printf("Error committing transaction: %v\n", err)

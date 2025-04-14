@@ -1,6 +1,8 @@
 package timesource
 
 import (
+	"errors"
+
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/valyala/fasthttp"
 )
@@ -35,7 +37,8 @@ func (g *GlobalTimeSource) GetTime(mode string) (int64, error) {
 
 	// 检查状态码
 	if resp.StatusCode() != fasthttp.StatusOK {
-		return 0, err
+		// log.Printf("Error: received non-200 response code: %d, error: %s\n", resp.StatusCode(), err)
+		return 0, errors.New("non-200 response code")
 	}
 
 	// 读取响应体

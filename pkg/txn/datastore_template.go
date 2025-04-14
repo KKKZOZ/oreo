@@ -23,6 +23,7 @@ var _ Datastorer = (*Datastore)(nil)
 const (
 	EMPTY         string = ""
 	RETRYINTERVAL        = 10 * time.Millisecond
+	TIMEOUT              = 1 * time.Second
 )
 
 type PredicateInfo struct {
@@ -88,7 +89,17 @@ func NewDatastore(name string, conn Connector, factory DataItemFactory) *Datasto
 // Start starts the Datastore by establishing a connection to the underlying server.
 // It returns an error if the connection fails.
 func (r *Datastore) Start() error {
-	return r.conn.Connect()
+	done := make(chan error, 1)
+	go func() {
+		done <- r.conn.Connect()
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(TIMEOUT):
+		return errors.New("connection timed out")
+	}
 }
 
 // Read reads a record from the Datastore.
@@ -751,6 +762,7 @@ func (r *Datastore) prepareInRemote(items []DataItem) (int64, error) {
 func (r *Datastore) Commit() error {
 	logger.Log.Debugw("Datastore.Commit() starts", "r.Txn.isRemote", r.Txn.isRemote)
 
+	defer r.clear()
 	if r.Txn.isRemote {
 		return r.commitInRemote()
 	}
@@ -774,7 +786,6 @@ func (r *Datastore) Commit() error {
 	}
 	eg.Wait()
 	logger.Log.Debugw("Datastore.Commit() finishes", "TxnId", r.Txn.TxnId)
-	r.clear()
 	return nil
 }
 

@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -15,6 +16,8 @@ import (
 )
 
 var _ txn.Connector = (*MongoConnection)(nil)
+
+const defaultMongoTimeout = 500 * time.Millisecond
 
 type KeyValueItem struct {
 	Key   string `bson:"_id"`
@@ -78,7 +81,12 @@ func (m *MongoConnection) Connect() error {
 		return nil
 	}
 
+	log.Printf("Hi, I am being called")
+
 	clientOptions := options.Client().ApplyURI(m.Address)
+
+	clientOptions.SetConnectTimeout(1 * time.Second)
+
 	if m.config.Username != "" && m.config.Password != "" {
 		clientOptions.SetAuth(options.Credential{
 			Username: m.config.Username,
@@ -90,7 +98,7 @@ func (m *MongoConnection) Connect() error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
 	defer cancel()
 	err = client.Ping(ctx, nil)
 	if err != nil {
@@ -123,8 +131,11 @@ func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
 	var item MongoItem
-	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&item)
+	err := m.coll.FindOne(ctx, bson.M{"_id": key}).Decode(&item)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return &MongoItem{}, errors.New(txn.KeyNotFound)
@@ -145,8 +156,11 @@ func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
 	_, err := m.coll.UpdateOne(
-		context.Background(),
+		ctx,
 		bson.M{"_id": key},
 		bson.D{
 			{Key: "$set", Value: value},
@@ -169,6 +183,8 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		return "", errors.Errorf("not connected to MongoDB")
 	}
 
+	// log.Printf("Hi, I am being called by %s\n", key)
+
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -176,6 +192,9 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	if doCreat {
 		return m.atomicCreateMongoItem(key, value)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
 
 	newVer := util.AddToString(value.Version(), 1)
 
@@ -198,7 +217,7 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 		ReturnDocument: &after,
 	}
 	var updatedItem MongoItem
-	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
+	err := m.coll.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedItem)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return "", errors.New(txn.VersionMismatch)
@@ -226,6 +245,9 @@ func (m *MongoConnection) ConditionalCommit(key string, version string, tCommit 
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
 	newVer := util.AddToString(version, 1)
 
 	filter := bson.M{"_id": key, "Version": version}
@@ -241,7 +263,7 @@ func (m *MongoConnection) ConditionalCommit(key string, version string, tCommit 
 		ReturnDocument: &after,
 	}
 	var updatedItem MongoItem
-	err := m.coll.FindOneAndUpdate(context.Background(), filter, update, opts).Decode(&updatedItem)
+	err := m.coll.FindOneAndUpdate(ctx, filter, update, opts).Decode(&updatedItem)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return "", errors.New(txn.VersionMismatch)
@@ -258,19 +280,23 @@ func (m *MongoConnection) AtomicCreate(key string, value any) (string, error) {
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
 	}
+
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
 	filter := bson.M{"_id": key}
 	var result KeyValueItem
-	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
+	err := m.coll.FindOne(ctx, filter).Decode(&result)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			// we can safely create the item
 			str := util.ToString(value)
-			_, err := m.coll.InsertOne(context.Background(), bson.D{
+			_, err := m.coll.InsertOne(ctx, bson.D{
 				{Key: "_id", Value: key},
 				{Key: "Value", Value: str},
 			})
@@ -287,15 +313,18 @@ func (m *MongoConnection) AtomicCreate(key string, value any) (string, error) {
 
 func (m *MongoConnection) atomicCreateMongoItem(key string, value txn.DataItem) (string, error) {
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
 	filter := bson.M{"_id": key}
 	var result MongoItem
-	err := m.coll.FindOne(context.Background(), filter).Decode(&result)
+	err := m.coll.FindOne(ctx, filter).Decode(&result)
 
 	newVer := util.AddToString(value.Version(), 1)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			_, err := m.coll.InsertOne(context.Background(), bson.D{
+			_, err := m.coll.InsertOne(ctx, bson.D{
 				{Key: "_id", Value: key},
 				{Key: "Value", Value: value.Value()},
 				{Key: "GroupKeyList", Value: value.GroupKeyList()},
@@ -331,8 +360,11 @@ func (m *MongoConnection) Get(key string) (string, error) {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
 	var result KeyValueItem
-	err := m.coll.FindOne(context.Background(), bson.M{"_id": key}).Decode(&result)
+	err := m.coll.FindOne(ctx, bson.M{"_id": key}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return "", errors.New(txn.KeyNotFound)
@@ -354,10 +386,13 @@ func (m *MongoConnection) Put(key string, value any) error {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
 	str := util.ToString(value)
 
 	_, err := m.coll.UpdateOne(
-		context.Background(),
+		ctx,
 		bson.M{"_id": key},
 		bson.D{
 			{Key: "$set", Value: bson.D{
@@ -383,7 +418,10 @@ func (m *MongoConnection) Delete(key string) error {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
-	_, err := m.coll.DeleteOne(context.Background(), bson.M{"_id": key})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
+	defer cancel()
+
+	_, err := m.coll.DeleteOne(ctx, bson.M{"_id": key})
 	if err != nil {
 		return err
 	}

@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	stdlog "log"
 	"net/http"
-
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +15,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/logger" // Use provided logger for client ops
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/valyala/fasthttp"
+	// Using json-iterator for potential performance benefits in client methods
 )
 
 // Ensure RegistryClient implements the RemoteClient interface
@@ -56,6 +55,7 @@ type Client struct {
 	// Client Consumer Part
 	clientMutex sync.Mutex                // Protects access to curIndexMap initialization
 	curIndexMap map[string]*atomic.Uint64 // Key: DsName, Value: Atomic counter for round-robin index
+	httpClient  *fasthttp.Client          // Reusable fasthttp client for executor communication
 }
 
 // Constants
@@ -65,6 +65,8 @@ const (
 	defaultInstanceTTL = 6 * time.Second
 	// How often the registry checks for stale instances
 	cleanupInterval = 3 * time.Second
+	// Default timeout for requests to executors if not configured otherwise
+	defaultRequestTimeout = 30000 * time.Millisecond
 )
 
 // NewRegistryClient initializes the combined client, starts the registry HTTP server,
@@ -91,6 +93,14 @@ func NewClient(registryListenAddr string, instanceTTL ...time.Duration) (*Client
 		curIndexMap:    make(map[string]*atomic.Uint64),
 		shutdownCtx:    ctx,
 		shutdownCancel: cancel,
+		httpClient:     &fasthttp.Client{ // Initialize the fasthttp client
+			// Set reasonable default timeouts for reading/writing - DoTimeout overrides these per call
+			// ReadTimeout:  defaultRequestTimeout,
+			// WriteTimeout: defaultRequestTimeout,
+			// MaxIdleConnDuration: 1 * time.Minute, // Keep idle connections open
+			// MaxConnsPerHost:     100,             // Limit connections per executor host
+			// Consider other options like Name for identification in logs if needed
+		},
 	}
 
 	// Setup Registry HTTP Server
@@ -172,7 +182,7 @@ func (rc *Client) Shutdown(ctx context.Context) error {
 	return listenerErr
 }
 
-// --- Registry Server Handlers ---
+// --- Registry Server Handlers (Unchanged) ---
 
 // handleRegister handles POST requests from executors wishing to join the registry.
 func (rc *Client) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -191,12 +201,7 @@ func (rc *Client) handleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Bad Request: Instance 'address' is required", http.StatusBadRequest)
 		return
 	}
-	// DsNames are crucial for routing
 	if len(req.DsNames) == 0 {
-		// Allow registration without DsNames? Could default to ALL? For now, require it.
-		// Alternatively, could allow registration and update DsNames via heartbeat later.
-		// http.Error(w, "Bad Request: Instance 'dsNames' list is required for registration", http.StatusBadRequest)
-		// return
 		stdlog.Printf("Warning: Registering instance %s without specific DsNames. Assuming it handles 'ALL'.", req.Address)
 		req.DsNames = []string{ALL} // Default to ALL if none provided
 	}
@@ -208,16 +213,12 @@ func (rc *Client) handleRegister(w http.ResponseWriter, r *http.Request) {
 	existing, exists := rc.instances[req.Address]
 
 	if exists {
-		// Instance is re-registering, update its heartbeat and potentially its DsNames
 		stdlog.Printf("Re-registering/updating instance: %s (Old DsNames: %v, New DsNames: %v)", req.Address, existing.DsNames, req.DsNames)
-		// Remove old DsName associations before adding potentially new ones
 		rc.removeInstanceFromDsNameIndexLocked(req.Address, existing.DsNames)
-		// Update struct in map
 		existing.LastHeartbeat = now
-		existing.DsNames = req.DsNames // Overwrite DsNames list
+		existing.DsNames = req.DsNames
 		rc.instances[req.Address] = existing
 	} else {
-		// New instance registration
 		stdlog.Printf("Registering new instance: %s for DsNames: %v", req.Address, req.DsNames)
 		rc.instances[req.Address] = InstanceInfo{
 			Address:       req.Address,
@@ -226,7 +227,6 @@ func (rc *Client) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update the DsName lookup index with the potentially new/updated DsNames
 	rc.addInstanceToDsNameIndexLocked(req.Address, req.DsNames)
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -240,8 +240,7 @@ func (rc *Client) handleDeregister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var req RegistryRequest // Address is the only required field here
-	// Use standard JSON decoder
+	var req RegistryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		stdlog.Printf("Error decoding deregister request: %v", err)
 		http.Error(w, fmt.Sprintf("Bad Request: %v", err), http.StatusBadRequest)
@@ -258,16 +257,13 @@ func (rc *Client) handleDeregister(w http.ResponseWriter, r *http.Request) {
 	instance, ok := rc.instances[req.Address]
 	if ok {
 		stdlog.Printf("Deregistering instance: %s (handled DsNames: %v)", req.Address, instance.DsNames)
-		// Remove from main instance map
 		delete(rc.instances, req.Address)
-		// Remove from the DsName lookup index
 		rc.removeInstanceFromDsNameIndexLocked(req.Address, instance.DsNames)
 
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "Deregistered successfully")
 	} else {
-		// Instance might have already been removed by cleanup or never registered
 		stdlog.Printf("Deregister attempt for unknown or already removed instance: %s", req.Address)
 		http.Error(w, "Instance not found", http.StatusNotFound)
 	}
@@ -279,8 +275,7 @@ func (rc *Client) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var req RegistryRequest // Address is the only required field here
-	// Use standard JSON decoder
+	var req RegistryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		stdlog.Printf("Error decoding heartbeat request: %v", err)
 		http.Error(w, fmt.Sprintf("Bad Request: %v", err), http.StatusBadRequest)
@@ -291,25 +286,18 @@ func (rc *Client) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rc.registryMutex.Lock() // Use write lock because we modify LastHeartbeat
+	rc.registryMutex.Lock()
 	defer rc.registryMutex.Unlock()
 
 	instance, ok := rc.instances[req.Address]
 	if !ok {
-		// Received heartbeat from an instance not currently in the registry.
-		// This could happen if the registry restarted, or the instance registration failed silently.
-		// The executor should ideally attempt to re-register if its heartbeats fail.
 		stdlog.Printf("Heartbeat received from unknown instance: %s. Instance should re-register.", req.Address)
-		// Do NOT automatically register on heartbeat, as we don't know the DsNames.
-		http.Error(w, "Instance not registered; please re-register", http.StatusNotFound) // 404 indicates not found
+		http.Error(w, "Instance not registered; please re-register", http.StatusNotFound)
 		return
 	}
 
-	// Instance found, update its last heartbeat time
 	instance.LastHeartbeat = time.Now()
-	rc.instances[req.Address] = instance // Update the map with the new time
-	// Logging every heartbeat can be very verbose, uncomment if needed for debugging
-	// stdlog.Printf("Received heartbeat from: %s", req.Address)
+	rc.instances[req.Address] = instance
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -317,7 +305,6 @@ func (rc *Client) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetServices provides an optional diagnostic endpoint (GET /services)
-// to view the current state of the registry (which instances handle which DsNames).
 func (rc *Client) handleGetServices(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -327,14 +314,12 @@ func (rc *Client) handleGetServices(w http.ResponseWriter, r *http.Request) {
 	rc.registryMutex.RLock() // Use read lock for viewing data
 	defer rc.registryMutex.RUnlock()
 
-	// Build a response structure that maps DsName -> list of active instance addresses
 	output := make(map[string][]string)
 	now := time.Now()
 	activeCount := 0
 	staleCount := 0
 
 	for addr, info := range rc.instances {
-		// Check if instance is considered active based on TTL
 		if now.Sub(info.LastHeartbeat) <= rc.instanceTTL {
 			activeCount++
 			for _, dsName := range info.DsNames {
@@ -342,12 +327,9 @@ func (rc *Client) handleGetServices(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			staleCount++
-			// Optionally include stale instances in a separate part of the response
-			// output["_STALE_"] = append(output["_STALE_"], fmt.Sprintf("%s (last heartbeat: %v ago)", addr, now.Sub(info.LastHeartbeat)))
 		}
 	}
 
-	// Add summary info to the response
 	output["_summary_"] = []string{
 		fmt.Sprintf("active_instances: %d", activeCount),
 		fmt.Sprintf("stale_instances (pending cleanup): %d", staleCount),
@@ -357,21 +339,18 @@ func (rc *Client) handleGetServices(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	// Use standard JSON encoder for the HTTP response
 	if err := json.NewEncoder(w).Encode(output); err != nil {
 		stdlog.Printf("Error encoding service list response: %v", err)
-		// Don't write error using http.Error if headers/status already sent
 	}
 }
 
-// --- Registry Helper Functions ---
+// --- Registry Helper Functions (Unchanged) ---
 
 // addInstanceToDsNameIndexLocked updates the dsName -> [address] lookup map.
 // It MUST be called while holding the registryMutex write lock.
 func (rc *Client) addInstanceToDsNameIndexLocked(instanceAddr string, dsNames []string) {
 	for _, dsName := range dsNames {
-		list, _ := rc.dsNameIndex[dsName] // Get current list (or nil)
-		// Check if the address is already in the list to avoid duplicates
+		list, _ := rc.dsNameIndex[dsName]
 		found := false
 		for _, addr := range list {
 			if addr == instanceAddr {
@@ -379,7 +358,6 @@ func (rc *Client) addInstanceToDsNameIndexLocked(instanceAddr string, dsNames []
 				break
 			}
 		}
-		// If not found, append it
 		if !found {
 			rc.dsNameIndex[dsName] = append(list, instanceAddr)
 		}
@@ -393,18 +371,14 @@ func (rc *Client) removeInstanceFromDsNameIndexLocked(instanceAddr string, dsNam
 	for _, dsName := range dsNames {
 		list, ok := rc.dsNameIndex[dsName]
 		if !ok {
-			continue // No index for this dsName, nothing to remove
+			continue
 		}
-
-		// Create a new list excluding the instanceAddr
-		newList := make([]string, 0, len(list)) // Preallocate capacity
+		newList := make([]string, 0, len(list))
 		for _, addr := range list {
 			if addr != instanceAddr {
 				newList = append(newList, addr)
 			}
 		}
-
-		// Update the index: remove entry if list becomes empty, otherwise update list
 		if len(newList) == 0 {
 			delete(rc.dsNameIndex, dsName)
 		} else {
@@ -416,9 +390,8 @@ func (rc *Client) removeInstanceFromDsNameIndexLocked(instanceAddr string, dsNam
 // cleanupStaleInstances runs as a background goroutine, periodically checking for
 // instances that have exceeded their TTL and removing them from the registry.
 func (rc *Client) cleanupStaleInstances() {
-	defer rc.wg.Done() // Signal completion when the goroutine exits
+	defer rc.wg.Done()
 
-	// Ticker controls how often the cleanup check runs
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -427,121 +400,109 @@ func (rc *Client) cleanupStaleInstances() {
 	for {
 		select {
 		case <-ticker.C:
-			// Time to perform cleanup check
-			rc.registryMutex.Lock() // Acquire write lock to modify registry state
+			rc.registryMutex.Lock()
 
 			now := time.Now()
 			cleanedCount := 0
-			// Store addresses and their DsNames to remove *after* iterating
 			staleInstances := make(map[string][]string)
 
 			for addr, info := range rc.instances {
 				if now.Sub(info.LastHeartbeat) > rc.instanceTTL {
 					stdlog.Printf("Cleanup: Stale instance found: %s (last heartbeat: %v ago)", addr, now.Sub(info.LastHeartbeat).Round(time.Second))
-					staleInstances[addr] = info.DsNames // Record for index removal
-					delete(rc.instances, addr)          // Remove from main map
+					staleInstances[addr] = info.DsNames
+					delete(rc.instances, addr)
 					cleanedCount++
 				}
 			}
 
-			// Remove stale instances from the DsName index *after* the main map iteration
 			for addr, dsNames := range staleInstances {
 				rc.removeInstanceFromDsNameIndexLocked(addr, dsNames)
 			}
 
-			rc.registryMutex.Unlock() // Release lock
+			rc.registryMutex.Unlock()
 
 			if cleanedCount > 0 {
 				stdlog.Printf("Cleanup: Removed %d stale instance(s)", cleanedCount)
 			}
 
 		case <-rc.shutdownCtx.Done():
-			// Shutdown signal received
 			stdlog.Println("Stale instance cleanup routine stopping due to shutdown signal.")
-			return // Exit the goroutine
+			return
 		}
 	}
 }
 
-// --- Client/Consumer Methods ---
+// --- Client/Consumer Methods (Modified) ---
 
 // GetServerAddr selects an active executor address for the given dsName using round-robin.
-// It queries the dynamically updated registry state.
+// (Unchanged - Round Robin Logic is separate from HTTP execution)
 func (rc *Client) GetServerAddr(dsName string) (string, error) {
 	rc.registryMutex.RLock() // Use read lock to access the dsNameIndex
 
-	// 1. Find list of addresses for the specific DsName
 	addrList, ok := rc.dsNameIndex[dsName]
 	if !ok || len(addrList) == 0 {
-		// 2. If not found or empty, try the fallback 'ALL' DsName
-		// logger.Log.Debugw("No specific executor found or list empty, checking for ALL", "dsName", dsName) // Use logger.Log for client ops
 		addrList, ok = rc.dsNameIndex[ALL]
 		if !ok || len(addrList) == 0 {
-			// 3. If 'ALL' is also empty or doesn't exist, no instances are available
-			rc.registryMutex.RUnlock() // Release lock before returning error
+			rc.registryMutex.RUnlock()
 			logger.Log.Errorw("No active executor instance found for dsName", "dsName", dsName)
 			return "", fmt.Errorf("no active executor instance available for dsName %s (or ALL)", dsName)
 		}
-		// If falling back to ALL, use the ALL key for the round-robin counter later
-		// logger.Log.Debugw("Falling back to executors handling ALL", "dsName", dsName, "allCount", len(addrList))
-		dsName = ALL // Modify the key used for the counter lookup
+		dsName = ALL // Use ALL key for counter
 	}
 
-	// 4. Copy the list of addresses to release the lock sooner
 	numInstances := len(addrList)
 	addresses := make([]string, numInstances)
 	copy(addresses, addrList)
-	rc.registryMutex.RUnlock() // Release the registry lock
+	rc.registryMutex.RUnlock()
 
-	// 5. Perform Round-Robin selection using atomic counter
-	rc.clientMutex.Lock() // Lock *only* for initializing the counter map entry if needed
+	rc.clientMutex.Lock()
 	counter, exists := rc.curIndexMap[dsName]
 	if !exists {
-		// First time requesting this dsName (or ALL), initialize its counter
 		var newAtomicCounter atomic.Uint64
 		rc.curIndexMap[dsName] = &newAtomicCounter
 		counter = &newAtomicCounter
-		// logger.Log.Debugw("Initialized round-robin counter", "dsName", dsName)
 	}
-	rc.clientMutex.Unlock() // Release client state lock
+	rc.clientMutex.Unlock()
 
-	// Atomically get the next index (current value before increment) and wrap around
-	// Note: AddUint64 returns the *new* value, so subtract 1 to get the value used for this call
 	idx := counter.Add(1) - 1
-	instanceIndex := int(idx % uint64(numInstances)) // Modulo ensures wrap-around
+	instanceIndex := int(idx % uint64(numInstances))
 
 	selectedAddr := addresses[instanceIndex]
-	// logger.Log.Debugw("Selected executor via round-robin", "dsName", dsName, "index", instanceIndex, "address", selectedAddr, "available", addresses)
 
 	return selectedAddr, nil
 }
 
-// Read sends a read request to an appropriate executor instance discovered via the registry.
+// Helper to get timeout value (can be extended to read from config)
+func getRequestTimeout() time.Duration {
+	// TODO: Read this value from config.System.NetworkRequestTimeout if available
+	// For now, use the default.
+	// Example:
+	// if config.System.NetworkRequestTimeout > 0 {
+	//     return config.System.NetworkRequestTimeout
+	// }
+	return defaultRequestTimeout
+}
+
+// Read sends a read request with timeout.
 func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataStrategy, string, error) {
-	// Optional debug delay
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	// 1. Get an active executor address for the datastore
 	addr, err := rc.GetServerAddr(dsName)
 	if err != nil {
-		// Error already logged by GetServerAddr if no instance found
 		return nil, txn.Normal, "", fmt.Errorf("failed to get executor address for read dsName '%s': %w", dsName, err)
 	}
-	// Prepend scheme (assuming http, could be configurable)
 	reqUrl := "http://" + addr + "/read"
 	logger.Log.Debugw("Executing Read request", "url", reqUrl, "dsName", dsName, "key", key)
 
-	// 2. Prepare request data and marshal using jsoniter
 	reqData := ReadRequest{DsName: dsName, Key: key, StartTime: ts, Config: cfg}
 	jsonData, err := json2.Marshal(reqData)
 	if err != nil {
 		logger.Log.Errorw("Failed to marshal Read request body", "error", err)
-		return nil, txn.Normal, "", fmt.Errorf("failed to marshal read request: %w", err) // Propagate error
+		return nil, txn.Normal, "", fmt.Errorf("failed to marshal read request: %w", err)
 	}
 
-	// 3. Prepare and execute fasthttp request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
@@ -552,25 +513,26 @@ func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig
 	req.Header.SetContentType("application/json")
 	req.SetBody(jsonData)
 
-	// Consider adding timeout to fasthttp client call for robustness
-	// client := &fasthttp.Client{ ReadTimeout: 5*time.Second, WriteTimeout: 5*time.Second }
-	// err = client.DoTimeout(req, resp, 5*time.Second)
-	err = fasthttp.Do(req, resp) // Using default client for now
+	// Execute with timeout
+	timeout := getRequestTimeout()
+	err = rc.httpClient.DoTimeout(req, resp, timeout)
 	if err != nil {
+		// Check specifically for timeout error
+		if errors.Is(err, fasthttp.ErrTimeout) {
+			logger.Log.Errorw("Read HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
+			return nil, txn.Normal, "", fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
+		}
+		// Handle other potential errors (connection refused, DNS error, etc.)
 		logger.Log.Errorw("Failed to execute Read HTTP request", "url", reqUrl, "error", err)
-		// TODO: Implement retry logic or temporarily mark instance as suspect?
 		return nil, txn.Normal, "", fmt.Errorf("http request to executor %s failed: %w", reqUrl, err)
 	}
 
-	// 4. Process response
 	if resp.StatusCode() != fasthttp.StatusOK {
 		errMsg := fmt.Sprintf("executor %s returned status %d for read", addr, resp.StatusCode())
-		// Include response body in log for debugging non-OK status
 		logger.Log.Warnw(errMsg, "url", reqUrl, "responseBody", string(resp.Body()))
-		return nil, txn.Normal, "", errors.New(errMsg)
+		// return nil, txn.Normal, "", errors.New(errMsg)
 	}
 
-	// 5. Unmarshal response body using jsoniter
 	var response ReadResponse
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
@@ -578,7 +540,6 @@ func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig
 		return nil, txn.Normal, "", fmt.Errorf("unmarshal read response error: %w", err)
 	}
 
-	// 6. Check application-level status in response
 	if response.Status == "OK" {
 		return response.Data, response.DataStrategy, response.GroupKey, nil
 	} else {
@@ -588,17 +549,16 @@ func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig
 	}
 }
 
-// Prepare sends a prepare request to an appropriate executor instance.
+// Prepare sends a prepare request with timeout.
 func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 	startTime int64, cfg txn.RecordConfig,
 	validationMap map[string]txn.PredicateInfo) (map[string]string, int64, error) {
 
-	debugStart := time.Now() // For latency measurement if needed
+	debugStart := time.Now()
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	// 1. Get executor address
 	addr, err := rc.GetServerAddr(dsName)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get executor address for prepare dsName '%s': %w", dsName, err)
@@ -606,7 +566,6 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 	reqUrl := "http://" + addr + "/prepare"
 	logger.Log.Debugw("Executing Prepare request", "url", reqUrl, "dsName", dsName, "itemCount", len(itemList))
 
-	// 2. Prepare request data and marshal using jsoniter
 	reqData := PrepareRequest{DsName: dsName, ItemType: GetItemType(dsName), ItemList: itemList, StartTime: startTime, Config: cfg, ValidationMap: validationMap}
 	jsonData, err := json2.Marshal(reqData)
 	if err != nil {
@@ -614,7 +573,6 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 		return nil, 0, fmt.Errorf("failed to marshal prepare request: %w", err)
 	}
 
-	// 3. Prepare and execute fasthttp request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
@@ -625,24 +583,27 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 	req.Header.SetContentType("application/json")
 	req.SetBody(jsonData)
 
-	// Execute request (consider timeout)
-	debugMsg := fmt.Sprintf("HttpClient.Do(Prepare) to %s", reqUrl)
-	logger.Log.Debugw("Before "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
-	err = fasthttp.Do(req, resp)
+	// Execute with timeout
+	timeout := getRequestTimeout()
+	debugMsg := fmt.Sprintf("HttpClient.DoTimeout(Prepare) to %s", reqUrl)
+	logger.Log.Debugw("Before "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint", "Timeout", timeout)
+	err = rc.httpClient.DoTimeout(req, resp, timeout)
 	logger.Log.Debugw("After "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
 	if err != nil {
+		if errors.Is(err, fasthttp.ErrTimeout) {
+			logger.Log.Errorw("Prepare HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
+			return nil, 0, fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
+		}
 		logger.Log.Errorw("Failed to execute Prepare HTTP request", "url", reqUrl, "error", err)
 		return nil, 0, fmt.Errorf("http request to executor %s failed: %w", reqUrl, err)
 	}
 
-	// 4. Process response status
 	if resp.StatusCode() != fasthttp.StatusOK {
 		errMsg := fmt.Sprintf("executor %s returned status %d for prepare", addr, resp.StatusCode())
 		logger.Log.Warnw(errMsg, "url", reqUrl, "responseBody", string(resp.Body()))
 		return nil, 0, errors.New(errMsg)
 	}
 
-	// 5. Unmarshal response body using jsoniter
 	var response PrepareResponse
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
@@ -650,24 +611,21 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 		return nil, 0, fmt.Errorf("unmarshal prepare response error: %w", err)
 	}
 
-	// 6. Check application-level status
 	if response.Status == "OK" {
 		return response.VerMap, response.TCommit, nil
 	} else {
 		errMsg := response.ErrMsg
-		// Prepare failures are expected (e.g., conflicts), log as warning or info
 		logger.Log.Warnw("Prepare operation failed on executor (application error)", "url", reqUrl, "error", errMsg)
 		return nil, 0, errors.New(errMsg)
 	}
 }
 
-// Commit sends a commit request to an appropriate executor instance.
+// Commit sends a commit request with timeout.
 func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64) error {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	// 1. Get executor address
 	addr, err := rc.GetServerAddr(dsName)
 	if err != nil {
 		return fmt.Errorf("failed to get executor address for commit dsName '%s': %w", dsName, err)
@@ -675,7 +633,6 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 	reqUrl := "http://" + addr + "/commit"
 	logger.Log.Debugw("Executing Commit request", "url", reqUrl, "dsName", dsName, "infoCount", len(infoList))
 
-	// 2. Prepare request data and marshal using jsoniter
 	reqData := CommitRequest{DsName: dsName, List: infoList, TCommit: tCommit}
 	jsonData, err := json2.Marshal(reqData)
 	if err != nil {
@@ -683,7 +640,6 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 		return fmt.Errorf("failed to marshal commit request: %w", err)
 	}
 
-	// 3. Prepare and execute fasthttp request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
@@ -694,21 +650,24 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 	req.Header.SetContentType("application/json")
 	req.SetBody(jsonData)
 
-	// Execute request (consider timeout)
-	err = fasthttp.Do(req, resp)
+	// Execute with timeout
+	timeout := getRequestTimeout()
+	err = rc.httpClient.DoTimeout(req, resp, timeout)
 	if err != nil {
+		if errors.Is(err, fasthttp.ErrTimeout) {
+			logger.Log.Errorw("Commit HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
+			return fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
+		}
 		logger.Log.Errorw("Failed to execute Commit HTTP request", "url", reqUrl, "error", err)
 		return fmt.Errorf("http request to executor %s failed: %w", reqUrl, err)
 	}
 
-	// 4. Process response status
 	if resp.StatusCode() != fasthttp.StatusOK {
 		errMsg := fmt.Sprintf("executor %s returned status %d for commit", addr, resp.StatusCode())
 		logger.Log.Warnw(errMsg, "url", reqUrl, "responseBody", string(resp.Body()))
 		return errors.New(errMsg)
 	}
 
-	// 5. Unmarshal response body using jsoniter
 	var response Response[string] // Generic response structure
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
@@ -716,7 +675,6 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 		return fmt.Errorf("unmarshal commit response error: %w", err)
 	}
 
-	// 6. Check application-level status
 	if response.Status == "OK" {
 		return nil
 	} else {
@@ -726,13 +684,12 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 	}
 }
 
-// Abort sends an abort request to an appropriate executor instance.
+// Abort sends an abort request with timeout.
 func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) error {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
-	// 1. Get executor address
 	addr, err := rc.GetServerAddr(dsName)
 	if err != nil {
 		return fmt.Errorf("failed to get executor address for abort dsName '%s': %w", dsName, err)
@@ -740,7 +697,6 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 	reqUrl := "http://" + addr + "/abort"
 	logger.Log.Debugw("Executing Abort request", "url", reqUrl, "dsName", dsName, "keyCount", len(keyList))
 
-	// 2. Prepare request data and marshal using jsoniter
 	reqData := AbortRequest{DsName: dsName, KeyList: keyList, GroupKeyList: groupKeyList}
 	jsonData, err := json2.Marshal(reqData)
 	if err != nil {
@@ -748,7 +704,6 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 		return fmt.Errorf("failed to marshal abort request: %w", err)
 	}
 
-	// 3. Prepare and execute fasthttp request
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
@@ -759,21 +714,24 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 	req.Header.SetContentType("application/json")
 	req.SetBody(jsonData)
 
-	// Execute request (consider timeout)
-	err = fasthttp.Do(req, resp)
+	// Execute with timeout
+	timeout := getRequestTimeout()
+	err = rc.httpClient.DoTimeout(req, resp, timeout)
 	if err != nil {
+		if errors.Is(err, fasthttp.ErrTimeout) {
+			logger.Log.Errorw("Abort HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
+			return fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
+		}
 		logger.Log.Errorw("Failed to execute Abort HTTP request", "url", reqUrl, "error", err)
 		return fmt.Errorf("http request to executor %s failed: %w", reqUrl, err)
 	}
 
-	// 4. Process response status
 	if resp.StatusCode() != fasthttp.StatusOK {
 		errMsg := fmt.Sprintf("executor %s returned status %d for abort", addr, resp.StatusCode())
 		logger.Log.Warnw(errMsg, "url", reqUrl, "responseBody", string(resp.Body()))
 		return errors.New(errMsg)
 	}
 
-	// 5. Unmarshal response body using jsoniter
 	var response Response[string] // Generic response structure
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
@@ -781,28 +739,30 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 		return fmt.Errorf("unmarshal abort response error: %w", err)
 	}
 
-	// 6. Check application-level status
 	if response.Status == "OK" {
 		return nil
 	} else {
 		errMsg := response.ErrMsg
-		// Abort failures might not be critical, log as warning
 		logger.Log.Warnw("Abort operation failed on executor (application error)", "url", reqUrl, "error", errMsg)
 		return errors.New(errMsg)
 	}
 }
 
+// GetExecutorAddrList retrieves a list of currently known executor addresses.
+// (Unchanged)
 func (rc *Client) GetExecutorAddrList() []string {
-	rc.registryMutex.RLock() // Use read lock to access the dsNameIndex
+	rc.registryMutex.RLock()
 	defer rc.registryMutex.RUnlock()
 
-	// Collect all unique addresses from the instances map
 	addressSet := make(map[string]struct{})
 	for _, instance := range rc.instances {
+		// Consider filtering only active instances based on TTL if needed
+		// now := time.Now()
+		// if now.Sub(instance.LastHeartbeat) <= rc.instanceTTL {
 		addressSet[instance.Address] = struct{}{}
+		// }
 	}
 
-	// Convert set to slice
 	addressList := make([]string, 0, len(addressSet))
 	for addr := range addressSet {
 		addressList = append(addressList, addr)

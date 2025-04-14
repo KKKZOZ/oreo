@@ -5,6 +5,11 @@ nodes=(node2 node3 node4)
 
 main() {
     cd "$(dirname "$0")" && cd ../..
+
+    echo "Rebuilding components and docker images"
+
+    bash ./scripts/setup/update-component.sh
+
     mkdir -p ./oreo-ben/config
 
     cp ./scripts/setup/* ./oreo-ben/

@@ -80,7 +80,9 @@ func (w *worker) RunBenchmark(ctx context.Context, dbName string) {
 	} else {
 		db = w.wrappedDBMap[dbName]
 	}
-	w.wl.Run(ctx, w.opCount, db)
+
+	ctxKV := context.WithValue(ctx, "threadID", w.threadID)
+	w.wl.Run(ctxKV, w.opCount, db)
 }
 
 func (w *worker) RunPostCheck(ctx context.Context, dbName string, resChan chan int) {

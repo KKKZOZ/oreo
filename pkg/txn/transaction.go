@@ -148,6 +148,11 @@ func (t *Transaction) Start() error {
 			Log.Debugw("failed to get time", "cause", err, "Topic", "CheckPoint")
 			return err
 		}
+
+		if t.TxnStartTime == 0 {
+			Log.Debugw("failed to get time", "cause", err, "Topic", "CheckPoint")
+			return errors.New("failed to get time")
+		}
 	}
 
 	for _, ds := range t.dataStoreMap {
@@ -376,7 +381,7 @@ func (t *Transaction) commitInOreo() error {
 	success := true
 	var cause error
 	mu := sync.Mutex{}
-	prepareDatastoreFunc := func(ds Datastorer) {
+	__prepareDatastoreFunc := func(ds Datastorer) {
 		defer func() {
 			msg := fmt.Sprintf("%s prepare phase ends", ds.GetName())
 			Log.Debugw(msg, "Latency", time.Since(t.debugStart), "Topic", "CheckPoint")
@@ -402,7 +407,7 @@ func (t *Transaction) commitInOreo() error {
 		wg.Add(1)
 		go func(ds Datastorer) {
 			defer wg.Done()
-			prepareDatastoreFunc(ds)
+			__prepareDatastoreFunc(ds)
 		}(ds)
 	}
 	wg.Wait()
@@ -565,6 +570,10 @@ func (t *Transaction) RemoteRead(dsName string, key string) (DataItem, RemoteDat
 	}
 
 	// globalName := t.groupKeyMaintainer.(Datastorer).GetName()
+
+	// if t.TxnStartTime == 0 {
+	// 	panic("WTF?")
+	// }
 
 	return t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
 		// GlobalName:                  globalName,

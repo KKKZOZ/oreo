@@ -218,7 +218,9 @@ func (s *Server) startHeartbeat() {
 				resp, err := http.DefaultClient.Do(req)
 				if err != nil {
 					// Network errors are expected sometimes, just log warning
-					Log.Warnw("Failed to send heartbeat (will retry)", "error", err)
+
+					// Disable this for now to avoid flooding logs
+					// Log.Warnw("Failed to send heartbeat (will retry)", "error", err)
 					// Ensure context is cancelled even on error
 					reqCancel()
 					continue
@@ -458,7 +460,7 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 		req.StartTime, req.Config, req.ValidationMap)
 	var resp network.PrepareResponse
 	if err != nil {
-		Log.Warnw("Prepare operation failed", "dsName", req.DsName, "startTime", req.StartTime, "error", err)
+		// Log.Warnw("Prepare operation failed", "dsName", req.DsName, "startTime", req.StartTime, "error", err)
 		resp = network.PrepareResponse{
 			Status: "Error",
 			ErrMsg: err.Error(),
@@ -504,7 +506,7 @@ func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 	err := s.committer.Commit(req.DsName, req.List, req.TCommit)
 	var resp network.Response[string] // Generic response type
 	if err != nil {
-		Log.Warnw("Commit operation failed", "dsName", req.DsName, "tCommit", req.TCommit, "error", err)
+		// Log.Warnw("Commit operation failed", "dsName", req.DsName, "tCommit", req.TCommit, "error", err)
 		resp = network.Response[string]{
 			Status: "Error",
 			ErrMsg: err.Error(),
@@ -906,7 +908,7 @@ func newLogger() {
 	case "FATAL":
 		level = zap.FatalLevel
 	default:
-		level = zap.InfoLevel // Default to INFO if LOG env var is not set or invalid
+		level = zap.WarnLevel
 	}
 
 	// Use production config for better performance, but with development settings for readability

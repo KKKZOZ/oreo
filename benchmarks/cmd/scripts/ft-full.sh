@@ -21,6 +21,7 @@ verbose=false
 remote=false
 skip=false
 loaded=false
+limited=false
 wl_mode=
 
 declare -g executor_pid
@@ -46,7 +47,7 @@ while [[ "$#" -gt 0 ]]; do
     -v | --verbose) verbose=true ;;
     -r | --remote) remote=true ;;
     -s | --skip) skip=true ;;
-    -l | --loaded) loaded=true ;;
+    -l | --limited) limited=true ;;
     *)
         echo "Unknown parameter passed: $1"
         exit 1
@@ -60,6 +61,7 @@ tar_dir=./data/ft
 config_file="./workloads/ft/ft.yaml"
 results_file="$tar_dir/ft_benchmark_results.csv"
 bc=./config/BenConfig_ft.yaml
+log_file="$tar_dir/ft_benchmark.log"
 
 log() {
     local color=${2:-$NC}
@@ -86,7 +88,7 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
     log "Running $wl_type-$wl_mode $profile thread=$thread" $BLUE
-    ./bin/cmd -ft -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -t "$thread" >"$output"
+    ./bin/cmd -ft -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -t "$thread" >"$output" 2>"$log_file"
 }
 
 load_data() {
@@ -162,12 +164,21 @@ deploy_local() {
 deploy_remote() {
     log "Setup timeoracle on node 2" "$GREEN"
     ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-timeoracle.sh "
+    ssh -t ${node_list[0]} "sudo systemctl restart haproxy"
 
-    for node in "${node_list[@]}"; do
-        log "Setup $node" "$GREEN"
-        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations -r"
-        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8002 -wl $wl_type -db $db_combinations"
-    done
+    if [ "$limited" = true ]; then
+       for node in "${node_list[@]}"; do
+            log "Setup $node" "$GREEN"
+            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations -r -l"
+            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8002 -wl $wl_type -db $db_combinations -l"
+        done
+    else 
+        for node in "${node_list[@]}"; do
+            log "Setup $node" "$GREEN"
+            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations -r"
+            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8002 -wl $wl_type -db $db_combinations"
+        done
+    fi
 }
 
 main() {
@@ -243,7 +254,7 @@ main() {
 
         print_summary "${thread}" "${oreo_duration}" "${oreo_p99}" "${oreo_ratio}"
 
-        sleep $round_interval
+        # sleep $round_interval
     done
 
     mv timeline.csv "./data/ft/timeline.csv"
