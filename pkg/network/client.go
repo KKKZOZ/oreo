@@ -598,11 +598,11 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 		return nil, 0, fmt.Errorf("http request to executor %s failed: %w", reqUrl, err)
 	}
 
-	if resp.StatusCode() != fasthttp.StatusOK {
-		errMsg := fmt.Sprintf("executor %s returned status %d for prepare,err: %s", addr, resp.StatusCode(), string(resp.Body()))
-		logger.Log.Warnw(errMsg, "url", reqUrl, "responseBody", string(resp.Body()))
-		return nil, 0, errors.New(errMsg)
-	}
+	// if resp.StatusCode() != fasthttp.StatusOK {
+	// 	errMsg := fmt.Sprintf("executor %s returned status %d for prepare,err: %s", addr, resp.StatusCode(), string(resp.Body()))
+	// 	logger.Log.Warnw(errMsg, "url", reqUrl, "responseBody", string(resp.Body()))
+	// 	return nil, 0, errors.New(errMsg)
+	// }
 
 	var response PrepareResponse
 	err = json2.Unmarshal(resp.Body(), &response)

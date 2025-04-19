@@ -217,7 +217,7 @@ func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 
 	for i := 0; i < opCount; i++ {
 		if benconfig.GlobalIsFaultTolerance {
-			interval := rand.Intn(int(benconfig.GlobalFaultToleranceRequestInterval.Milliseconds())) + 2
+			interval := rand.Intn(int(benconfig.GlobalFaultToleranceRequestInterval.Milliseconds())+1) + 1
 			time.Sleep(time.Duration(interval) * time.Millisecond)
 		}
 		wl.doTxn(ctx, txnDB)

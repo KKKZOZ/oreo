@@ -69,12 +69,14 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 							return nil
 						}
 					} else {
-						return errors.New("validation failed due to unknown status")
+						errMsg := fmt.Sprintf("[getDSR err: %v] validation failed due to unknown status", err)
+						return errors.New(errMsg)
 					}
 				}
 
 				// For AssumeCommit
-				return errors.New("validation failed due to unknown status")
+				errMsg := fmt.Sprintf("[getDSR err: %v] validation failed due to unknown status", err)
+				return errors.New(errMsg)
 			}
 
 			// all group keys are found
