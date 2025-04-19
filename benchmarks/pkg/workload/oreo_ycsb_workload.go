@@ -7,6 +7,7 @@ import (
 	"errors" // Added for error handling
 	"fmt"
 	"log" // Added for random selection within combination
+	"math/rand"
 	"reflect"
 	"strings"
 	"sync"
@@ -52,9 +53,10 @@ func NewOreoYCSBWorkload(wp *WorkloadParameter) *OreoYCSBWorkload {
 		log.Fatal("Oreo YCSB Workload: No databases found with non-zero proportions.")
 		return nil // Or handle error differently
 	}
-	if wp.InvolvedDBNum <= 0 {
-		log.Fatalf("Oreo YCSB Workload: InvolvedDBNum (%d) must be positive.", wp.InvolvedDBNum)
-		return nil
+	if wp.InvolvedDBNum == 0 {
+		log.Printf("WARN: Oreo YCSB Workload: InvolvedDBNum (%d), default to 2", wp.InvolvedDBNum)
+		wp.InvolvedDBNum = 2
+		// return nil
 	}
 	if len(activeDBs) < wp.InvolvedDBNum {
 		log.Fatalf("Oreo YCSB Workload: Not enough active databases (%d) to satisfy InvolvedDBNum (%d). Active DBs: %v", len(activeDBs), wp.InvolvedDBNum, activeDBs)
@@ -215,7 +217,8 @@ func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 
 	for i := 0; i < opCount; i++ {
 		if benconfig.GlobalIsFaultTolerance {
-			time.Sleep(benconfig.GlobalFaultToleranceRequestInterval)
+			interval := rand.Intn(int(benconfig.GlobalFaultToleranceRequestInterval.Milliseconds())) + 2
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 		}
 		wl.doTxn(ctx, txnDB)
 	}

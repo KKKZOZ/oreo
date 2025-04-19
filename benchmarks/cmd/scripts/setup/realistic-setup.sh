@@ -110,6 +110,6 @@ elif [ "$wl" == "order" ]; then
     fi
 fi
 
-rm -f "../$wl/$wl-load"
+# rm -f "../$wl/$wl-load"
 
 echo "Deployment complete for $wl workload on node$nodeId"

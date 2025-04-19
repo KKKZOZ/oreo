@@ -599,7 +599,7 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 	}
 
 	if resp.StatusCode() != fasthttp.StatusOK {
-		errMsg := fmt.Sprintf("executor %s returned status %d for prepare", addr, resp.StatusCode())
+		errMsg := fmt.Sprintf("executor %s returned status %d for prepare,err: %s", addr, resp.StatusCode(), string(resp.Body()))
 		logger.Log.Warnw(errMsg, "url", reqUrl, "responseBody", string(resp.Body()))
 		return nil, 0, errors.New(errMsg)
 	}

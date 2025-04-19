@@ -26,8 +26,8 @@ executor_address_map:
 
 fault_tolerance_request_interval_value: 1
 # deploy time oracle on node2
-time_oracle_url: "http://10.206.206.3:8009"
-zipfian_constant: 0.9
+time_oracle_url: "http://10.206.206.3:8010"
+zipfian_constant: 0.8
 latency_value: 3
 
 # Redis configuration

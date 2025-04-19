@@ -68,13 +68,10 @@ func main() {
 
 	wp := loadConfig()
 
-	if isFaultTolerance {
-		// Wait for executor connections
-		log.Println("Running under fault tolerance mode")
-		log.Println("Waiting 5s for executor connections...")
-		time.Sleep(5 * time.Second)
-		log.Println("RUN!!!!")
-	}
+	// Wait for executor connections
+	log.Println("Waiting 5s for executor connections...")
+	time.Sleep(5 * time.Second)
+	log.Println("RUN!!!!")
 
 	switch preset {
 	case "cg":

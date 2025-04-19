@@ -76,6 +76,6 @@ else
     echo "Invalid database"
 fi
 
-rm ../ycsb/ycsb-load
+# rm ../ycsb/ycsb-load
 
 echo "YCSB setup complete"

@@ -15,6 +15,8 @@ sudo systemctl status haproxy
 
 sudo systemctl restart haproxy
 
+sudo systemctl stop haproxy
+
 haproxy -f ./haproxy.cfg
 ```
 

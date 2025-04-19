@@ -3,7 +3,6 @@ package mongo
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -80,8 +79,6 @@ func (m *MongoConnection) Connect() error {
 	if m.hasConnected {
 		return nil
 	}
-
-	log.Printf("Hi, I am being called")
 
 	clientOptions := options.Client().ApplyURI(m.Address)
 
@@ -182,8 +179,6 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
 	}
-
-	// log.Printf("Hi, I am being called by %s\n", key)
 
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)

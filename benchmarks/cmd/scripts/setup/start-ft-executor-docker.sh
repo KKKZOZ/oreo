@@ -6,6 +6,7 @@ handle_error() {
 port=8001
 db_combinations=
 wl_mode=
+bc=
 limited=false
 remove_all=false
 
@@ -23,6 +24,10 @@ while [[ "$#" -gt 0 ]]; do
         db_combinations="$2"
         shift
         ;;
+    -bc | --benconfig)
+        bc="$2"
+        shift
+        ;;
     -r | --remove) remove_all=true ;;
     -l | --limited) limited=true ;;
     *)
@@ -33,11 +38,11 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-if [ "$wl_mode" == "ycsb" ]; then
-    bc=BenConfig_ft.yaml
-else
-    bc=BenConfig_realistic.yaml
-fi
+# if [ "$wl_mode" == "ycsb" ]; then
+#     bc=BenConfig_ft.yaml
+# else
+#     bc.=BenConfig_realistic.yaml
+# fi
 
 cd ~/oreo-ben || handle_error "oreo-ben directory not found"
 

@@ -61,7 +61,7 @@ tar_dir=./data/ft
 config_file="./workloads/ft/ft.yaml"
 results_file="$tar_dir/ft_benchmark_results.csv"
 bc=./config/BenConfig_ft.yaml
-log_file="$tar_dir/ft_benchmark.log"
+log_file="$tar_dir/benchmark.log"
 
 log() {
     local color=${2:-$NC}
@@ -169,8 +169,8 @@ deploy_remote() {
     if [ "$limited" = true ]; then
        for node in "${node_list[@]}"; do
             log "Setup $node" "$GREEN"
-            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations -r -l"
-            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8002 -wl $wl_type -db $db_combinations -l"
+            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations -bc BenConfig_ft.yaml -r -l"
+            ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8002 -wl $wl_type -db $db_combinations -bc BenConfig_ft.yaml -l"
         done
     else 
         for node in "${node_list[@]}"; do

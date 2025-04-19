@@ -53,6 +53,7 @@ fi
 tar_dir=./data/$wl_type
 config_file="./workloads/realistic/${wl_type}.yaml"
 results_file="$tar_dir/${wl_type}_benchmark_results.csv"
+log_file="$tar_dir/benchmark.log"
 
 log() {
     local color=${2:-$NC}
@@ -74,7 +75,7 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4
     log "Running $wl_type $profile thread=$thread" $BLUE
-    go run . -d oreo -wl $wl_type -wc "./workloads/$wl_type.yaml" -bc "$bc" -m $mode -ps $profile -t "$thread" >"$output"
+    go run . -d oreo -wl $wl_type -wc "./workloads/$wl_type.yaml" -bc "$bc" -m $mode -ps $profile -t "$thread" >"$output" 2>"$log_file"
 }
 
 load_data() {
@@ -157,7 +158,8 @@ deploy_remote() {
 
     for node in "${node_list[@]}"; do
         log "Setup $node" "$GREEN"
-        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
+        # ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl $wl_type -db $db_combinations"
+        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl $wl_type -db $db_combinations -bc BenConfig_realistic.yaml -r"
     done
 }
 

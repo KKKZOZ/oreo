@@ -5,7 +5,9 @@ import (
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
+	"time"
 )
 
 type worker struct {
@@ -80,6 +82,8 @@ func (w *worker) RunBenchmark(ctx context.Context, dbName string) {
 	} else {
 		db = w.wrappedDBMap[dbName]
 	}
+	interval := rand.Intn(500)
+	time.Sleep(time.Duration(interval) * time.Millisecond)
 
 	ctxKV := context.WithValue(ctx, "threadID", w.threadID)
 	w.wl.Run(ctxKV, w.opCount, db)

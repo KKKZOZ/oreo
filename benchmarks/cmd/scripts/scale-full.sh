@@ -53,6 +53,7 @@ tar_dir=./data/scale
 config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
 bc=./config/BenConfig_ycsb.yaml
+log_file="$tar_dir/benchmark.log"
 
 log() {
     local color=${2:-$NC}
@@ -79,7 +80,7 @@ kill_process_on_port() {
 run_workload() {
     local mode=$1 profile=$2 thread=$3 output=$4 read_strategy=$5
     log "Running $wl_type-$wl_mode $profile thread=$thread readStrategy=$read_strategy" $BLUE
-    go run . -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -read "$read_strategy" -t "$thread" >"$output"
+    go run . -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "$mode" -ps "$profile" -read "$read_strategy" -t "$thread" >"$output" 2>"$log_file"
 }
 
 load_data() {
@@ -172,7 +173,8 @@ deploy_remote() {
 
     for node in "${node_list[@]}"; do
         log "Setup $node" $GREEN
-        ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor-docker.sh -l -p 8001 -wl ycsb -db $db_combinations"
+        # ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor-docker.sh -l -p 8001 -wl ycsb -db $db_combinations"
+        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl ycsb -db $db_combinations -bc BenConfig_ycsb.yaml -r"
     done
 }
 
