@@ -208,7 +208,7 @@ func (c *Client) getCacheState() {
 	}
 
 	for _, url := range executorUrlList {
-		tar_url := url + "/cache"
+		tar_url := "http://" + url + "/cache"
 		resp, err := client.Get(tar_url)
 		if err != nil {
 			fmt.Printf("Failed to send GET request to %s: %v\n", tar_url, err)

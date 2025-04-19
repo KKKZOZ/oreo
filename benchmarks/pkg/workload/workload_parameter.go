@@ -9,10 +9,11 @@ type WorkloadParameter struct {
 	DoBenchmark       bool
 	PostCheckInterval int `yaml:"postcheckinterval"`
 
-	RecordCount       int `yaml:"recordcount"`
-	OperationCount    int `yaml:"operationcount"`
-	TxnOperationGroup int `yaml:"txnoperationgroup"`
-	MaxLoadBatchSize  int `yaml:"max_load_batch_size"`
+	RecordCount       int     `yaml:"recordcount"`
+	OperationCount    int     `yaml:"operationcount"`
+	TxnOperationGroup int     `yaml:"txnoperationgroup"`
+	MaxLoadBatchSize  int     `yaml:"max_load_batch_size"`
+	ZipfianConstant   float64 `yaml:"zipfian_constant"`
 
 	ReadProportion            float64 `yaml:"readproportion"`
 	UpdateProportion          float64 `yaml:"updateproportion"`

@@ -120,9 +120,10 @@ func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
 
 	return &RedisConnection{
 		rdb: redis.NewClient(&redis.Options{
-			Addr:     config.Address,
-			Password: config.Password,
-			PoolSize: config.PoolSize,
+			Addr:        config.Address,
+			Password:    config.Password,
+			PoolSize:    config.PoolSize,
+			PoolTimeout: 10 * time.Second,
 		}),
 		Address: config.Address,
 		se:      config.se,

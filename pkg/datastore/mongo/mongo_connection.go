@@ -16,7 +16,7 @@ import (
 
 var _ txn.Connector = (*MongoConnection)(nil)
 
-const defaultMongoTimeout = 500 * time.Millisecond
+const defaultMongoTimeout = 5000 * time.Millisecond
 
 type KeyValueItem struct {
 	Key   string `bson:"_id"`
@@ -82,7 +82,7 @@ func (m *MongoConnection) Connect() error {
 
 	clientOptions := options.Client().ApplyURI(m.Address)
 
-	clientOptions.SetConnectTimeout(1 * time.Second)
+	// clientOptions.SetConnectTimeout(1 * time.Second)
 
 	if m.config.Username != "" && m.config.Password != "" {
 		clientOptions.SetAuth(options.Credential{

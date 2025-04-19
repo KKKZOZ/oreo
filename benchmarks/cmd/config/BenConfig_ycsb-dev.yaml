@@ -15,7 +15,7 @@ executor_address_map:
 
 time_oracle_url: "http://172.24.58.116:8010"
 zipfian_constant: 0.9
-latency_value: 10
+latency_value: 0
 
 # Redis configuration
 redis_addr: "172.24.58.116:6379"

@@ -215,8 +215,9 @@ rsync -avP root@FILL:~/oreo ~/Projects/oreo2
 # Node 3
 ./ycsb-setup.sh MongoDB2
 
-
+# Node 2
 ./ycsb-setup.sh Redis
+# Node 3
 ./ycsb-setup.sh Cassandra
 
 ```
@@ -242,7 +243,9 @@ docker volume prune
 - Setup
 
 ```shell
+# Node 2
 ./realistic-setup.sh -wl iot -id 2
+# Node 3
 ./realistic-setup.sh -wl iot -id 3
 ```
 
@@ -257,8 +260,11 @@ docker volume prune
 - Setup
 
 ```shell
+# Node 2
 ./realistic-setup.sh -wl social -id 2
+# Node 3
 ./realistic-setup.sh -wl social -id 3
+# Node 4
 ./realistic-setup.sh -wl social -id 4
 ```
 
@@ -273,9 +279,13 @@ docker volume prune
 - Setup
 
 ```shell
+# Node 2
 ./realistic-setup.sh -wl order -id 2
+# Node 3
 ./realistic-setup.sh -wl order -id 3
+# Node 4
 ./realistic-setup.sh -wl order -id 4
+# Node 5
 ./realistic-setup.sh -wl order -id 5
 ```
 

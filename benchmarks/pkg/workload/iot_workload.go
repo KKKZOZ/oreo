@@ -41,6 +41,7 @@ func NewIotWorkload(wp *WorkloadParameter) *IotWorkload {
 }
 
 func (wl *IotWorkload) DataIngestion(ctx context.Context, db ycsb.TransactionDB) {
+
 	sensor_id := wl.NextKeyName()
 
 	db.Start()
@@ -120,6 +121,7 @@ func (wl *IotWorkload) Run(ctx context.Context, opCount int,
 		fmt.Println("The DB does not support transactions")
 		return
 	}
+
 	for i := 0; i < opCount; i++ {
 		switch wl.NextTask() {
 		case 1:

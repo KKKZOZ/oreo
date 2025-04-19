@@ -126,7 +126,7 @@ func main() {
 
 	switch mode {
 	case "load":
-		// cfg.Config.ConcurrentOptimizationLevel = 1
+		cfg.Config.ConcurrentOptimizationLevel = 2
 		if benconfig.MaxLoadBatchSize == 0 {
 			log.Fatalf("MaxLoadBatchSize should be specified")
 		}
@@ -448,11 +448,12 @@ func displayBenchmarkInfo() {
 func loadConfig() *workload.WorkloadParameter {
 
 	bcLoader := aconfig.LoaderFor(&benConfig, aconfig.Config{
-		SkipDefaults: true,
-		SkipFiles:    false,
-		SkipEnv:      true,
-		SkipFlags:    true,
-		Files:        []string{benConfigPath},
+		SkipDefaults:       true,
+		SkipFiles:          false,
+		SkipEnv:            true,
+		SkipFlags:          true,
+		FailOnFileNotFound: true,
+		Files:              []string{benConfigPath},
 		FileDecoders: map[string]aconfig.FileDecoder{
 			".yaml": aconfigyaml.New(),
 		},
@@ -473,11 +474,12 @@ func loadConfig() *workload.WorkloadParameter {
 
 	wp := &workload.WorkloadParameter{}
 	wpLoader := aconfig.LoaderFor(wp, aconfig.Config{
-		SkipDefaults: true,
-		SkipFiles:    false,
-		SkipEnv:      true,
-		SkipFlags:    true,
-		Files:        []string{workloadConfigPath},
+		SkipDefaults:       true,
+		SkipFiles:          false,
+		SkipEnv:            true,
+		SkipFlags:          true,
+		FailOnFileNotFound: true,
+		Files:              []string{workloadConfigPath},
 		FileDecoders: map[string]aconfig.FileDecoder{
 			".yaml": aconfigyaml.New(),
 		},
@@ -488,6 +490,10 @@ func loadConfig() *workload.WorkloadParameter {
 	}
 	benconfig.MaxLoadBatchSize = wp.MaxLoadBatchSize
 	benconfig.GlobalClient, _ = network.NewClient(":9000")
+	// WorkloadParameter's config takes precedence over BenchmarkConfig
+	if wp.ZipfianConstant != 0 {
+		benconfig.ZipfianConstant = wp.ZipfianConstant
+	}
 
 	return wp
 }

@@ -5,6 +5,7 @@ import (
 	"benchmark/ycsb"
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"time"
@@ -63,9 +64,15 @@ func newWorker(
 	// 	os.Exit(-1)
 	// }
 
+	// log.Printf("threadID: %d, totalOpCount: %d, threadCount: %d\n", threadID, totalOpCount, threadCount)
+
 	w.opCount = totalOpCount / threadCount
 	if threadID < totalOpCount%threadCount {
 		w.opCount++
+	}
+	if w.opCount == 0 {
+		log.Fatalf("opCount should be bigger than 0")
+		os.Exit(-1)
 	}
 
 	return w
@@ -82,10 +89,10 @@ func (w *worker) RunBenchmark(ctx context.Context, dbName string) {
 	} else {
 		db = w.wrappedDBMap[dbName]
 	}
-	interval := rand.Intn(500)
+	interval := rand.Intn(200)
 	time.Sleep(time.Duration(interval) * time.Millisecond)
-
 	ctxKV := context.WithValue(ctx, "threadID", w.threadID)
+	log.Printf("Worker %d: start benchmark for %s\n", w.threadID, dbName)
 	w.wl.Run(ctxKV, w.opCount, db)
 }
 

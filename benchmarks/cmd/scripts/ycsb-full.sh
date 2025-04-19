@@ -56,6 +56,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 wl_type=ycsb
+load_flag_dir=./data/ycsb
 tar_dir=./data/ycsb
 config_file="./workloads/ycsb/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
@@ -96,7 +97,7 @@ load_data() {
         ./bin/cmd -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
     done
-    touch "$tar_dir/${wl_type}-load"
+    touch "$load_flag_dir/${wl_type}-load"
 }
 
 get_metrics() {
@@ -208,7 +209,7 @@ main() {
     if [ "$loaded" = true ]; then
         log "Skipping data loading" $YELLOW
     else
-        if [ ! -f "$tar_dir/${wl_type}-load" ]; then
+        if [ ! -f "$load_flag_dir/${wl_type}-load" ]; then
             log "Ready to load data" $YELLOW
         else
             log "Data has been already loaded" $YELLOW
@@ -222,7 +223,7 @@ main() {
     fi
 
     # Load data if needed
-    if [ ! -f "$tar_dir/${wl_type}-load" ]; then
+    if [ ! -f "$load_flag_dir/${wl_type}-load" ]; then
         load_data
     fi
 
