@@ -78,7 +78,7 @@ scp go1.23.3.linux-amd64.tar.gz .tmux.conf root@FILL:~/
 
 scp oreo.tar.gz root@FILL:~/
 
-scp jdk-17_linux-x64.tar.gz epoxy-3m2.jar root@FILL:~/
+scp jdk-17_linux-x64.tar.gz epoxy.jar root@FILL:~/
 ```
 
 2. 运行以下指令安装并运行 Docker
@@ -86,7 +86,7 @@ scp jdk-17_linux-x64.tar.gz epoxy-3m2.jar root@FILL:~/
 ```shell
 ssh root@FILL
 
-sudo yum install -y docker-ce git ripgrep fish tmux
+sudo yum install -y docker-ce git ripgrep fish tmux iproute-tc
 
 sudo mkdir -p /etc/docker
 
@@ -178,20 +178,13 @@ source .bashrc && go env -w GOPROXY=https://goproxy.cn,direct
 tar -xzf jdk-17_linux-x64.tar.gz
 
 export JAVA_HOME=/root/jdk-17.0.11
+export PATH=$PATH:/usr/local/go/bin:$JAVA_HOME/bin
 
 7. 执行 `setup.sh` 完成对其他服务器的配置
 
 ```shell
 cd oreo/benchmarks/cmd/scripts/vm-setup
 ./setup.sh
-```
-
-1. 在执行 Workload 之前, 需要手动配置各个服务器目前运行的数据库
-
-- Postgres
-
-```shell
-docker run -d -p 5432:5432 --rm --name="apiary-postgres" --env POSTGRES_PASSWORD=dbos postgres:latest
 ```
 
 1. 同步数据
@@ -231,6 +224,54 @@ rsync -avP root@FILL:~/oreo ~/Projects/oreo2
 ./ycsb-full.sh -wl A -db Redis,Cassandra -v -r
 ./ycsb-full.sh -wl F -db Redis,Cassandra -v -r
 ```
+
+#### Epoxy
+
+
+```shell
+# Node 2
+docker run -d -p 5432:5432 --rm --name="apiary-postgres" --env POSTGRES_PASSWORD=dbos postgres:latest
+
+java -jar epoxy
+```
+
+- Load Data
+
+```shell
+POST /load?recordCount=1000000&threadNum=50&mongoIdx=1 HTTP/1.1
+Content-Length: 0
+Host: 119.45.11.232:7081
+User-Agent: HTTPie
+
+POST /load?recordCount=1000000&threadNum=50&mongoIdx=2 HTTP/1.1
+Content-Length: 0
+Host: 119.45.11.232:7081
+User-Agent: HTTPie
+
+```
+
+- Run
+
+```shell
+GET /workloada?operationCount=60000&threadNum=8 HTTP/1.1
+Host: 119.45.11.232:7081
+User-Agent: HTTPie
+
+GET /workloada?operationCount=60000&threadNum=16 HTTP/1.1
+Host: 119.45.11.232:7081
+User-Agent: HTTPie
+
+GET /workloadf?operationCount=60000&threadNum=8 HTTP/1.1
+Host: 119.45.11.232:7081
+User-Agent: HTTPie
+
+GET /workloadf?operationCount=60000&threadNum=16 HTTP/1.1
+Host: 119.45.11.232:7081
+User-Agent: HTTPie
+
+```
+
+
 
 ### Realistic Workloads
 

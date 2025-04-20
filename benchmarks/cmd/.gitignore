@@ -26,6 +26,8 @@ cassandra_util
 getip
 cmd
 
+epoxy-data.md
+
 # Python environment
 .venv/
 

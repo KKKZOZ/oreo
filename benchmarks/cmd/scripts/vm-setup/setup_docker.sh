@@ -1,19 +1,17 @@
 #!/bin/bash
 
-# 服务器列表
 # servers=("10.206.206.3" "10.206.206.4" "10.206.206.5" "10.206.206.6")
 servers=("10.206.206.3" "10.206.206.4" "10.206.206.5")
 
 # 用户名
 user="root"
 
-# 循环遍历服务器列表
+
 for server in "${servers[@]}"; do
     echo "========================================"
     echo "正在连接到服务器: $server"
     echo "========================================"
 
-    # 使用ssh连接到服务器并执行命令
     ssh "$user"@"$server" <<EOF
     echo "执行命令: sudo yum install -y docker-ce"
     sudo yum install -y docker-ce

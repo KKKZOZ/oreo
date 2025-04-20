@@ -6,7 +6,7 @@ max_load_batch_size: 100
 operationcount: 2000
 
 # Number of operations in each transaction group
-txnoperationgroup: 4
+txnoperationgroup: 6
 postcheckinterval: 1000
 zipfian_constant: 0.8
 
