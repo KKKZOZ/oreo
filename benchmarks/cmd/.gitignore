@@ -27,8 +27,10 @@ getip
 cmd
 
 # Benchmark Result Files
-epoxy-data.md
+epoxy-data-*.md
+!epoxy-data-template.md
 cpu-usage.md
+timeline_plot.pdf
 
 # Python environment
 .venv/

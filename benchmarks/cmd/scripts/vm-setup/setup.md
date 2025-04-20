@@ -143,28 +143,23 @@ git clone git@github.com:KKKZOZ/oreo.git --depth=1
 git config --global user.email "1206668472@qq.com" && git config --global user.name "KKKZOZ"
 ```
 
-6. 安装 Golang
+6. 安装 Golang 和 Java
 
 ```shell
 rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.3.linux-amd64.tar.gz
 
+tar -xzf jdk-17_linux-x64.tar.gz
+
 # vim .bashrc
 # export PATH=$PATH:/usr/local/go/bin
 
-
-echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+echo 'export JAVA_HOME=/root/jdk-17.0.11' >> ~/.bashrc
+echo 'export PATH=$PATH:/usr/local/go/bin:$JAVA_HOME/bin' >> ~/.bashrc
 
 source .bashrc && go env -w GOPROXY=https://goproxy.cn,direct
 ```
 
-- 安装 Java
-
-tar -xzf jdk-17_linux-x64.tar.gz
-
-export JAVA_HOME=/root/jdk-17.0.11
-export PATH=$PATH:/usr/local/go/bin:$JAVA_HOME/bin
-
-7. 执行 `setup.sh` 完成对其他服务器的配置
+1. 执行 `setup.sh` 完成对其他服务器的配置
 
 ```shell
 cd oreo/benchmarks/cmd/scripts/vm-setup
@@ -211,7 +206,6 @@ rsync -avP root@FILL:~/oreo ~/Projects/oreo2
 
 #### Epoxy
 
-
 ```shell
 # Node 2
 docker run -d -p 5432:5432 --rm --name="apiary-postgres" --env POSTGRES_PASSWORD=dbos postgres:latest
@@ -254,8 +248,6 @@ Host: 119.45.11.232:7081
 User-Agent: HTTPie
 
 ```
-
-
 
 ### Realistic Workloads
 
@@ -365,7 +357,6 @@ docker volume prune
 ./read-full.sh -wl RRMW -v -r
 ```
 
-
 ### Scalability && FT
 
 #### FT
@@ -414,7 +405,6 @@ haproxy -f ./haproxy.cfg
 ./ft-process.sh
 ```
 
-
 #### Horizontal Scalability
 
 ```shell
@@ -433,7 +423,6 @@ haproxy -f ./haproxy.cfg
 ./scale-full.sh -wl RMW -v -r -n 6
 ```
 
-
 - Run
 
 ```shell
@@ -446,5 +435,3 @@ haproxy -f ./haproxy.cfg
 ./scale-full.sh -wl RMW -v -r -n 7
 ./scale-full.sh -wl RMW -v -r -n 8
 ```
-
-
