@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# nodes=(node2 node3 node4 node5)
-nodes=(node2 node3)
+nodes=(node2 node3 node4 node5)
+# nodes=(node2 node3)
 
 main() {
     cd "$(dirname "$0")" && cd ../..

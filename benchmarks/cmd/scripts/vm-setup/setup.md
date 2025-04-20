@@ -76,7 +76,7 @@ ssh root@FILL
 scp id_ed25519 root@FILL:~/.ssh
 scp go1.23.3.linux-amd64.tar.gz .tmux.conf root@FILL:~/
 
-scp oreo.tar.gz root@FILL:~/
+# scp oreo.tar.gz root@FILL:~/
 
 scp jdk-17_linux-x64.tar.gz epoxy.jar root@FILL:~/
 ```
@@ -115,22 +115,6 @@ ssh-copy-id -i ~/.ssh/id_rsa.pub root@10.206.206.6
 4. 设置 `~/.ssh/config`
 
 > vim ~/.ssh/config
-
-- 3 个节点
-
-```config
-Host node1
-    HostName 10.206.206.2
-    User root
-Host node2
-    HostName 10.206.206.3
-    User root
-Host node3
-    HostName 10.206.206.4
-    User root
-```
-
-- 5 个节点
 
 ```config
 Host node1
@@ -381,21 +365,59 @@ docker volume prune
 ./read-full.sh -wl RRMW -v -r
 ```
 
-修改 `read-full.sh`，只运行 `readStrategy=p` 的部分，手动修改 `Chain Length`
 
-### Scalability
+### Scalability && FT
 
-> 需要换服务器 32 vcpu, 3 台
+#### FT
+
+> Deploy HAProxy on node2
 
 ```shell
-# Redis,MongoDB2
-# node 2
+sudo yum install -y haproxy
+sudo cp haproxy.cfg /etc/haproxy/haproxy.cfg
+
+sudo systemctl start haproxy
+
+sudo systemctl status haproxy
+
+sudo systemctl restart haproxy
+
+sudo systemctl stop haproxy
+
+# Optional
+haproxy -f ./haproxy.cfg
+```
+
+- Setup Databases
+
+```shell
+# node2
 ./ycsb-setup.sh Redis
+# node3
+./ycsb-setup.sh MongoDB1
+# node4
+./ycsb-setup.sh Cassandra
+```
 
-# node 3
-./ycsb-setup.sh MongoDB2
+- Load Data
+
+```shell
+./ft-full.sh -r
+```
+
+- Run
+
+```shell
+./ft-full.sh -r -l
+
+# When pressing enter, start another shell, run
+./ft-process.sh
+```
 
 
+#### Horizontal Scalability
+
+```shell
 # MongoDB1,Cassandra
 # node 2
 ./ycsb-setup.sh MongoDB1
@@ -405,44 +427,24 @@ docker volume prune
 
 ```
 
-#### Vertical
-
-> 注意如果直接启动的话, load data 这一步骤会非常慢, 建议先在 scale-full 脚本
-> 中的 deploy_remote 中把 `start-exeuctor-docker.sh` 的 `-l` 参数删掉
-> 数据加载完成后再加回来, 然后执行 `docker rm -f executor-8001`
-
-> 记得记录 Executor cpu usage
+- Load
 
 ```shell
-./scale-full.sh -wl RMW -t 256 -v -r
+./scale-full.sh -wl RMW -v -r -n 6
 ```
+
+
+- Run
 
 ```shell
-docker update --cpus=1 executor-8001 && htop
-docker update --cpus=2 executor-8001 && htop
-docker update --cpus=4 executor-8001 && htop
-docker update --cpus=6 executor-8001 && htop
-docker update --cpus=8 executor-8001 && htop
-docker update --cpus=10 executor-8001 && htop
-docker update --cpus=12 executor-8001 && htop
-docker update --cpus=14 executor-8001 && htop
-docker update --cpus=16 executor-8001 && htop
+./scale-full.sh -wl RMW -v -r -n 1
+./scale-full.sh -wl RMW -v -r -n 2
+./scale-full.sh -wl RMW -v -r -n 3
+./scale-full.sh -wl RMW -v -r -n 4
+./scale-full.sh -wl RMW -v -r -n 5
+./scale-full.sh -wl RMW -v -r -n 6
+./scale-full.sh -wl RMW -v -r -n 7
+./scale-full.sh -wl RMW -v -r -n 8
 ```
 
-#### Horizontal
 
-```shell
-./scale-full.sh -wl RMW -v -r
-```
-
-> 记得修改 `BenchmarkConfig_ycsb.yaml` 中的 executor_address_map
-
-```shell
-./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8002
-./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8003
-./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8004
-./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8005
-./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8006
-./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8007
-./start-executor-docker.sh -l  -wl ycsb -db MongoDB1,Cassandra -p 8008
-```

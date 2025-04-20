@@ -11,20 +11,21 @@ NC='\033[0m' # No Color
 executor_port=8001
 timeoracle_port=8010
 thread_load=100
-threads=(64 80 96 112 138)
+threads=(256)
 round_interval=2
 
 thread=0
 verbose=false
 wl_mode=
 db_combinations='MongoDB1,Cassandra'
+number_of_executors=1
 skip=false
 
 declare -g executor_pid
 declare -g time_oracle_pid
 remote=false
-node_list=(node2 node3)
-# node_list=(s1-ljy s3-ljy)
+# Deploy executors on separate nodes
+node_list=(node4 node5)
 PASSWORD=kkkzoz
 
 while [[ "$#" -gt 0 ]]; do
@@ -35,6 +36,10 @@ while [[ "$#" -gt 0 ]]; do
         ;;
     -t | --threads)
         threads=($2)
+        shift
+        ;;
+    -n | --number)
+        number_of_executors="$2"
         shift
         ;;
     -v | --verbose) verbose=true ;;
@@ -49,8 +54,9 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 wl_type=scale
+base_tar_dir=./data/scale
 tar_dir=./data/scale
-config_file="./workloads/${wl_mode}_${db_combinations}.yaml"
+config_file="./workloads/scale/${wl_mode}_${db_combinations}.yaml"
 results_file="$tar_dir/${wl_mode}_${db_combinations}_benchmark_results.csv"
 bc=./config/BenConfig_ycsb.yaml
 log_file="$tar_dir/benchmark.log"
@@ -89,7 +95,7 @@ load_data() {
         go run . -d oreo-ycsb -wl "$db_combinations" -wc "$config_file" -bc "$bc" -m "load" -ps $profile -t "$thread_load"
         # run_workload "load" "$profile" "$thread_load" "/dev/null"
     done
-    touch "$tar_dir/${wl_type}-load"
+    touch "$base_tar_dir/${wl_type}-load"
 }
 
 get_metrics() {
@@ -163,19 +169,38 @@ deploy_local() {
 
 deploy_remote() {
     log "Setup timeoracle on node 2" $GREEN
-    ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
-    # ssh -t ${node_list[0]} "echo '$PASSWORD' | sudo -S bash /home/liujinyi/oreo-ben/start-timeoracle.sh "
+    ssh -t node2 "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-timeoracle.sh "
 
-    # for node in "${node_list[@]}"; do
-    #     log "Setup $node" $GREEN
-    #     ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor.sh -wl ycsb -db $db_combinations"
-    # done
+    base_port=8001
 
     for node in "${node_list[@]}"; do
-        log "Setup $node" $GREEN
-        # ssh -t $node "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-executor-docker.sh -l -p 8001 -wl ycsb -db $db_combinations"
-        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p 8001 -wl ycsb -db $db_combinations -bc BenConfig_ycsb.yaml -r"
+        log "--- Starting setup on node $node ---" $GREEN
+
+        ssh -t "$node" "echo '$PASSWORD' | sudo -S bash /root/oreo-ben/rm-all-ft-executors.sh"
+
+        current_port=$base_port # Reset port for each node
+
+        for ((i = 1; i <= number_of_executors; i++)); do
+            log "Setting up executor $i on $node using port $current_port" $GREEN
+
+            # Define the command to start the executor
+            ssh_command="echo '$PASSWORD' | sudo -S bash /root/oreo-ben/start-ft-executor-docker.sh -p $current_port -wl ycsb -db $db_combinations -bc BenConfig_ycsb.yaml -l"
+
+            # Execute the command via SSH
+            ssh -t "$node" "$ssh_command"
+
+            # Check the exit status of the SSH command
+            if [ $? -ne 0 ]; then
+                log "Error: Failed to set up executor $i on $node (port $current_port)." $RED
+            else
+                log "Executor $i on $node (port $current_port) started successfully." $GREEN
+            fi
+
+            current_port=$((current_port + 1))
+        done
+        log "--- Finished setup for node $node ---" $GREEN
     done
+    log "Remote deployment process completed." $GREEN
 }
 
 main() {
@@ -217,7 +242,7 @@ main() {
         fi
     fi
 
-    if [ ! -f "$tar_dir/${wl_type}-load" ]; then
+    if [ ! -f "$base_tar_dir/${wl_type}-load" ]; then
         log "Ready to load data" $YELLOW
     else
         log "Data has been already loaded" $YELLOW
@@ -230,7 +255,7 @@ main() {
     fi
 
     # Load data if needed
-    if [ ! -f "$tar_dir/${wl_type}-load" ]; then
+    if [ ! -f "$base_tar_dir/${wl_type}-load" ]; then
         load_data
     fi
 

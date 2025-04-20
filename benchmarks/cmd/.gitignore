@@ -26,7 +26,9 @@ cassandra_util
 getip
 cmd
 
+# Benchmark Result Files
 epoxy-data.md
+cpu-usage.md
 
 # Python environment
 .venv/
