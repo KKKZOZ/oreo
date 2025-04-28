@@ -339,7 +339,7 @@ docker volume prune
 ```shell
 ./opt-full.sh -wl RMW -v -r
 
-./opt-full.sh -wl RRMW -v -r
+./opt-full.sh -wl RW -v -r
 ```
 
 ### Read Strategy
