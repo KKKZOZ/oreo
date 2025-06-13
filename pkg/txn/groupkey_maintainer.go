@@ -34,7 +34,7 @@ func (g *GroupKeyMaintainer) AddConnector(ds Datastorer) {
 }
 
 func (g *GroupKeyMaintainer) GetGroupKey(urls []string) ([]GroupKey, error) {
-	groupKeys := make([]GroupKey, len(urls))
+	groupKeys := make([]GroupKey, 0, len(urls))
 	var mu sync.Mutex
 	var eg errgroup.Group
 	for _, urll := range urls {

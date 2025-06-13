@@ -9,7 +9,6 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/oreo-dtx-lab/oreo/internal/testutil"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
-	"github.com/oreo-dtx-lab/oreo/pkg/locker"
 	. "github.com/oreo-dtx-lab/oreo/pkg/logger"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 )
@@ -57,10 +56,6 @@ type Transaction struct {
 	dataStoreMap map[string]Datastorer
 	// timeSource represents the source of time for the transaction.
 	timeSource timesource.TimeSourcer
-	// oracleURL is the URL of the oracle service used by the transaction.
-	// oracleURL string
-	// locker is used for transaction-level locking.
-	locker locker.Locker
 
 	// isReadOnly indicates whether the transaction is read-only.
 	isReadOnly bool
@@ -86,8 +81,7 @@ func NewTransaction() *Transaction {
 		groupKeyMaintainer: *NewGroupKeyMaintainer(),
 		dataStoreMap:       make(map[string]Datastorer),
 		timeSource:         timesource.NewSimpleTimeSource(),
-		locker:             locker.AMemoryLocker,
-		isReadOnly:         true,
+		isReadOnly:         true, // default to read-only, can be changed later
 		StateMachine:       NewStateMachine(),
 		isRemote:           false,
 	}
@@ -98,8 +92,7 @@ func NewTransactionWithOracle(oracle timesource.TimeSourcer) *Transaction {
 		groupKeyMaintainer: *NewGroupKeyMaintainer(),
 		dataStoreMap:       make(map[string]Datastorer),
 		timeSource:         oracle,
-		locker:             locker.AMemoryLocker,
-		isReadOnly:         true,
+		isReadOnly:         true, // default to read-only, can be changed later
 		StateMachine:       NewStateMachine(),
 		isRemote:           false,
 	}
@@ -110,8 +103,7 @@ func NewTransactionWithRemote(client RemoteClient, oracle timesource.TimeSourcer
 		groupKeyMaintainer: *NewGroupKeyMaintainer(),
 		dataStoreMap:       make(map[string]Datastorer),
 		timeSource:         oracle,
-		locker:             locker.AMemoryLocker,
-		isReadOnly:         true,
+		isReadOnly:         true, // default to read-only, can be changed later
 		StateMachine:       NewStateMachine(),
 		client:             client,
 		isRemote:           true,
@@ -562,12 +554,12 @@ func (t *Transaction) getTime(mode string) (int64, error) {
 		time.Sleep(config.GetMaxDebugLatency())
 	}
 	retryTimes := 3
-	for i := 0; i < retryTimes; i++ {
+	for range retryTimes {
 		gotTime, err := t.timeSource.GetTime(mode)
 		if err == nil {
 			return gotTime, nil
 		}
-		time.Sleep(500 * time.Millisecond) // wait for 100ms before retrying
+		time.Sleep(500 * time.Millisecond) // wait for 500ms before retrying
 	}
 	ErrMsg := fmt.Sprintf("failed to get time after %d retries", retryTimes)
 	return 0, errors.New(ErrMsg)

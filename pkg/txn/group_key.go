@@ -1,6 +1,7 @@
 package txn
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
@@ -14,6 +15,14 @@ type GroupKey struct {
 type GroupKeyItem struct {
 	TxnState config.State
 	TCommit  int64
+}
+
+func (item *GroupKeyItem) MarshalBinary() ([]byte, error) {
+	return json.Marshal(item)
+}
+
+func (item *GroupKeyItem) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, item)
 }
 
 func NewGroupKeyItem(txnState config.State, tCommit int64) GroupKeyItem {

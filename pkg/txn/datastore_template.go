@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"fmt"
 	"log"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -252,7 +253,7 @@ func (r *Datastore) basicVisibilityProcessor(item DataItem) (DataItem, error) {
 				// if all the group keys are in COMMITTED state
 				// Items in PREPARED state do not contain a valid TValid
 				// update its TCommit first
-				tCommit := int64(0)
+				tCommit := int64(math.MinInt64)
 				for _, gk := range groupKeyList {
 					tCommit = max(tCommit, gk.TCommit)
 				}

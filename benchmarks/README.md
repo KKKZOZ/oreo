@@ -1,19 +1,6 @@
-# Oreo
+# Oreo Benchmarking
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/oreo-dtx-lab/oreo)](https://goreportcard.com/report/github.com/oreo-framework/oreo)
-[![Go Reference](https://pkg.go.dev/badge/github.com/oreo-dtx-lab/oreo.svg)](https://pkg.go.dev/github.com/oreo-framework/oreo)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-<div align="center">
-  <img src="./assets/img/logo.png" width="300" alt="logo">
-</div>
-
-## Table of Contents
-
-- [Oreo](#oreo)
-  - [Table of Contents](#table-of-contents)
-  - [Oreo Structure](#oreo-structure)
-  - [Project Structure](#project-structure)
+- [Oreo Benchmarking](#oreo-benchmarking)
   - [Evaluation](#evaluation)
     - [Topology](#topology)
     - [Environment Setup](#environment-setup)
@@ -27,29 +14,6 @@
       - [Read Strategy](#read-strategy)
       - [FT](#ft)
       - [Scalability](#scalability)
-  - [License](#license)
-
-## Oreo Structure
-
-<div align="center">
-  <img src="./assets/img/sys-arch.png" width="400" alt="sys-arch">
-</div>
-
-## Project Structure
-
-- `./benchmarks`: All code related to benchmark testing
-- `./bin-util`: Utility executables
-- `./executor`: Code for the Stateless Executor
-- `./ft-executor`: Code for the Fault-Tolerant Executor
-- `./ft-timeoracle`: Code for the Fault-Tolerant Timeoracle
-- `./integration`: Code for the Integration Tests (Broken due to the latest changes)
-- `./internal`: Internal classes
-- `./pkg`: All code related to Oreo
-- `./script`: Scripts for automation and testing (Unused)
-- `./tc-test`: Linux traffic control test code
-- `./timeoracle`: Code for the Timeoracle
-
-<!-- Documentation can be found [here](https://pkg.go.dev/github.com/oreo-framework/oreo). -->
 
 ## Evaluation
 
@@ -315,7 +279,3 @@ haproxy -f ./haproxy.cfg
 ./scale-full.sh -wl RMW -v -r -n 7
 ./scale-full.sh -wl RMW -v -r -n 8
 ```
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
