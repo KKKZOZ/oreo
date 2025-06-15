@@ -30,7 +30,7 @@ type MongoItem struct {
 func NewMongoItem(options txn.ItemOptions) *MongoItem {
 	return &MongoItem{
 		MKey:          options.Key,
-		MValue:        options.Value,
+		MValue:        options.Value.(string),
 		MGroupKeyList: options.GroupKeyList,
 		MTxnState:     options.TxnState,
 		MTValid:       options.TValid,

@@ -28,7 +28,7 @@ type RedisItem struct {
 func NewRedisItem(options txn.ItemOptions) *RedisItem {
 	return &RedisItem{
 		RKey:          options.Key,
-		RValue:        options.Value,
+		RValue:        options.Value.(string),
 		RGroupKeyList: options.GroupKeyList,
 		RTxnState:     options.TxnState,
 		RTValid:       options.TValid,

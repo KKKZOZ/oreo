@@ -27,7 +27,7 @@ type CouchDBItem struct {
 func NewCouchDBItem(options txn.ItemOptions) *CouchDBItem {
 	return &CouchDBItem{
 		CKey:          options.Key,
-		CValue:        options.Value,
+		CValue:        options.Value.(string),
 		CGroupKeyList: options.GroupKeyList,
 		CTxnState:     options.TxnState,
 		CTValid:       options.TValid,

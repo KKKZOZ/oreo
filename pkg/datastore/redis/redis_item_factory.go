@@ -9,7 +9,7 @@ type RedisItemFactory struct{}
 func (r *RedisItemFactory) NewDataItem(options txn.ItemOptions) txn.DataItem {
 	return &RedisItem{
 		RKey:          options.Key,
-		RValue:        options.Value,
+		RValue:        options.Value.(string),
 		RGroupKeyList: options.GroupKeyList,
 		RTxnState:     options.TxnState,
 		RTValid:       options.TValid,

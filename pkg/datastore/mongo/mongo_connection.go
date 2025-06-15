@@ -384,14 +384,14 @@ func (m *MongoConnection) Put(key string, value any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
 	defer cancel()
 
-	str := util.ToString(value)
+	// str := util.ToString(value)
 
 	_, err := m.coll.UpdateOne(
 		ctx,
 		bson.M{"_id": key},
 		bson.D{
 			{Key: "$set", Value: bson.D{
-				{Key: "Value", Value: str},
+				{Key: "Value", Value: value},
 			}},
 		},
 		options.Update().SetUpsert(true),

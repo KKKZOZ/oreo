@@ -8,7 +8,7 @@ import (
 
 type ItemOptions struct {
 	Key          string
-	Value        string
+	Value        any
 	GroupKeyList string
 	TxnState     config.State
 	TValid       int64
