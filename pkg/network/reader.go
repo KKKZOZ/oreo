@@ -49,7 +49,6 @@ func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
 	}
 
 	item, err := conn.GetItem(key)
-	logger.Log.Infow("Read", "key", key, "item", item)
 	if err != nil {
 		return nil, dataType, "", err
 	}

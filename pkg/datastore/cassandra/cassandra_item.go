@@ -51,9 +51,14 @@ CREATE TABLE IF NOT EXISTS items (
 ) WITH gc_grace_seconds = 172800`
 
 func NewCassandraItem(options txn.ItemOptions) *CassandraItem {
+
+	if options.Value == nil {
+		options.Value = ""
+	}
+
 	return &CassandraItem{
 		CKey:          options.Key,
-		CValue:        options.Value,
+		CValue:        options.Value.(string),
 		CGroupKeyList: options.GroupKeyList,
 		CTxnState:     options.TxnState,
 		CTValid:       options.TValid,

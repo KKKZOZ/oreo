@@ -153,7 +153,6 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 				} else {
 					doCreate = false
 				}
-				// logger.Log.Debugw("do a txn Read to determine the record version", "dbItem", dbItem)
 				item, _ = c.updateMetadata(item, dbItem, 0, cfg)
 			}
 
@@ -320,6 +319,7 @@ func (c *Committer) updateMetadata(newItem txn.DataItem,
 }
 
 func (c *Committer) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
+	// WTF??
 	preItem := c.itemFactory.NewDataItem(txn.ItemOptions{})
 	err := c.se.Deserialize([]byte(item.Prev()), &preItem)
 	if err != nil {

@@ -28,6 +28,11 @@ type MongoItem struct {
 }
 
 func NewMongoItem(options txn.ItemOptions) *MongoItem {
+
+	if options.Value == nil {
+		options.Value = ""
+	}
+
 	return &MongoItem{
 		MKey:          options.Key,
 		MValue:        options.Value.(string),

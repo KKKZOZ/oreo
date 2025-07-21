@@ -25,9 +25,14 @@ type DynamoDBItem struct {
 }
 
 func NewDynamoDBItem(options txn.ItemOptions) *DynamoDBItem {
+
+	if options.Value == nil {
+		options.Value = ""
+	}
+
 	return &DynamoDBItem{
 		DKey:          options.Key,
-		DValue:        options.Value,
+		DValue:        options.Value.(string),
 		DGroupKeyList: options.GroupKeyList,
 		DTxnState:     options.TxnState,
 		DTValid:       options.TValid,

@@ -460,7 +460,7 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 		req.StartTime, req.Config, req.ValidationMap)
 	var resp network.PrepareResponse
 	if err != nil {
-		// Log.Warnw("Prepare operation failed", "dsName", req.DsName, "startTime", req.StartTime, "error", err)
+		Log.Warnw("Prepare operation failed", "dsName", req.DsName, "startTime", req.StartTime, "error", err)
 		resp = network.PrepareResponse{
 			Status: "Error",
 			ErrMsg: err.Error(),

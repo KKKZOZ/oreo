@@ -33,6 +33,8 @@ design-note.md
 executor/executor
 oreo-executor-image.tar.gz
 
+ft-executor
+timeoracle
 
 tc-test
 !tc-test/
