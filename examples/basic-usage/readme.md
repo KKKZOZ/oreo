@@ -26,10 +26,11 @@ The example demonstrates:
 
 The example uses the following components:
 
-- **Time Oracle**: Provides global timestamps for transaction ordering
+- **Time Oracles**: Provides global timestamps for transaction ordering
 - **Executors**: Handle transaction execution and coordination
 - **Client Application**: Your application that performs transactions
 - **Datastores**: Redis and MongoDB instances
+- **HAProxy**: Load balancer for distributing requests to Time Oracles
 
 ## Setup Instructions
 
@@ -60,13 +61,13 @@ Build the required Oreo system components:
 cd ../../ft-executor
 go build .
 
-# Build the time oracle
-cd ../timeoracle
+# Build the fault-tolerant time oracle
+cd ../ft-timeoracle
 go build .
 
 # Copy the built binaries to the example directory
 cp ft-executor ../examples/basic-usage/
-cp timeoracle ../examples/basic-usage/
+cp ft-timeoracle ../examples/basic-usage/
 
 # Return to the example directory
 cd ../examples/basic-usage
@@ -77,14 +78,26 @@ cd ../examples/basic-usage
 Start the system components in the following order:
 
 ```shell
-# 1. Start the time oracle (hybrid mode provides both logical and physical timestamps)
-./timeoracle -p 8010 -type hybrid
+# 1. Start the time oracle
+./ft-timeoracle -role primary -p 8010 -type hybrid -max-skew 50ms
 
-# 2. Start executor instances (in separate terminals)
-# Terminal 2:
+./ft-timeoracle -role backup -p 8011 -type hybrid -max-skew 50ms \
+             -primary-addr http://localhost:8010 \
+             -health-check-interval 2s \
+             -health-check-timeout 1s \
+             -failure-threshold 3
+
+# 2. Start HAProxy
+docker run \
+    -d \
+    --name haproxy-service \
+    -p 8009:8009 \
+    -v "$(pwd)/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro" \
+    haproxy:latest
+
+# 3. Start executor instances (in separate terminals)
 ./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1"
 
-# Terminal 3:
 ./ft-executor -p 8002 -w ycsb --advertise-addr "localhost:8002" -bc "./config.yaml" -db "Redis,MongoDB1"
 ```
 
@@ -95,6 +108,8 @@ Once all components are running, execute the example:
 ```shell
 go run .
 ```
+
+> see `http://admin:password@localhost:8009/haproxy?stats` for HAProxy statistics
 
 ## Expected Output
 

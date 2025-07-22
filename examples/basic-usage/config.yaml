@@ -1,5 +1,5 @@
 registry_addr: "http://localhost:9000"
-time_oracle_url: "http://localhost:8010"
+time_oracle_url: "http://localhost:8009"
 
 # Redis configuration
 redis_addr: "localhost:6379"

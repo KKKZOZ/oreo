@@ -30,11 +30,13 @@ design-note.md
 /benchmarks/cmd/cmd
 /component/component
 
-executor/executor
+
 oreo-executor-image.tar.gz
 
+executor
 ft-executor
 timeoracle
+ft-timeoracle
 
 tc-test
 !tc-test/

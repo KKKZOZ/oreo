@@ -39,7 +39,7 @@ func main() {
 	mongo1_datastore := mongo.NewMongoDatastore("MongoDB1", mongo1_conn)
 
 	write_txn := txn.NewTransactionWithRemote(client, oracle)
-	_ = write_txn.AddDatastores(redis_datastore, mongo1_datastore)
+	write_txn.AddDatastores(redis_datastore, mongo1_datastore)
 
 	_ = write_txn.Start()
 	_ = write_txn.Write("Redis", "key1", "value1")
@@ -52,7 +52,7 @@ func main() {
 	fmt.Printf("Write transaction committed successfully.\n")
 
 	read_txn := txn.NewTransactionWithRemote(client, oracle)
-	_ = read_txn.AddDatastores(redis_datastore, mongo1_datastore)
+	read_txn.AddDatastores(redis_datastore, mongo1_datastore)
 
 	_ = read_txn.Start()
 
