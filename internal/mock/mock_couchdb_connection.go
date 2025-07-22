@@ -24,7 +24,8 @@ type MockCouchDBConnection struct {
 }
 
 func NewMockCouchDBConnection(address string, port int, limit int,
-	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockCouchDBConnection {
+	isReturned bool, networkDelay time.Duration, debugFunc func() error,
+) *MockCouchDBConnection {
 	conn := couchdb.NewCouchDBConnection(&couchdb.ConnectionOptions{
 		Address: fmt.Sprintf("http://admin:password@%s:%d", address, port),
 		DBName:  "oreo",
@@ -52,7 +53,11 @@ func (m *MockCouchDBConnection) Get(name string) (string, error) {
 	return m.CouchDBConnection.Get(name)
 }
 
-func (m *MockCouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+func (m *MockCouchDBConnection) ConditionalUpdate(
+	key string,
+	value txn.DataItem,
+	doCreate bool,
+) (string, error) {
 	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {

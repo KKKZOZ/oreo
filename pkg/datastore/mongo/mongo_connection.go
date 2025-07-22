@@ -175,7 +175,11 @@ func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error
 // If the item's version does not match, it returns a version mismatch error.
 // Note: if the previous version of the item is not found, it will return a key not found error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreat bool) (string, error) {
+func (m *MongoConnection) ConditionalUpdate(
+	key string,
+	value txn.DataItem,
+	doCreat bool,
+) (string, error) {
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
 	}
@@ -231,7 +235,11 @@ func (m *MongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCr
 // It takes a key string and a version string as parameters.
 // If the item's version does not match, it returns a version mismatch error.
 // Otherwise, it updates the item with the provided values and returns the updated item.
-func (m *MongoConnection) ConditionalCommit(key string, version string, tCommit int64) (string, error) {
+func (m *MongoConnection) ConditionalCommit(
+	key string,
+	version string,
+	tCommit int64,
+) (string, error) {
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
 	}
@@ -286,7 +294,6 @@ func (m *MongoConnection) AtomicCreate(key string, value any) (string, error) {
 	filter := bson.M{"_id": key}
 	var result KeyValueItem
 	err := m.coll.FindOne(ctx, filter).Decode(&result)
-
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			// we can safely create the item
@@ -307,7 +314,6 @@ func (m *MongoConnection) AtomicCreate(key string, value any) (string, error) {
 }
 
 func (m *MongoConnection) atomicCreateMongoItem(key string, value txn.DataItem) (string, error) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultMongoTimeout)
 	defer cancel()
 

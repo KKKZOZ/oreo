@@ -24,7 +24,8 @@ type MockMongoConnection struct {
 }
 
 func NewMockMongoConnection(address string, port int, username string, password string, limit int,
-	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockMongoConnection {
+	isReturned bool, networkDelay time.Duration, debugFunc func() error,
+) *MockMongoConnection {
 	conn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 		Address:        fmt.Sprintf("mongodb://%s:%d", address, port),
 		Username:       username,
@@ -55,7 +56,11 @@ func (m *MockMongoConnection) Get(name string) (string, error) {
 	return m.MongoConnection.Get(name)
 }
 
-func (m *MockMongoConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+func (m *MockMongoConnection) ConditionalUpdate(
+	key string,
+	value txn.DataItem,
+	doCreate bool,
+) (string, error) {
 	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {

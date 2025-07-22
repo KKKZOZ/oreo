@@ -1,13 +1,14 @@
 package measurement
 
 import (
-	"benchmark/pkg/util"
 	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"time"
+
+	"benchmark/pkg/util"
 )
 
 type histograms struct {
@@ -20,7 +21,11 @@ func (h *histograms) GenerateExtendedOutputs() {
 		exportHistogramsFilepath := "./"
 		for op, opM := range h.histograms {
 			outFile := fmt.Sprintf("%s%s-percentiles.txt", exportHistogramsFilepath, op)
-			fmt.Printf("Exporting the full latency spectrum for operation '%s' in percentile output format into file: %s.\n", op, outFile)
+			fmt.Printf(
+				"Exporting the full latency spectrum for operation '%s' in percentile output format into file: %s.\n",
+				op,
+				outFile,
+			)
 			f, err := os.Create(outFile)
 			if err != nil {
 				panic("failed to create percentile output file: " + err.Error())

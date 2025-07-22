@@ -78,7 +78,12 @@ type BatchDB interface {
 	// table: The name of the table.
 	// keys: The keys of records to read.
 	// fields: The list of fields to read, nil|empty for reading all.
-	BatchRead(ctx context.Context, table string, keys []string, fields []string) ([]map[string][]byte, error)
+	BatchRead(
+		ctx context.Context,
+		table string,
+		keys []string,
+		fields []string,
+	) ([]map[string][]byte, error)
 
 	// BatchUpdate updates records in the database.
 	// table: The name of table.

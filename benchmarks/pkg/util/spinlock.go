@@ -13,7 +13,7 @@ type SpinLock struct {
 // Lock locks sl. If the lock is already in use, the caller blocks until Unlock is called
 func (sl *SpinLock) Lock() {
 	for !sl.TryLock() {
-		runtime.Gosched() //allow other goroutines to do stuff.
+		runtime.Gosched() // allow other goroutines to do stuff.
 	}
 }
 

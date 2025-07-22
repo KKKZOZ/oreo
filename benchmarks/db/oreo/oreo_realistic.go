@@ -1,11 +1,11 @@
 package oreo
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/ycsb"
 	"context"
 	"log"
 
+	"benchmark/pkg/benconfig"
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
@@ -41,8 +41,12 @@ type OreoRealisticDatastore struct {
 	mode                string
 }
 
-func NewOreoRealisticDatastore(connMap map[string]txn.Connector, globalDatastoreName string, isRemote bool, mode string) *OreoRealisticDatastore {
-
+func NewOreoRealisticDatastore(
+	connMap map[string]txn.Connector,
+	globalDatastoreName string,
+	isRemote bool,
+	mode string,
+) *OreoRealisticDatastore {
 	return &OreoRealisticDatastore{
 		isRemote:            isRemote,
 		connMap:             connMap,
@@ -131,14 +135,22 @@ func (r *OreoRealisticDatastore) Close() error {
 	return nil
 }
 
-func (r *OreoRealisticDatastore) InitThread(ctx context.Context, threadID int, threadCount int) context.Context {
+func (r *OreoRealisticDatastore) InitThread(
+	ctx context.Context,
+	threadID int,
+	threadCount int,
+) context.Context {
 	return ctx
 }
 
 func (r *OreoRealisticDatastore) CleanupThread(ctx context.Context) {
 }
 
-func (r *OreoRealisticDatastore) Read(ctx context.Context, table string, key string) (string, error) {
+func (r *OreoRealisticDatastore) Read(
+	ctx context.Context,
+	table string,
+	key string,
+) (string, error) {
 	key = r.addPrefix(key)
 
 	var value string
@@ -149,12 +161,22 @@ func (r *OreoRealisticDatastore) Read(ctx context.Context, table string, key str
 	return value, nil
 }
 
-func (r *OreoRealisticDatastore) Update(ctx context.Context, table string, key string, value string) error {
+func (r *OreoRealisticDatastore) Update(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) error {
 	key = r.addPrefix(key)
 	return r.txn.Write(table, key, value)
 }
 
-func (r *OreoRealisticDatastore) Insert(ctx context.Context, table string, key string, value string) error {
+func (r *OreoRealisticDatastore) Insert(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) error {
 	key = r.addPrefix(key)
 	return r.txn.Write(table, key, value)
 }

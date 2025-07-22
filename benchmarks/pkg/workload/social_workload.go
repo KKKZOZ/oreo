@@ -1,14 +1,15 @@
 package workload
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/pkg/generator"
-	"benchmark/pkg/util"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"log"
 	"sync"
+
+	"benchmark/pkg/benconfig"
+	"benchmark/pkg/generator"
+	"benchmark/pkg/util"
+	"benchmark/ycsb"
 )
 
 type SocialWorkload struct {
@@ -43,7 +44,6 @@ func NewSocialWorkload(wp *WorkloadParameter) *SocialWorkload {
 }
 
 func (wl *SocialWorkload) ContentFeedRetrieval(ctx context.Context, db ycsb.TransactionDB) {
-
 	db.Start()
 
 	post_id := wl.NextKeyName()
@@ -54,23 +54,41 @@ func (wl *SocialWorkload) ContentFeedRetrieval(ctx context.Context, db ycsb.Tran
 }
 
 func (wl *SocialWorkload) ContentCreation(ctx context.Context, db ycsb.TransactionDB) {
-
 	db.Start()
 
 	post_id := wl.NextKeyName()
 	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, post_id), wl.RandomValue())
-	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, post_id), wl.RandomValue())
-	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, post_id), wl.RandomValue())
+	db.Update(
+		ctx,
+		"Redis",
+		fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, post_id),
+		wl.RandomValue(),
+	)
+	db.Update(
+		ctx,
+		"Redis",
+		fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, post_id),
+		wl.RandomValue(),
+	)
 
 	db.Commit()
 }
 
 func (wl *SocialWorkload) ProfileUpdate(ctx context.Context, db ycsb.TransactionDB) {
-
 	db.Start()
 	user_id := wl.NextKeyName()
-	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, user_id), wl.RandomValue())
-	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, user_id), wl.RandomValue())
+	db.Update(
+		ctx,
+		"Cassandra",
+		fmt.Sprintf("%v:%v", wl.CassandraNamespace, user_id),
+		wl.RandomValue(),
+	)
+	db.Update(
+		ctx,
+		"Redis",
+		fmt.Sprintf("%v:%v", wl.RedisNamespaceSession, user_id),
+		wl.RandomValue(),
+	)
 	db.Commit()
 }
 
@@ -80,24 +98,44 @@ func (wl *SocialWorkload) UserInteraction(ctx context.Context, db ycsb.Transacti
 	post_id := wl.NextKeyName()
 	user_id := wl.NextKeyName()
 
-	db.Update(ctx, "MongoDB", fmt.Sprintf("%v:%v:interactions", wl.MongoDBNamespace, post_id), wl.RandomValue())
+	db.Update(
+		ctx,
+		"MongoDB",
+		fmt.Sprintf("%v:%v:interactions", wl.MongoDBNamespace, post_id),
+		wl.RandomValue(),
+	)
 
-	db.Update(ctx, "Cassandra", fmt.Sprintf("%v:%v:activities", wl.CassandraNamespace, user_id), wl.RandomValue())
+	db.Update(
+		ctx,
+		"Cassandra",
+		fmt.Sprintf("%v:%v:activities", wl.CassandraNamespace, user_id),
+		wl.RandomValue(),
+	)
 
-	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v:stats", wl.RedisNamespaceAnalytics, post_id), wl.RandomValue())
+	db.Update(
+		ctx,
+		"Redis",
+		fmt.Sprintf("%v:%v:stats", wl.RedisNamespaceAnalytics, post_id),
+		wl.RandomValue(),
+	)
 
 	db.Commit()
 }
 
 func (wl *SocialWorkload) Load(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	txnDB, ok := db.(ycsb.TransactionDB)
 	if !ok {
 		fmt.Println("The DB does not support transactions")
 		return
 	}
 	if opCount%benconfig.MaxLoadBatchSize != 0 {
-		log.Fatalf("opCount should be a multiple of MaxLoadBatchSize, opCount: %d, MaxLoadBatchSize: %d", opCount, benconfig.MaxLoadBatchSize)
+		log.Fatalf(
+			"opCount should be a multiple of MaxLoadBatchSize, opCount: %d, MaxLoadBatchSize: %d",
+			opCount,
+			benconfig.MaxLoadBatchSize,
+		)
 	}
 
 	round := opCount / benconfig.MaxLoadBatchSize
@@ -106,9 +144,24 @@ func (wl *SocialWorkload) Load(ctx context.Context, opCount int,
 		txnDB.Start()
 		for j := 0; j < benconfig.MaxLoadBatchSize; j++ {
 			key := wl.NextKeyNameFromSequence()
-			txnDB.Insert(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, key), wl.RandomValue())
-			txnDB.Insert(ctx, "Cassandra", fmt.Sprintf("%v:%v", wl.CassandraNamespace, key), wl.RandomValue())
-			txnDB.Insert(ctx, "Redis", fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, key), wl.RandomValue())
+			txnDB.Insert(
+				ctx,
+				"MongoDB",
+				fmt.Sprintf("%v:%v", wl.MongoDBNamespace, key),
+				wl.RandomValue(),
+			)
+			txnDB.Insert(
+				ctx,
+				"Cassandra",
+				fmt.Sprintf("%v:%v", wl.CassandraNamespace, key),
+				wl.RandomValue(),
+			)
+			txnDB.Insert(
+				ctx,
+				"Redis",
+				fmt.Sprintf("%v:%v", wl.RedisNamespaceAnalytics, key),
+				wl.RandomValue(),
+			)
 		}
 		err := txnDB.Commit()
 		if err != nil {
@@ -119,12 +172,11 @@ func (wl *SocialWorkload) Load(ctx context.Context, opCount int,
 	if aErr != nil {
 		fmt.Printf("Error in Social Load: %v\n", aErr)
 	}
-
 }
 
 func (wl *SocialWorkload) Run(ctx context.Context, opCount int,
-	db ycsb.DB) {
-
+	db ycsb.DB,
+) {
 	txnDB, ok := db.(ycsb.TransactionDB)
 	if !ok {
 		fmt.Println("The DB does not support transactions")
@@ -144,7 +196,6 @@ func (wl *SocialWorkload) Run(ctx context.Context, opCount int,
 			panic("Invalid task")
 		}
 	}
-
 }
 
 func (wl *SocialWorkload) Cleanup() {}

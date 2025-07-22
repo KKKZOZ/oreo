@@ -25,7 +25,6 @@ type TiKVItem struct {
 }
 
 func NewTiKVItem(options txn.ItemOptions) *TiKVItem {
-
 	if options.Value == nil {
 		options.Value = ""
 	}

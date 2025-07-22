@@ -1,11 +1,12 @@
 package generator
 
 import (
-	"benchmark/pkg/util"
 	"fmt"
 	"math"
 	"math/rand"
 	"time"
+
+	"benchmark/pkg/util"
 )
 
 const (
@@ -105,11 +106,11 @@ func (z *Zipfian) next(r *rand.Rand, itemCount int64) int64 {
 	if itemCount != z.countForZeta {
 		z.lock.Lock()
 		if itemCount > z.countForZeta {
-			//we have added more items. can compute zetan incrementally, which is cheaper
+			// we have added more items. can compute zetan incrementally, which is cheaper
 			z.zetan = z.zeta(z.countForZeta, itemCount, z.theta, z.zetan)
 			z.eta = (1 - math.Pow(2.0/float64(z.items), 1-z.theta)) / (1 - z.zeta2Theta/z.zetan)
 		} else if itemCount < z.countForZeta && z.allowItemCountDecrease {
-			//note : for large itemsets, this is very slow. so don't do it!
+			// note : for large itemsets, this is very slow. so don't do it!
 			fmt.Printf("recomputing Zipfian distribution, should be avoided,item count %v, count for zeta %v\n", itemCount, z.countForZeta)
 			z.zetan = z.zeta(0, itemCount, z.theta, 0)
 			z.eta = (1 - math.Pow(2.0/float64(z.items), 1-z.theta)) / (1 - z.zeta2Theta/z.zetan)

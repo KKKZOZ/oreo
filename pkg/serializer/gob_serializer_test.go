@@ -10,9 +10,7 @@ type User struct {
 	Name string
 }
 
-type NonExportedStruct struct {
-	secret string
-}
+type NonExportedStruct struct{}
 
 func TestNewGobSerializer(t *testing.T) {
 	if reflect.ValueOf(NewGobSerializer()).IsNil() {

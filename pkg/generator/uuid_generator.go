@@ -2,8 +2,7 @@ package generator
 
 import "github.com/google/uuid"
 
-type UUIDGenerator struct {
-}
+type UUIDGenerator struct{}
 
 func NewUUIDGenerator() *UUIDGenerator {
 	return &UUIDGenerator{}

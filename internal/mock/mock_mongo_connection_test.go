@@ -9,7 +9,6 @@ import (
 
 func TestMongo_DebugCounter(t *testing.T) {
 	t.Run("test less than limit", func(t *testing.T) {
-
 		conn := NewMockMongoConnection("localhost", 27017, "admin", "admin", 10, true,
 			0, func() error { return errors.New("error") })
 		conn.Connect()
@@ -44,11 +43,9 @@ func TestMongo_DebugCounter(t *testing.T) {
 		err = conn.Put("key4", "value4")
 		assert.EqualError(t, err, "error")
 	})
-
 }
 
 func TestMongo_DebugFunc(t *testing.T) {
-
 	t.Run("trigger debugFunc", func(t *testing.T) {
 		conn := NewMockMongoConnection("localhost", 27017, "admin", "admin", 3, true,
 			0, func() error { return errors.New("my error") })

@@ -13,25 +13,25 @@ var _ txn.DataItem = (*CassandraItem)(nil)
 
 type CassandraItem struct {
 	// 主键
-	CKey string `cql:"key" json:"Key"`
+	CKey string `cql:"key"            json:"Key"`
 	// 数据值
-	CValue string `cql:"value" json:"Value"`
+	CValue string `cql:"value"          json:"Value"`
 	// 组键列表
 	CGroupKeyList string `cql:"group_key_list" json:"GroupKeyList"`
 	// 事务状态
-	CTxnState config.State `cql:"txn_state" json:"TxnState"`
+	CTxnState config.State `cql:"txn_state"      json:"TxnState"`
 	// 时间戳
-	CTValid int64 `cql:"t_valid" json:"TValid"`
+	CTValid int64 `cql:"t_valid"        json:"TValid"`
 	// 租约时间
-	CTLease time.Time `cql:"t_lease" json:"TLease"`
+	CTLease time.Time `cql:"t_lease"        json:"TLease"`
 	// 前驱
-	CPrev string `cql:"prev" json:"Prev"`
+	CPrev string `cql:"prev"           json:"Prev"`
 	// 链表长度
-	CLinkedLen int `cql:"linked_len" json:"LinkedLen"`
+	CLinkedLen int `cql:"linked_len"     json:"LinkedLen"`
 	// 删除标记
-	CIsDeleted bool `cql:"is_deleted" json:"IsDeleted"`
+	CIsDeleted bool `cql:"is_deleted"     json:"IsDeleted"`
 	// 版本控制 - Cassandra使用时间戳作为版本
-	CVersion string `cql:"version" json:"Version"`
+	CVersion string `cql:"version"        json:"Version"`
 }
 
 // CQL创建表的语句
@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS items (
 ) WITH gc_grace_seconds = 172800`
 
 func NewCassandraItem(options txn.ItemOptions) *CassandraItem {
-
 	if options.Value == nil {
 		options.Value = ""
 	}

@@ -27,7 +27,12 @@ type Reader struct {
 	Cacher      *Cacher
 }
 
-func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory, se serializer.Serializer, cacher *Cacher) *Reader {
+func NewReader(
+	connMap map[string]txn.Connector,
+	itemFactory txn.DataItemFactory,
+	se serializer.Serializer,
+	cacher *Cacher,
+) *Reader {
 	return &Reader{
 		connMap:     connMap,
 		itemFactory: itemFactory,
@@ -40,7 +45,8 @@ func NewReader(connMap map[string]txn.Connector, itemFactory txn.DataItemFactory
 //
 // Let the upper layer decide what to do with it
 func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
-	isRemoteCall bool) (txn.DataItem, txn.RemoteDataStrategy, string, error) {
+	isRemoteCall bool,
+) (txn.DataItem, txn.RemoteDataStrategy, string, error) {
 	dataType := txn.Normal
 
 	conn, ok := r.connMap[dsName]
@@ -91,7 +97,8 @@ func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
 // basicVisibilityProcessor performs basic visibility processing on a DataItem.
 // It tries to bring the item to the COMMITTED state by performing rollback or rollforward operations.
 func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
-	startTime int64, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataStrategy, error) {
+	startTime int64, cfg txn.RecordConfig,
+) (txn.DataItem, txn.RemoteDataStrategy, error) {
 	// function to perform the rollback operation
 	rollbackFunc := func() (txn.DataItem, txn.RemoteDataStrategy, error) {
 		item, err := r.rollback(dsName, item)
@@ -139,9 +146,15 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		// that is, item's TLease < current time
 		// we should roll back the record
 		if item.TLease().Before(time.Now()) {
-			successNum := r.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED, 0)
+			successNum := r.createGroupKey(
+				strings.Split(item.GroupKeyList(), ","),
+				config.ABORTED,
+				0,
+			)
 			if successNum == 0 {
-				return nil, txn.Normal, errors.New("failed to rollback the record because none of the group keys are created")
+				return nil, txn.Normal, errors.New(
+					"failed to rollback the record because none of the group keys are created",
+				)
 			}
 			return rollbackFunc()
 		}
@@ -150,7 +163,6 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		// that is, txn's TStart < item's TValid < item's TLease
 		// we should try check the previous record
 		if startTime < item.TValid() {
-
 			// Origin Cherry Garcia would do
 			if config.Debug.CherryGarciaMode {
 				return nil, txn.Normal, errors.New(ReadFailed)
@@ -191,14 +203,15 @@ func (r *Reader) basicVisibilityProcessor(dsName string, item txn.DataItem,
 		}
 
 	}
-	return nil, txn.Normal, errors.New("key not found(unreachable code in basicVisibilityProcessor)")
+	return nil, txn.Normal, errors.New(
+		"key not found(unreachable code in basicVisibilityProcessor)",
+	)
 }
 
 // rollback overwrites the record with the application data
 // and metadata that found in field Prev.
 // if the `Prev` is empty, it simply deletes the record
 func (r *Reader) rollback(dsName string, item txn.DataItem) (txn.DataItem, error) {
-
 	if item.Prev() == "" {
 		item.SetIsDeleted(true)
 		item.SetTxnState(config.COMMITTED)
@@ -229,7 +242,6 @@ func (r *Reader) rollback(dsName string, item txn.DataItem) (txn.DataItem, error
 
 // rollForward makes the record metadata with COMMITTED state
 func (r *Reader) rollForward(dsName string, item txn.DataItem) (txn.DataItem, error) {
-
 	item.SetTxnState(config.COMMITTED)
 	newVer, err := r.connMap[dsName].ConditionalUpdate(item.Key(), item, false)
 	if err != nil {
@@ -398,7 +410,8 @@ func (r *Reader) createSingleGroupKey(url string, state config.State, tCommit in
 // according to its timestamp, and performs the given logic function on it.
 func (r *Reader) treatAsCommitted(item txn.DataItem,
 	startTime int64, logicFunc func(txn.DataItem, bool) (txn.DataItem, error),
-	cfg txn.RecordConfig) (txn.DataItem, error) {
+	cfg txn.RecordConfig,
+) (txn.DataItem, error) {
 	curItem := item
 	for i := 1; i <= cfg.MaxRecordLen; i++ {
 

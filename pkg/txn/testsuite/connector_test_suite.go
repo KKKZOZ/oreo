@@ -459,7 +459,6 @@ func testConnectionConditionalCommit(t *testing.T, conn txn.Connector, h Helper)
 // ---------------------------------------------------------------------------
 
 func TestConnectorSuite(t *testing.T, conn txn.Connector, h Helper) {
-
 	tests := []struct {
 		name string
 		fn   func(*testing.T, txn.Connector, Helper)

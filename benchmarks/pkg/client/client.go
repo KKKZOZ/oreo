@@ -1,11 +1,6 @@
 package client
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/pkg/errrecord"
-	"benchmark/pkg/measurement"
-	"benchmark/pkg/workload"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"io"
@@ -13,6 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"benchmark/pkg/benconfig"
+	"benchmark/pkg/errrecord"
+	"benchmark/pkg/measurement"
+	"benchmark/pkg/workload"
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )
 
@@ -25,7 +25,11 @@ type Client struct {
 	wl workload.Workload
 }
 
-func NewClient(workload *workload.Workload, wp *workload.WorkloadParameter, dbCreatorMap map[string]ycsb.DBCreator) *Client {
+func NewClient(
+	workload *workload.Workload,
+	wp *workload.WorkloadParameter,
+	dbCreatorMap map[string]ycsb.DBCreator,
+) *Client {
 	return &Client{
 		mu:           sync.Mutex{},
 		wl:           *workload,
@@ -33,11 +37,9 @@ func NewClient(workload *workload.Workload, wp *workload.WorkloadParameter, dbCr
 		wp:           wp,
 		table:        wp.TableName,
 	}
-
 }
 
 func (c *Client) RunLoad() {
-
 	ctx := context.Background()
 
 	for dbName, creator := range c.dbCreatorMap {
@@ -93,7 +95,6 @@ func (c *Client) RunLoad() {
 	// 	wg.Wait()
 	// 	return
 	// }
-
 }
 
 func (c *Client) RunBenchmark() {
@@ -198,7 +199,6 @@ func (c *Client) RunBenchmark() {
 }
 
 func (c *Client) getCacheState() {
-
 	fmt.Println("----------------------------------")
 
 	executorUrlList := benconfig.GlobalClient.GetExecutorAddrList()

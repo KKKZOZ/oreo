@@ -112,7 +112,11 @@ func (c *TiKVConnection) PutItem(key string, value txn.DataItem) (string, error)
 	return "", nil
 }
 
-func (c *TiKVConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+func (c *TiKVConnection) ConditionalUpdate(
+	key string,
+	value txn.DataItem,
+	doCreate bool,
+) (string, error) {
 	if !c.hasConnected {
 		return "", fmt.Errorf("not connected to TiKV")
 	}
@@ -136,7 +140,9 @@ func (c *TiKVConnection) ConditionalUpdate(key string, value txn.DataItem, doCre
 		// 使用 CompareAndSwap 确保键不存在时才创建
 		_, ok, err := c.client.CompareAndSwap(ctx, []byte(key), nil, newData)
 		if err != nil {
-			return "", errors.New(fmt.Sprintf("ConditionalUpdate(doCreate) key %s failed, err: %v", key, err))
+			return "", errors.New(
+				fmt.Sprintf("ConditionalUpdate(doCreate) key %s failed, err: %v", key, err),
+			)
 		}
 		if ok {
 			return newVer, nil
@@ -158,7 +164,11 @@ func (c *TiKVConnection) ConditionalUpdate(key string, value txn.DataItem, doCre
 	}
 }
 
-func (c *TiKVConnection) ConditionalCommit(key string, version string, tCommit int64) (string, error) {
+func (c *TiKVConnection) ConditionalCommit(
+	key string,
+	version string,
+	tCommit int64,
+) (string, error) {
 	if !c.hasConnected {
 		return "", fmt.Errorf("not connected to TiKV")
 	}

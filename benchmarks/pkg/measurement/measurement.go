@@ -1,16 +1,31 @@
 package measurement
 
 import (
-	"benchmark/ycsb"
 	"bufio"
 	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"benchmark/ycsb"
 )
 
-var header = []string{"Operation", "Takes(s)", "Count", "OPS", "Avg(us)", "Min(us)", "Max(us)", "50th(us)", "90th(us)", "95th(us)", "99th(us)", "99.9th(us)", "99.99th(us)"}
+var header = []string{
+	"Operation",
+	"Takes(s)",
+	"Count",
+	"OPS",
+	"Avg(us)",
+	"Min(us)",
+	"Max(us)",
+	"50th(us)",
+	"90th(us)",
+	"95th(us)",
+	"99th(us)",
+	"99.9th(us)",
+	"99.99th(us)",
+}
 
 type measurement struct {
 	sync.RWMutex
@@ -114,6 +129,8 @@ func FMeasure(op string, end time.Time, lan time.Duration) {
 	faultToleranceMeasure.measure(op, end, lan)
 }
 
-var globalMeasure *measurement
-var faultToleranceMeasure *measurement
-var warmUp int32 // use as bool, 1 means in warmup progress, 0 means warmup finished.
+var (
+	globalMeasure         *measurement
+	faultToleranceMeasure *measurement
+	warmUp                int32 // use as bool, 1 means in warmup progress, 0 means warmup finished.
+)

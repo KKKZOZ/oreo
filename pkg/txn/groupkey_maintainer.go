@@ -85,7 +85,6 @@ func (g *GroupKeyMaintainer) GetGroupKeyList(item DataItem) ([]GroupKey, error) 
 }
 
 func (g *GroupKeyMaintainer) CreateGroupKey(urls []string, state config.State) int {
-
 	resChan := make(chan error, len(urls))
 	for _, urll := range urls {
 		url := urll

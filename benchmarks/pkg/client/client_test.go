@@ -1,15 +1,15 @@
 package client
 
 import (
-	"benchmark/pkg/generator"
 	"math/rand"
 	"sort"
 	"testing"
 	"time"
+
+	"benchmark/pkg/generator"
 )
 
 func TestZipfian(t *testing.T) {
-
 	recordCount := 10000
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -20,7 +20,11 @@ func TestZipfian(t *testing.T) {
 
 	var keyrangeLowerBound int64 = insertStart
 	var keyrangeUpperBound int64 = insertStart + insertCount - 1
-	keyChooser := generator.NewScrambledZipfian(keyrangeLowerBound, keyrangeUpperBound, generator.ZipfianConstant)
+	keyChooser := generator.NewScrambledZipfian(
+		keyrangeLowerBound,
+		keyrangeUpperBound,
+		generator.ZipfianConstant,
+	)
 
 	// items := make([]int64, recordCount)
 	itemMap := make(map[int64]int)
@@ -54,5 +58,4 @@ func TestZipfian(t *testing.T) {
 	}
 
 	t.Fail()
-
 }

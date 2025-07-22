@@ -1,11 +1,11 @@
 package redis
 
 import (
-	"benchmark/ycsb"
 	"context"
 	"sync"
 	"time"
 
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/redis/go-redis/v9"
 )
@@ -53,7 +53,6 @@ func (r *Redis) CleanupThread(ctx context.Context) {
 }
 
 func (r *Redis) Read(ctx context.Context, table string, key string) (string, error) {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -62,7 +61,6 @@ func (r *Redis) Read(ctx context.Context, table string, key string) (string, err
 }
 
 func (r *Redis) Update(ctx context.Context, table string, key string, value string) error {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -71,7 +69,6 @@ func (r *Redis) Update(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Redis) Insert(ctx context.Context, table string, key string, value string) error {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -80,7 +77,6 @@ func (r *Redis) Insert(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Redis) Delete(ctx context.Context, table string, key string) error {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}

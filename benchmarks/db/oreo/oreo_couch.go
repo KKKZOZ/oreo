@@ -1,10 +1,10 @@
 package oreo
 
 import (
-	"benchmark/ycsb"
 	"context"
 	"sync"
 
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
@@ -38,7 +38,6 @@ type CouchDatastore struct {
 }
 
 func NewCouchDatastore(conn *couchdb.CouchDBConnection) *CouchDatastore {
-
 	return &CouchDatastore{
 		conn: conn,
 	}
@@ -70,7 +69,11 @@ func (r *CouchDatastore) Close() error {
 	return nil
 }
 
-func (r *CouchDatastore) InitThread(ctx context.Context, threadID int, threadCount int) context.Context {
+func (r *CouchDatastore) InitThread(
+	ctx context.Context,
+	threadID int,
+	threadCount int,
+) context.Context {
 	return ctx
 }
 

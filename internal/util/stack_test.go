@@ -3,7 +3,7 @@ package util
 import "testing"
 
 func TestStack(t *testing.T) {
-	var tests = []struct {
+	tests := []struct {
 		name           string
 		input          []int // Inputs to push to the stack
 		expectedPop    []int // Expected outcome when the items are popped
@@ -43,7 +43,11 @@ func TestStack(t *testing.T) {
 			}
 
 			if !equal(popped, tt.expectedPop) {
-				t.Errorf("When popping elements, expected = %v, but got = %v", tt.expectedPop, popped)
+				t.Errorf(
+					"When popping elements, expected = %v, but got = %v",
+					tt.expectedPop,
+					popped,
+				)
 			}
 		})
 	}

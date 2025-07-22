@@ -123,14 +123,17 @@ func (c *CassandraConnection) PutItem(key string, value txn.DataItem) (string, e
 		key, item.CValue, item.CGroupKeyList, item.CTxnState,
 		item.CTValid, item.CTLease, item.CPrev, item.CLinkedLen,
 		item.CIsDeleted, item.CVersion).Exec()
-
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("PutItem key %s failed, err: %v", key, err))
 	}
 	return "", nil
 }
 
-func (c *CassandraConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+func (c *CassandraConnection) ConditionalUpdate(
+	key string,
+	value txn.DataItem,
+	doCreate bool,
+) (string, error) {
 	if !c.hasConnected {
 		return "", fmt.Errorf("not connected to Cassandra")
 	}
@@ -153,9 +156,10 @@ func (c *CassandraConnection) ConditionalUpdate(key string, value txn.DataItem, 
 			key, value.Value(), value.GroupKeyList(), value.TxnState(),
 			value.TValid(), value.TLease(), value.Prev(), value.LinkedLen(),
 			value.IsDeleted(), newVer).ScanCAS()
-
 		if err != nil {
-			return "", errors.New(fmt.Sprintf("ConditionalUpdate(doCreate) key %s failed, err: %v", key, err))
+			return "", errors.New(
+				fmt.Sprintf("ConditionalUpdate(doCreate) key %s failed, err: %v", key, err),
+			)
 		}
 		if !applied {
 			return "", errors.New("key exists")
@@ -175,7 +179,6 @@ func (c *CassandraConnection) ConditionalUpdate(key string, value txn.DataItem, 
 		newVer, key, value.Version()).ScanCAS()
 	// gocql: not enough columns to scan into: have 1 want 2
 	// this is ok because it only occurs when the conditional update fails
-
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("ConditionalUpdate key %s failed, err: %v", key, err))
 	}
@@ -186,7 +189,11 @@ func (c *CassandraConnection) ConditionalUpdate(key string, value txn.DataItem, 
 	return newVer, nil
 }
 
-func (c *CassandraConnection) ConditionalCommit(key string, version string, tCommit int64) (string, error) {
+func (c *CassandraConnection) ConditionalCommit(
+	key string,
+	version string,
+	tCommit int64,
+) (string, error) {
 	if !c.hasConnected {
 		return "", fmt.Errorf("not connected to Cassandra")
 	}
@@ -200,7 +207,6 @@ func (c *CassandraConnection) ConditionalCommit(key string, version string, tCom
         WHERE key = ?
         IF version = ?`,
 		config.COMMITTED, tCommit, key, version).ScanCAS()
-
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("ConditionalCommit key %s failed, err: %v", key, err))
 	}
@@ -225,7 +231,6 @@ func (c *CassandraConnection) AtomicCreate(name string, value any) (string, erro
         VALUES (?, ?)
         IF NOT EXISTS`,
 		name, strValue).ScanCAS()
-
 	if err != nil {
 		return "", err
 	}
@@ -273,7 +278,6 @@ func (c *CassandraConnection) Put(name string, value interface{}) error {
         INSERT INTO kv (key, value)
         VALUES (?, ?)`,
 		name, strValue).Exec()
-
 	if err != nil {
 		return errors.New(fmt.Sprintf("put key %s failed, err: %v", name, err))
 	}

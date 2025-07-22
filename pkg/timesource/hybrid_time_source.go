@@ -45,7 +45,6 @@ func (ts *HybridTimeSource) updatePhysicalTime() {
 }
 
 func (ts *HybridTimeSource) GetTime(mode string) (int64, error) {
-
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 

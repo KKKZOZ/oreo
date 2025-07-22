@@ -4,8 +4,7 @@ import jsoniter "github.com/json-iterator/go"
 
 var json2 = jsoniter.ConfigCompatibleWithStandardLibrary
 
-type JSON2Serializer struct {
-}
+type JSON2Serializer struct{}
 
 func NewJSON2Serializer() *JSON2Serializer {
 	return &JSON2Serializer{}

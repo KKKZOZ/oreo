@@ -24,15 +24,15 @@ const (
 	DTSR     TxnTopic = "TSR"
 )
 
-var debugStart time.Time
-var debugVerbosity int
+var (
+	debugStart     time.Time
+	debugVerbosity int
+)
 
 func init() {
-
 	debugVerbosity = getVerbosity()
 	debugStart = time.Now()
 	log.SetFlags(log.Flags() &^ (log.Ldate | log.Ltime))
-
 }
 
 // Retrieve the verbosity level from an environment variable
@@ -50,7 +50,6 @@ func getVerbosity() int {
 }
 
 func Debug(topic TxnTopic, format string, a ...interface{}) {
-
 	if debugVerbosity >= 1 {
 		time := time.Since(debugStart).Microseconds()
 		time /= 10
@@ -58,5 +57,4 @@ func Debug(topic TxnTopic, format string, a ...interface{}) {
 		format = prefix + format
 		log.Printf(format, a...)
 	}
-
 }

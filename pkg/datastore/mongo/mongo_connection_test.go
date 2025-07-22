@@ -45,10 +45,13 @@ func TestMain(m *testing.M) {
 		WaitingFor:   wait.ForListeningPort("27017/tcp"),
 	}
 
-	mongoContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
+	mongoContainer, err := testcontainers.GenericContainer(
+		ctx,
+		testcontainers.GenericContainerRequest{
+			ContainerRequest: req,
+			Started:          true,
+		},
+	)
 	if err != nil {
 		log.Fatalf("Could not start MongoDB container: %s", err)
 	}
@@ -68,8 +71,10 @@ func TestMain(m *testing.M) {
 }
 
 func newTestMongoDBConnection() *MongoConnection {
-	connectionOptions := &ConnectionOptions{Address: testMongoDBURI, DBName: "oreo",
-		CollectionName: "records"}
+	connectionOptions := &ConnectionOptions{
+		Address: testMongoDBURI, DBName: "oreo",
+		CollectionName: "records",
+	}
 	connection := NewMongoConnection(connectionOptions)
 	if err := connection.Connect(); err != nil {
 		log.Fatalf("Could not connect to MongoDB: %s", err)

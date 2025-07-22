@@ -49,16 +49,16 @@ type DataItem interface {
 }
 
 type DataItem2 struct {
-	Key       string       `redis:"Key" bson:"_id"`
-	Value     string       `redis:"Value" bson:"Value"`
-	TxnId     string       `redis:"TxnId" bson:"TxnId"`
-	TxnState  config.State `redis:"TxnState" bson:"TxnState"`
-	TValid    int64        `redis:"TValid" bson:"TValid"`
-	TLease    time.Time    `redis:"TLease" bson:"TLease"`
-	Prev      string       `redis:"Prev" bson:"Prev"`
+	Key       string       `redis:"Key"       bson:"_id"`
+	Value     string       `redis:"Value"     bson:"Value"`
+	TxnId     string       `redis:"TxnId"     bson:"TxnId"`
+	TxnState  config.State `redis:"TxnState"  bson:"TxnState"`
+	TValid    int64        `redis:"TValid"    bson:"TValid"`
+	TLease    time.Time    `redis:"TLease"    bson:"TLease"`
+	Prev      string       `redis:"Prev"      bson:"Prev"`
 	LinkedLen int          `redis:"LinkedLen" bson:"LinkedLen"`
 	IsDeleted bool         `redis:"IsDeleted" bson:"IsDeleted"`
-	Version   int          `redis:"Version" bson:"Version"`
+	Version   int          `redis:"Version"   bson:"Version"`
 }
 
 func (m DataItem2) GetKey() string {

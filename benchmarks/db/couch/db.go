@@ -1,12 +1,12 @@
 package couch
 
 import (
-	"benchmark/ycsb"
 	"context"
 	"errors"
 	"net/http"
 	"time"
 
+	"benchmark/ycsb"
 	"github.com/go-kivik/kivik/v4"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 )

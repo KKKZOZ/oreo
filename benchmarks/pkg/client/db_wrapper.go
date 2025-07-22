@@ -1,12 +1,13 @@
 package client
 
 import (
-	"benchmark/pkg/errrecord"
-	"benchmark/pkg/measurement"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"time"
+
+	"benchmark/pkg/errrecord"
+	"benchmark/pkg/measurement"
+	"benchmark/ycsb"
 )
 
 var _ ycsb.DB = (*DbWrapper)(nil)
@@ -49,7 +50,12 @@ func (db DbWrapper) Read(ctx context.Context, table string, key string) (_ strin
 	return db.DB.Read(ctx, table, key)
 }
 
-func (db DbWrapper) BatchRead(ctx context.Context, table string, keys []string, fields []string) (_ []map[string][]byte, err error) {
+func (db DbWrapper) BatchRead(
+	ctx context.Context,
+	table string,
+	keys []string,
+	fields []string,
+) (_ []map[string][]byte, err error) {
 	batchDB, ok := db.DB.(ycsb.BatchDB)
 	if ok {
 		start := time.Now()
@@ -76,7 +82,12 @@ func (db DbWrapper) BatchRead(ctx context.Context, table string, keys []string, 
 // 	return db.DB.Scan(ctx, table, startKey, count, fields)
 // }
 
-func (db DbWrapper) Update(ctx context.Context, table string, key string, value string) (err error) {
+func (db DbWrapper) Update(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) (err error) {
 	start := time.Now()
 	defer func() {
 		measure(start, "UPDATE", err)
@@ -86,7 +97,12 @@ func (db DbWrapper) Update(ctx context.Context, table string, key string, value 
 	return db.DB.Update(ctx, table, key, value)
 }
 
-func (db DbWrapper) BatchUpdate(ctx context.Context, table string, keys []string, values []string) (err error) {
+func (db DbWrapper) BatchUpdate(
+	ctx context.Context,
+	table string,
+	keys []string,
+	values []string,
+) (err error) {
 	// batchDB, ok := db.DB.(ycsb.BatchDB)
 	// if ok {
 	// 	start := time.Now()
@@ -104,7 +120,12 @@ func (db DbWrapper) BatchUpdate(ctx context.Context, table string, keys []string
 	return nil
 }
 
-func (db DbWrapper) Insert(ctx context.Context, table string, key string, value string) (err error) {
+func (db DbWrapper) Insert(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) (err error) {
 	start := time.Now()
 	defer func() {
 		measure(start, "INSERT", err)
@@ -114,7 +135,12 @@ func (db DbWrapper) Insert(ctx context.Context, table string, key string, value 
 	return db.DB.Insert(ctx, table, key, value)
 }
 
-func (db DbWrapper) BatchInsert(ctx context.Context, table string, keys []string, values []string) (err error) {
+func (db DbWrapper) BatchInsert(
+	ctx context.Context,
+	table string,
+	keys []string,
+	values []string,
+) (err error) {
 	// batchDB, ok := db.DB.(ycsb.BatchDB)
 	// if ok {
 	// 	start := time.Now()

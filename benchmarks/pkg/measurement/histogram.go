@@ -14,10 +14,10 @@
 package measurement
 
 import (
-	"benchmark/pkg/util"
 	"sort"
 	"time"
 
+	"benchmark/pkg/util"
 	hdrhistogram "github.com/HdrHistogram/hdrhistogram-go"
 )
 

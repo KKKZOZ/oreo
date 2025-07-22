@@ -1,8 +1,9 @@
 package workload
 
 import (
-	"benchmark/ycsb"
 	"context"
+
+	"benchmark/ycsb"
 )
 
 type operationType int64

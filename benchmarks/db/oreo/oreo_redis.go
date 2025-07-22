@@ -1,11 +1,11 @@
 package oreo
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/ycsb"
 	"context"
 	"sync"
 
+	"benchmark/pkg/benconfig"
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -42,7 +42,6 @@ type RedisDatastore struct {
 }
 
 func NewRedisDatastore(conn *redis.RedisConnection, isRemote bool) *RedisDatastore {
-
 	return &RedisDatastore{
 		conn:     conn,
 		isRemote: isRemote,
@@ -81,7 +80,11 @@ func (r *RedisDatastore) Close() error {
 	return nil
 }
 
-func (r *RedisDatastore) InitThread(ctx context.Context, threadID int, threadCount int) context.Context {
+func (r *RedisDatastore) InitThread(
+	ctx context.Context,
+	threadID int,
+	threadCount int,
+) context.Context {
 	return ctx
 }
 

@@ -1,10 +1,10 @@
 package mongo
 
 import (
-	"benchmark/ycsb"
 	"context"
 	"time"
 
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -54,7 +54,6 @@ func (r *Mongo) CleanupThread(ctx context.Context) {
 }
 
 func (r *Mongo) Read(ctx context.Context, table string, key string) (string, error) {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -69,7 +68,6 @@ func (r *Mongo) Read(ctx context.Context, table string, key string) (string, err
 }
 
 func (r *Mongo) Update(ctx context.Context, table string, key string, value string) error {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -88,7 +86,6 @@ func (r *Mongo) Update(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Insert(ctx context.Context, table string, key string, value string) error {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
@@ -107,7 +104,6 @@ func (r *Mongo) Insert(ctx context.Context, table string, key string, value stri
 }
 
 func (r *Mongo) Delete(ctx context.Context, table string, key string) error {
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}

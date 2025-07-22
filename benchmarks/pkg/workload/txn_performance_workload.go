@@ -1,21 +1,18 @@
 package workload
 
 import (
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 
 	mongoDB "benchmark/db/mongo"
-
+	rds "benchmark/db/redis"
+	"benchmark/ycsb"
+	goredis "github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
-
-	rds "benchmark/db/redis"
-
-	goredis "github.com/redis/go-redis/v9"
 )
 
 type TxnPerformanceWorkload struct {
@@ -33,7 +30,8 @@ func NewTxnPerformanceWorkload(wp *WorkloadParameter) *TxnPerformanceWorkload {
 }
 
 func (wl *TxnPerformanceWorkload) Load(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	if txnDB, ok := db.(ycsb.TransactionDB); ok {
 		err := txnDB.Start()
 		if err != nil {
@@ -59,7 +57,8 @@ func (wl *TxnPerformanceWorkload) Load(ctx context.Context, opCount int,
 }
 
 func (wl *TxnPerformanceWorkload) Run(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	for i := 0; i < opCount; i++ {
 		_ = wl.doTxnPerformanceTest(ctx, db)
 	}
@@ -96,7 +95,11 @@ func (wl *TxnPerformanceWorkload) doTxnPerformanceTest(ctx context.Context, db y
 	}
 }
 
-func (wl *TxnPerformanceWorkload) doInOreoRedis(ctx context.Context, db ycsb.DB, opCount int) error {
+func (wl *TxnPerformanceWorkload) doInOreoRedis(
+	ctx context.Context,
+	db ycsb.DB,
+	opCount int,
+) error {
 	txnDB, ok := db.(ycsb.TransactionDB)
 	if !ok {
 		panic("Unsupport db type")
@@ -133,7 +136,6 @@ func (wl *TxnPerformanceWorkload) doInMongo(ctx context.Context, db ycsb.DB, opC
 		SetDefaultWriteConcern(writeconcern.Majority())
 
 	session, err := m.Client.StartSession(sessionOpts)
-
 	if err != nil {
 		fmt.Printf("StartSession error: %v\n", err)
 		return err
@@ -141,7 +143,6 @@ func (wl *TxnPerformanceWorkload) doInMongo(ctx context.Context, db ycsb.DB, opC
 	defer session.EndSession(ctx)
 
 	callback := func(sessCtx mongo.SessionContext) (interface{}, error) {
-
 		keys := make([]string, opCount)
 		values := make([]string, opCount)
 		for i := 0; i < opCount; i++ {
@@ -204,7 +205,6 @@ func (wl *TxnPerformanceWorkload) doInRedis(ctx context.Context, db ycsb.DB, opC
 			}
 			return nil
 		})
-
 		// fmt.Printf("TxPipelined done: %v\n", time.Since(mid))
 		if err != nil {
 			fmt.Printf("TxPipelined error: %v\n", err)
@@ -214,5 +214,4 @@ func (wl *TxnPerformanceWorkload) doInRedis(ctx context.Context, db ycsb.DB, opC
 
 	err := rdb.Watch(ctx, txnf, keys...)
 	return err
-
 }

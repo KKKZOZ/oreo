@@ -5,8 +5,7 @@ import (
 	"encoding/gob"
 )
 
-type GobSerializer struct {
-}
+type GobSerializer struct{}
 
 func NewGobSerializer() *GobSerializer {
 	return &GobSerializer{}

@@ -222,7 +222,9 @@ func TestMemoryLocker_ConcurrentLockSame(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		time.Sleep(time.Second * 1)                    // Wait 1 second later to ensure the previous goroutine secures the lock first
+		time.Sleep(
+			time.Second * 1,
+		) // Wait 1 second later to ensure the previous goroutine secures the lock first
 		_ = locker.Lock("key11", "id2", time.Second*2) // Will block and wait for the lock
 		_ = locker.Unlock("key11", "id2")
 	}()

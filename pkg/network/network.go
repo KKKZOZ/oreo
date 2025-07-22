@@ -132,7 +132,6 @@ func (r *ReadResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (p *PrepareRequest) UnmarshalJSON(data []byte) error {
-
 	type TempRequest struct {
 		DsName        string                       `json:"DsName"`
 		ValidationMap map[string]txn.PredicateInfo `json:"ValidationMap"`

@@ -79,7 +79,6 @@ func TestSimpleReadWhenCommitted(t *testing.T) {
 }
 
 func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
-
 	txn1 := trxn.NewTransaction()
 	conn := newTestRedisConnection()
 	rds := NewRedisDatastore("redis", conn)
@@ -114,7 +113,6 @@ func TestSimpleReadWhenCommittedFindEmpty(t *testing.T) {
 	var result testutil.Person
 	err = txn1.Read("redis", key, &result)
 	assert.EqualError(t, err, trxn.KeyNotFound.Error())
-
 }
 
 func TestSimpleReadWhenCommittedFindPrevious(t *testing.T) {
@@ -286,7 +284,6 @@ func TestSimpleReadWhenPreparedWithTSRInCOMMITTED(t *testing.T) {
 	if result != expected {
 		t.Errorf("got %v want %v", result, expected)
 	}
-
 }
 
 // TestSimpleReadWhenPreparedWithTSRInABORTED tests the scenario where a simple read operation is performed
@@ -416,7 +413,6 @@ func TestSimpleReadWhenPrepareExpired(t *testing.T) {
 }
 
 func TestSimpleReadWhenPrepareNotExpired(t *testing.T) {
-
 	dbItem1 := &RedisItem{
 		RKey:          "item1",
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre1")),
@@ -491,7 +487,6 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 }
 
 func TestSimpleWriteAndRead(t *testing.T) {
-
 	// Start the transaction
 	txn := NewTransactionWithSetup()
 	err := txn.Start()
@@ -524,7 +519,6 @@ func TestSimpleWriteAndRead(t *testing.T) {
 }
 
 func TestSimpleDirectWrite(t *testing.T) {
-
 	conn := newTestRedisConnection()
 	conn.Delete("John")
 
@@ -808,7 +802,6 @@ func TestSimpleDeleteTwice(t *testing.T) {
 }
 
 func TestDeleteWithRead(t *testing.T) {
-
 	conn := newTestRedisConnection()
 	// clear the test data
 	conn.Delete("John")
@@ -833,7 +826,6 @@ func TestDeleteWithRead(t *testing.T) {
 }
 
 func TestDeleteWithoutRead(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup()
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -851,7 +843,6 @@ func TestDeleteWithoutRead(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error committing transaction: %s", err)
 	}
-
 }
 
 func TestSimpleReadWriteDeleteThenRead(t *testing.T) {
@@ -981,11 +972,9 @@ func TestSimpleWriteDeleteWriteThenRead(t *testing.T) {
 	if result != person {
 		t.Errorf("got %v want %v", result, person)
 	}
-
 }
 
 func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
-
 	// clear the test data
 	conn := newTestRedisConnection()
 	for _, item := range testutil.InputItemList {
@@ -1051,11 +1040,9 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 	}
 	err = postTxn.Commit()
 	assert.NoError(t, err)
-
 }
 
 func TestTxnWriteMultiRecord(t *testing.T) {
-
 	// clear the test data
 	conn := newTestRedisConnection()
 	conn.Delete("item1")
@@ -1089,13 +1076,11 @@ func TestTxnWriteMultiRecord(t *testing.T) {
 	assert.Equal(t, "item1_new", resItem.Value)
 	postTxn.Read("redis", "item2", &resItem)
 	assert.Equal(t, "item2_new", resItem.Value)
-
 }
 
 // ---|---------|--------|---------|------> time
 // item1_1  T_Start   item1_2   item1_3
 func TestLinkedReadAsCommitted(t *testing.T) {
-
 	item1_1 := testutil.NewTestItem("item1_1")
 	memItem1_1 := &RedisItem{
 		RKey:          "item1",
@@ -1135,7 +1120,6 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	}
 
 	t.Run("read will fail due to MaxRecordLength=2", func(t *testing.T) {
-
 		conn := newTestRedisConnection()
 		_, err := conn.PutItem("item1", memItem1_3)
 		assert.NoError(t, err)
@@ -1149,7 +1133,6 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	})
 
 	t.Run("read will success due to MaxRecordLength=3", func(t *testing.T) {
-
 		conn := newTestRedisConnection()
 		conn.PutItem("item1", memItem1_3)
 
@@ -1164,7 +1147,6 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 	})
 
 	t.Run("read will success due to MaxRecordLength > 3", func(t *testing.T) {
-
 		conn := newTestRedisConnection()
 		conn.PutItem("item1", memItem1_3)
 
@@ -1180,13 +1162,11 @@ func TestLinkedReadAsCommitted(t *testing.T) {
 }
 
 func TestLinkedTruncate(t *testing.T) {
-
 	t.Cleanup(func() {
 		config.Config.MaxRecordLength = 2
 	})
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 2", func(t *testing.T) {
-
 		config.Config.MaxRecordLength = 2
 
 		conn := newTestRedisConnection()
@@ -1254,7 +1234,6 @@ func TestLinkedTruncate(t *testing.T) {
 		})
 
 	t.Run("4 commits immediately after txn.Start() when MaxRecordLength = 5", func(t *testing.T) {
-
 		config.Config.MaxRecordLength = 5
 		expectedLen := min(4, config.Config.MaxRecordLength)
 		for i := 1; i <= 4; i++ {
@@ -1289,7 +1268,6 @@ func TestLinkedTruncate(t *testing.T) {
 
 // The transcation should ***roll back*** the record then conditionalUpdate properly
 func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
-
 	// final linked record should be "item1-cur" -> "item1-pre2"
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := newTestRedisConnection()
@@ -1386,12 +1364,10 @@ func TestDirectWriteOnOutdatedPreparedRecordWithoutTSR(t *testing.T) {
 		tarItem.SetVersion(util.AddToString(tarItem.Version(), 1))
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
-
 }
 
 // The transcation should ***roll forward*** the record then conditionalUpdate properly
 func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
-
 	// final linked record should be "item2-cur" -> "item2-pre"
 	t.Run("the record has a valid Prev field", func(t *testing.T) {
 		conn := newTestRedisConnection()
@@ -1504,12 +1480,10 @@ func TestDirectWriteOnOutdatedPreparedRecordWithTSR(t *testing.T) {
 		tarItem.SetTxnState(config.COMMITTED)
 		assert.Equal(t, util.ToJSONString(tarItem), finalRedisItem.Prev())
 	})
-
 }
 
 // The transaction should abort because version mismatch
 func TestDirectWriteOnPreparingRecord(t *testing.T) {
-
 	conn := newTestRedisConnection()
 
 	tarItem := &RedisItem{
@@ -1568,7 +1542,6 @@ func TestDirectWriteOnDeletedRecord(t *testing.T) {
 }
 
 func TestRollbackWhenReading(t *testing.T) {
-
 	item1Pre := &RedisItem{
 		RKey:          "item1",
 		RValue:        util.ToJSONString(testutil.NewTestItem("item1-pre")),
@@ -1675,7 +1648,6 @@ func TestRollbackWhenWriting(t *testing.T) {
 		tarItem := item1Pre
 		tarItem.SetVersion("3")
 		assert.Equal(t, util.ToJSONString(tarItem), res.Prev())
-
 	})
 
 	t.Run("rollback an item with an invalid Prev field", func(t *testing.T) {
@@ -1719,7 +1691,6 @@ func TestRollbackWhenWriting(t *testing.T) {
 }
 
 func TestRollForwardWhenReading(t *testing.T) {
-
 	conn := newTestRedisConnection()
 
 	tarItem := &RedisItem{
@@ -1756,7 +1727,6 @@ func TestRollForwardWhenReading(t *testing.T) {
 }
 
 func TestRollForwardWhenWriting(t *testing.T) {
-
 	conn := newTestRedisConnection()
 
 	tarItem := &RedisItem{
@@ -1794,7 +1764,6 @@ func TestRollForwardWhenWriting(t *testing.T) {
 }
 
 func TestItemVersionUpdate(t *testing.T) {
-
 	t.Run("item version ++ after updated", func(t *testing.T) {
 		conn := newTestRedisConnection()
 		dbItem := &RedisItem{

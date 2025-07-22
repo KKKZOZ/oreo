@@ -19,7 +19,6 @@ import (
 )
 
 func TestMongo_TxnWrite(t *testing.T) {
-
 	txn1 := NewTransactionWithSetup(MONGO)
 	expected := testutil.NewDefaultPerson()
 
@@ -65,7 +64,6 @@ func TestMongo_TxnWrite(t *testing.T) {
 }
 
 func TestMongo_ReadOwnWrite(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -102,11 +100,9 @@ func TestMongo_ReadOwnWrite(t *testing.T) {
 	if actual != expected {
 		t.Errorf("Expected %v, got %v", expected, actual)
 	}
-
 }
 
 func TestMongo_SingleKeyWriteConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -134,11 +130,9 @@ func TestMongo_SingleKeyWriteConflict(t *testing.T) {
 	if postPerson != person {
 		t.Errorf("got %v want %v", postPerson, person)
 	}
-
 }
 
 func TestMongo_MultileKeyWriteConflict(t *testing.T) {
-
 	// clear the data
 	conn := NewConnectionWithSetup(MONGO)
 	conn.Delete("item1")
@@ -216,7 +210,6 @@ func TestMongo_MultileKeyWriteConflict(t *testing.T) {
 }
 
 func TestMongo_RepeatableReadWhenRecordDeleted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -245,7 +238,6 @@ func TestMongo_RepeatableReadWhenRecordDeleted(t *testing.T) {
 }
 
 func TestMongo_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -296,7 +288,6 @@ func TestMongo_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 //
 // two read in txn2 should be the same
 func TestMongo_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -369,7 +360,6 @@ func TestMongo_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 //
 // two read in txn2 should be the same
 func TestMongo_RepeatableReadWhenAnotherCommitted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -432,7 +422,6 @@ func TestMongo_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 }
 
 func TestMongo_TxnAbort(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	preTxn.Start()
 	expected := testutil.NewDefaultPerson()
@@ -459,7 +448,6 @@ func TestMongo_TxnAbort(t *testing.T) {
 
 // TODO: WTF why this test failed when using CLI
 func TestMongo_TxnAbortCausedByWriteConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -509,7 +497,6 @@ func TestMongo_TxnAbortCausedByWriteConflict(t *testing.T) {
 }
 
 func TestMongo_ConcurrentTransaction(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	preTxn.Start()
 	person := testutil.NewDefaultPerson()
@@ -600,7 +587,6 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
 	}
 	// assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
-
 }
 
 // A complex test
@@ -632,7 +618,6 @@ func TestMongo_SimpleExpiredRead(t *testing.T) {
 //   - item4-fast COMMITTED
 //   - item5-fast COMMITTED
 func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -703,7 +688,6 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	err = postTxn.Commit()
 	assert.NoError(t, err)
-
 }
 
 // A complex test
@@ -736,7 +720,6 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 //   - item4-fast COMMITTED
 //   - item5 COMMITTED
 func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -849,7 +832,6 @@ func TestMongo_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 //   - item4 rollback to COMMITTED
 //   - item5 rollback to COMMITTED
 func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(MONGO)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -899,13 +881,11 @@ func TestMongo_TransactionAbortWhenWritingTSR(t *testing.T) {
 }
 
 func TestMongo_LinkedRecord(t *testing.T) {
-
 	t.Cleanup(func() {
 		config.Config.MaxRecordLength = 2
 	})
 
 	t.Run("commit time less than MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -937,7 +917,6 @@ func TestMongo_LinkedRecord(t *testing.T) {
 	})
 
 	t.Run("commit time equals MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -969,7 +948,6 @@ func TestMongo_LinkedRecord(t *testing.T) {
 	})
 
 	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -1001,7 +979,6 @@ func TestMongo_LinkedRecord(t *testing.T) {
 }
 
 func TestMongo_RollbackConflict(t *testing.T) {
-
 	// there is a broken item
 	//   - txnA reads the item, decides to roll back
 	//   - txnB reads the item, decides to roll back
@@ -1119,7 +1096,6 @@ func TestMongo_RollbackConflict(t *testing.T) {
 		redisItem2.MVersion = util.AddToString(redisItem2.MVersion, 1)
 		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 	})
-
 }
 
 // there is a broken item
@@ -1162,7 +1138,6 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 		var item testutil.TestItem
 		err := txnA.Read(MONGO, "item1", &item)
 		assert.NotNil(t, err)
-
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -1185,11 +1160,9 @@ func TestMongo_RollForwardConflict(t *testing.T) {
 	redisItem2.MLinkedLen = 1
 	redisItem2.MVersion = "3"
 	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
-
 }
 
 func TestMongo_ConcurrentDirectWrite(t *testing.T) {
-
 	conn := NewConnectionWithSetup(MONGO)
 	conn.Delete("item1")
 
@@ -1258,10 +1231,8 @@ func TestMongo_TxnDelete(t *testing.T) {
 }
 
 func TestMongo_PreventLostUpdatesValidation(t *testing.T) {
-
 	t.Run("Case 1-1(with read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
-
 			preTxn := NewTransactionWithSetup(MONGO)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
@@ -1296,9 +1267,9 @@ func TestMongo_PreventLostUpdatesValidation(t *testing.T) {
 			assert.Equal(t, itemA, item1)
 		})
 
-	t.Run("Case 1-2(without read): The target record has been updated by the concurrent transaction",
+	t.Run(
+		"Case 1-2(without read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
-
 			preTxn := NewTransactionWithSetup(MONGO)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
@@ -1327,10 +1298,10 @@ func TestMongo_PreventLostUpdatesValidation(t *testing.T) {
 			var item1 testutil.TestItem
 			postTxn.Read(MONGO, "item1", &item1)
 			assert.Equal(t, itemA, item1)
-		})
+		},
+	)
 
 	t.Run("Case 2-1(with read): There is no conflict", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
@@ -1364,7 +1335,6 @@ func TestMongo_PreventLostUpdatesValidation(t *testing.T) {
 	})
 
 	t.Run("Case 2-2(without read): There is no conflict", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
@@ -1475,11 +1445,9 @@ func TestMongo_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "item1-A", itemPost.Value)
 	})
-
 }
 
 func TestMongo_DeleteTimingProblems(t *testing.T) {
-
 	// conn Puts an item with an empty Prev field
 	//  - txnA reads the item, decides to delete
 	//  - txnB reads the item, updates and commmits
@@ -1527,12 +1495,10 @@ func TestMongo_DeleteTimingProblems(t *testing.T) {
 		resItem, err := testConn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-
 	})
 }
 
 func TestMongo_VisibilityResults(t *testing.T) {
-
 	t.Run("a normal chain", func(t *testing.T) {
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
@@ -1555,7 +1521,6 @@ func TestMongo_VisibilityResults(t *testing.T) {
 			err = txn.Commit()
 			assert.NoError(t, err)
 		}
-
 	})
 }
 
@@ -1566,9 +1531,7 @@ func TestMongo_VisibilityResults(t *testing.T) {
 //  - call `Put` 2X+2 times
 
 func TestMongo_ReadModifyWritePattern(t *testing.T) {
-
 	t.Run("when X = 1", func(t *testing.T) {
-
 		X := 1
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
@@ -1601,7 +1564,6 @@ func TestMongo_ReadModifyWritePattern(t *testing.T) {
 	})
 
 	t.Run("when X = 5", func(t *testing.T) {
-
 		X := 5
 		preTxn := NewTransactionWithSetup(MONGO)
 		preTxn.Start()
@@ -1636,5 +1598,4 @@ func TestMongo_ReadModifyWritePattern(t *testing.T) {
 		assert.Equal(t, X+1, mockConn.GetTimes)
 		assert.Equal(t, 2*X+2, mockConn.PutTimes)
 	})
-
 }

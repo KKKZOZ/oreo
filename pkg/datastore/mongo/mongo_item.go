@@ -15,20 +15,19 @@ import (
 var _ txn.DataItem = (*MongoItem)(nil)
 
 type MongoItem struct {
-	MKey          string       `bson:"_id" json:"Key"`
-	MValue        string       `bson:"Value" json:"Value"`
+	MKey          string       `bson:"_id"          json:"Key"`
+	MValue        string       `bson:"Value"        json:"Value"`
 	MGroupKeyList string       `bson:"GroupKeyList" json:"GroupKeyList"`
-	MTxnState     config.State `bson:"TxnState" json:"TxnState"`
-	MTValid       int64        `bson:"TValid" json:"TValid"`
-	MTLease       time.Time    `bson:"TLease" json:"TLease"`
-	MPrev         string       `bson:"Prev" json:"Prev"`
-	MLinkedLen    int          `bson:"LinkedLen" json:"LinkedLen"`
-	MIsDeleted    bool         `bson:"IsDeleted" json:"IsDeleted"`
-	MVersion      string       `bson:"Version" json:"Version"`
+	MTxnState     config.State `bson:"TxnState"     json:"TxnState"`
+	MTValid       int64        `bson:"TValid"       json:"TValid"`
+	MTLease       time.Time    `bson:"TLease"       json:"TLease"`
+	MPrev         string       `bson:"Prev"         json:"Prev"`
+	MLinkedLen    int          `bson:"LinkedLen"    json:"LinkedLen"`
+	MIsDeleted    bool         `bson:"IsDeleted"    json:"IsDeleted"`
+	MVersion      string       `bson:"Version"      json:"Version"`
 }
 
 func NewMongoItem(options txn.ItemOptions) *MongoItem {
-
 	if options.Value == nil {
 		options.Value = ""
 	}

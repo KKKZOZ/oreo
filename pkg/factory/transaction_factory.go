@@ -94,7 +94,6 @@ func NewTransactionFactory(config *TransactionConfig) (*TransactionFactory, erro
 		dateStoreList:    config.DatastoreList,
 		globalDatastore:  config.GlobalDatastore,
 	}, nil
-
 }
 
 // NewTransaction creates a new Transaction object.

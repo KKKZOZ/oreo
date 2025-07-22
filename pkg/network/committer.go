@@ -26,8 +26,13 @@ type Committer struct {
 	pool        pond.Pool
 }
 
-func NewCommitter(connMap map[string]txn.Connector, reader Reader, se serializer.Serializer, itemFactory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Committer {
-
+func NewCommitter(
+	connMap map[string]txn.Connector,
+	reader Reader,
+	se serializer.Serializer,
+	itemFactory txn.DataItemFactory,
+	timeSource timesource.TimeSourcer,
+) *Committer {
 	pool := pond.NewPool(200)
 
 	// conn.Connect()
@@ -42,7 +47,8 @@ func NewCommitter(connMap map[string]txn.Connector, reader Reader, se serializer
 }
 
 func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
-	validationMap map[string]txn.PredicateInfo) error {
+	validationMap map[string]txn.PredicateInfo,
+) error {
 	if cfg.ReadStrategy == config.Pessimistic {
 		return nil
 	}
@@ -75,7 +81,10 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 				}
 
 				// For AssumeCommit
-				errMsg := fmt.Sprintf("[getDSR err: %v] validation failed due to unknown status", err)
+				errMsg := fmt.Sprintf(
+					"[getDSR err: %v] validation failed due to unknown status",
+					err,
+				)
 				return errors.New(errMsg)
 			}
 
@@ -108,12 +117,20 @@ func (c *Committer) validate(dsName string, cfg txn.RecordConfig,
 
 func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	startTime int64, cfg txn.RecordConfig,
-	validateMap map[string]txn.PredicateInfo) (map[string]string, int64, error) {
-
+	validateMap map[string]txn.PredicateInfo,
+) (map[string]string, int64, error) {
 	debugStart := time.Now()
 
 	err := c.validate(dsName, cfg, validateMap)
-	logger.Log.Debugw("After validation", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint", "cfg.ConcurrentOptimizationLevel", cfg.ConcurrentOptimizationLevel)
+	logger.Log.Debugw(
+		"After validation",
+		"LatencyInFunc",
+		time.Since(debugStart),
+		"Topic",
+		"CheckPoint",
+		"cfg.ConcurrentOptimizationLevel",
+		cfg.ConcurrentOptimizationLevel,
+	)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -173,7 +190,13 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 		}
 		return nil, 0, err
 	}
-	logger.Log.Debugw("After eg.Wait()", "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
+	logger.Log.Debugw(
+		"After eg.Wait()",
+		"LatencyInFunc",
+		time.Since(debugStart),
+		"Topic",
+		"CheckPoint",
+	)
 
 	if cfg.AblationLevel >= 4 {
 		// create the corresponding group key
@@ -189,7 +212,12 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 	return versionMap, tCommit, nil
 }
 
-func (c *Committer) createGroupKey(dsName string, item txn.DataItem, state config.State, tCommit int64) error {
+func (c *Committer) createGroupKey(
+	dsName string,
+	item txn.DataItem,
+	state config.State,
+	tCommit int64,
+) error {
 	singleGK := strings.Split(item.GroupKeyList(), ",")[0]
 	txnId := strings.Split(singleGK, ":")[1]
 	url := dsName + ":" + txnId
@@ -292,7 +320,8 @@ func (c *Committer) truncate(newItem txn.DataItem, cfg txn.RecordConfig) (txn.Da
 // It then truncates the record using the truncate method and sets the TxnState, TValid, and TLease fields of the newItem.
 // Finally, it returns the updated newItem and any error that occurred during the process.
 func (c *Committer) updateMetadata(newItem txn.DataItem,
-	oldItem txn.DataItem, commitTime int64, cfg txn.RecordConfig) (txn.DataItem, error) {
+	oldItem txn.DataItem, commitTime int64, cfg txn.RecordConfig,
+) (txn.DataItem, error) {
 	if oldItem == nil {
 		newItem.SetLinkedLen(1)
 	} else {
@@ -332,7 +361,6 @@ func (c *Committer) getPrevItem(item txn.DataItem) (txn.DataItem, error) {
 // and metadata that found in field Prev.
 // if the `Prev` is empty, it simply deletes the record
 func (c *Committer) rollback(dsName string, item txn.DataItem) (txn.DataItem, error) {
-
 	if item.Prev() == "" {
 		item.SetIsDeleted(true)
 		item.SetTxnState(config.COMMITTED)
@@ -362,7 +390,6 @@ func (c *Committer) rollback(dsName string, item txn.DataItem) (txn.DataItem, er
 }
 
 func (c *Committer) rollbackFromConn(dsName string, key string) error {
-
 	item, err := c.connMap[dsName].GetItem(key)
 	if err != nil {
 		return err
@@ -377,9 +404,15 @@ func (c *Committer) rollbackFromConn(dsName string, key string) error {
 	// }
 
 	if item.TLease().Before(time.Now()) {
-		successNum := c.reader.createGroupKey(strings.Split(item.GroupKeyList(), ","), config.ABORTED, 0)
+		successNum := c.reader.createGroupKey(
+			strings.Split(item.GroupKeyList(), ","),
+			config.ABORTED,
+			0,
+		)
 		if successNum == 0 {
-			return fmt.Errorf("failed to rollback the record because none of the group keys are created")
+			return fmt.Errorf(
+				"failed to rollback the record because none of the group keys are created",
+			)
 		}
 		_, err = c.rollback(dsName, item)
 		return err

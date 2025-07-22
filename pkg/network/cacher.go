@@ -47,7 +47,12 @@ func (c *Cacher) Delete(key string) {
 }
 
 func (c *Cacher) Statistic() string {
-	return fmt.Sprintf("CacheRequest: %d, CacheHit: %d, HitRate: %.2f", c.CacheRequest, c.CacheHit, float64(c.CacheHit)/float64(c.CacheRequest))
+	return fmt.Sprintf(
+		"CacheRequest: %d, CacheHit: %d, HitRate: %.2f",
+		c.CacheRequest,
+		c.CacheHit,
+		float64(c.CacheHit)/float64(c.CacheRequest),
+	)
 }
 
 func (c *Cacher) Clear() {

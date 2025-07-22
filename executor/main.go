@@ -1,7 +1,6 @@
 package main
 
 import (
-	"benchmark/pkg/benconfig"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"benchmark/pkg/benconfig"
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	jsoniter "github.com/json-iterator/go"
@@ -50,7 +50,12 @@ type Server struct {
 	committer network.Committer
 }
 
-func NewServer(port int, connMap map[string]txn.Connector, factory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Server {
+func NewServer(
+	port int,
+	connMap map[string]txn.Connector,
+	factory txn.DataItemFactory,
+	timeSource timesource.TimeSourcer,
+) *Server {
 	reader := *network.NewReader(connMap, factory, serializer.NewJSON2Serializer(), network.NewCacher())
 	return &Server{
 		port:      port,
@@ -90,7 +95,6 @@ func (s *Server) pingHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (s *Server) cacheHandler(ctx *fasthttp.RequestCtx) {
-
 	method := string(ctx.Method())
 
 	if method == "GET" {
@@ -110,7 +114,6 @@ func (s *Server) cacheHandler(ctx *fasthttp.RequestCtx) {
 	// 处理不支持的请求方法
 	ctx.SetStatusCode(fasthttp.StatusMethodNotAllowed)
 	ctx.SetBodyString("Method not allowed")
-
 }
 
 func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
@@ -126,7 +129,17 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	Log.Infow("Read request", "dsName", req.DsName, "key", req.Key, "startTime", req.StartTime, "config", req.Config)
+	Log.Infow(
+		"Read request",
+		"dsName",
+		req.DsName,
+		"key",
+		req.Key,
+		"startTime",
+		req.StartTime,
+		"config",
+		req.Config,
+	)
 
 	item, dataType, gk, err := s.reader.Read(req.DsName, req.Key, req.StartTime, req.Config, true)
 
@@ -174,12 +187,28 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 	// body := ctx.PostBody()
 	// Log.Infow("Prepare request", "body", string(body))
 	if err := json2.Unmarshal(ctx.PostBody(), &req); err != nil {
-		errMsg := fmt.Sprintf("Invalid prepare request body, error: %s\n Body: %v\n", err.Error(), string(ctx.PostBody()))
+		errMsg := fmt.Sprintf(
+			"Invalid prepare request body, error: %s\n Body: %v\n",
+			err.Error(),
+			string(ctx.PostBody()),
+		)
 		ctx.Error(errMsg, fasthttp.StatusBadRequest)
 		return
 	}
 
-	Log.Infow("Prepare request", "dsName", req.DsName, "itemList", req.ItemList, "startTime", req.StartTime, "config", req.Config, "validationMap", req.ValidationMap)
+	Log.Infow(
+		"Prepare request",
+		"dsName",
+		req.DsName,
+		"itemList",
+		req.ItemList,
+		"startTime",
+		req.StartTime,
+		"config",
+		req.Config,
+		"validationMap",
+		req.ValidationMap,
+	)
 
 	verMap, tCommit, err := s.committer.Prepare(req.DsName, req.ItemList,
 		req.StartTime, req.Config, req.ValidationMap)
@@ -264,20 +293,20 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 // 	CouchPassword = "password"
 // )
 
-var port = 8000
-var poolSize = 60
-var traceFlag = false
-var pprofFlag = false
-var workloadType = ""
-var db_combination = ""
-var benConfigPath = ""
-var cg = false
+var (
+	port           = 8000
+	poolSize       = 60
+	traceFlag      = false
+	pprofFlag      = false
+	workloadType   = ""
+	db_combination = ""
+	benConfigPath  = ""
+	cg             = false
+)
 
 var Log *zap.SugaredLogger
 
-var (
-	benConfig = benconfig.BenchmarkConfig{}
-)
+var benConfig = benconfig.BenchmarkConfig{}
 
 func main() {
 	parseFlag()
@@ -341,7 +370,6 @@ func main() {
 
 	Log.Info("Shutting down server")
 	fmt.Printf("Cache: %v\n", server.reader.GetCacheStatistic())
-
 }
 
 func loadConfig() error {
@@ -386,7 +414,6 @@ func parseFlag() {
 	if workloadType == "ycsb" && db_combination == "" {
 		log.Fatal("Database Combination must be specified for YCSB workload")
 	}
-
 }
 
 func getConnMap() map[string]txn.Connector {
@@ -544,7 +571,6 @@ func getMongoConn(id int) *mongo.MongoConnection {
 }
 
 func getRedisConn(id int) *redis.RedisConnection {
-
 	address := ""
 	switch id {
 	case 1:

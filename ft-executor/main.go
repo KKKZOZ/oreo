@@ -1,7 +1,6 @@
 package main
 
 import (
-	"benchmark/pkg/benconfig"
 	"bytes"         // Import bytes
 	"context"       // Import context
 	"encoding/json" // Standard JSON for registry communication
@@ -20,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"benchmark/pkg/benconfig"
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	jsoniter "github.com/json-iterator/go" // Keep for application logic if needed
@@ -70,7 +70,14 @@ type RegistryRequest struct {
 }
 
 // NewServer modified to accept registry info and dsNames
-func NewServer(port int, advertiseAddr, registryAddr string, handledDsNames []string, connMap map[string]txn.Connector, factory txn.DataItemFactory, timeSource timesource.TimeSourcer) *Server {
+func NewServer(
+	port int,
+	advertiseAddr, registryAddr string,
+	handledDsNames []string,
+	connMap map[string]txn.Connector,
+	factory txn.DataItemFactory,
+	timeSource timesource.TimeSourcer,
+) *Server {
 	reader := *network.NewReader(connMap, factory, serializer.NewJSON2Serializer(), network.NewCacher())
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
@@ -101,7 +108,15 @@ func (s *Server) registerWithRegistry() error {
 		return fmt.Errorf("advertise address not set, cannot register")
 	}
 
-	Log.Infow("Attempting to register with registry", "registry", s.registryAddr, "advertise", s.advertiseAddr, "dsNames", s.handledDsNames)
+	Log.Infow(
+		"Attempting to register with registry",
+		"registry",
+		s.registryAddr,
+		"advertise",
+		s.advertiseAddr,
+		"dsNames",
+		s.handledDsNames,
+	)
 
 	reqBody := RegistryRequest{
 		Address: s.advertiseAddr,
@@ -115,7 +130,12 @@ func (s *Server) registerWithRegistry() error {
 	ctx, cancel := context.WithTimeout(context.Background(), registryTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.registryAddr+"/register", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		s.registryAddr+"/register",
+		bytes.NewBuffer(jsonData),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create register request: %w", err)
 	}
@@ -129,7 +149,12 @@ func (s *Server) registerWithRegistry() error {
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body) // Read body for detailed error
-		return fmt.Errorf("registry at %s returned non-OK status for register: %s Body: %s", s.registryAddr, resp.Status, string(bodyBytes))
+		return fmt.Errorf(
+			"registry at %s returned non-OK status for register: %s Body: %s",
+			s.registryAddr,
+			resp.Status,
+			string(bodyBytes),
+		)
 	}
 	Log.Infow("Successfully registered with registry", "registry", s.registryAddr)
 	return nil
@@ -141,7 +166,13 @@ func (s *Server) deregisterFromRegistry() error {
 		return nil
 	}
 
-	Log.Infow("Attempting to deregister from registry", "registry", s.registryAddr, "advertise", s.advertiseAddr)
+	Log.Infow(
+		"Attempting to deregister from registry",
+		"registry",
+		s.registryAddr,
+		"advertise",
+		s.advertiseAddr,
+	)
 
 	reqBody := RegistryRequest{Address: s.advertiseAddr}
 	jsonData, err := json.Marshal(reqBody) // Use standard JSON
@@ -153,7 +184,12 @@ func (s *Server) deregisterFromRegistry() error {
 	ctx, cancel := context.WithTimeout(context.Background(), registryTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.registryAddr+"/deregister", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		s.registryAddr+"/deregister",
+		bytes.NewBuffer(jsonData),
+	)
 	if err != nil {
 		Log.Errorw("Failed to create deregister request", "error", err)
 		return err
@@ -170,7 +206,15 @@ func (s *Server) deregisterFromRegistry() error {
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body) // Read body
-		Log.Warnw("Registry returned non-OK status for deregister", "registry", s.registryAddr, "status", resp.Status, "body", string(bodyBytes))
+		Log.Warnw(
+			"Registry returned non-OK status for deregister",
+			"registry",
+			s.registryAddr,
+			"status",
+			resp.Status,
+			"body",
+			string(bodyBytes),
+		)
 		return fmt.Errorf("registry returned non-OK status for deregister: %s", resp.Status)
 	}
 	Log.Infow("Successfully deregistered from registry", "registry", s.registryAddr)
@@ -189,13 +233,25 @@ func (s *Server) startHeartbeat() {
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 
-		Log.Infow("Starting heartbeat ticker", "interval", heartbeatInterval, "registry", s.registryAddr, "advertise", s.advertiseAddr)
+		Log.Infow(
+			"Starting heartbeat ticker",
+			"interval",
+			heartbeatInterval,
+			"registry",
+			s.registryAddr,
+			"advertise",
+			s.advertiseAddr,
+		)
 
 		reqBody := RegistryRequest{Address: s.advertiseAddr}
 		jsonData, err := json.Marshal(reqBody) // Use standard JSON
 		// Handle initial marshalling error - likely fatal if it persists
 		if err != nil {
-			Log.Errorw("CRITICAL: Failed to marshal heartbeat request on startup, heartbeat disabled", "error", err)
+			Log.Errorw(
+				"CRITICAL: Failed to marshal heartbeat request on startup, heartbeat disabled",
+				"error",
+				err,
+			)
 			return
 		}
 
@@ -206,7 +262,12 @@ func (s *Server) startHeartbeat() {
 				reqCtx, reqCancel := context.WithTimeout(s.heartbeatCtx, registryTimeout)
 
 				// Create request using standard net/http
-				req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, s.registryAddr+"/heartbeat", bytes.NewBuffer(jsonData))
+				req, err := http.NewRequestWithContext(
+					reqCtx,
+					http.MethodPost,
+					s.registryAddr+"/heartbeat",
+					bytes.NewBuffer(jsonData),
+				)
 				if err != nil {
 					Log.Errorw("Failed to create heartbeat request (will retry)", "error", err)
 					reqCancel() // Must cancel context if request creation fails
@@ -230,7 +291,13 @@ func (s *Server) startHeartbeat() {
 				if resp.StatusCode != http.StatusOK {
 					// If registry doesn't know us (e.g., registry restarted), try re-registering
 					bodyBytes, _ := io.ReadAll(resp.Body) // Read body for logging
-					Log.Warnw("Registry returned non-OK for heartbeat, attempting re-registration", "status", resp.Status, "body", string(bodyBytes))
+					Log.Warnw(
+						"Registry returned non-OK for heartbeat, attempting re-registration",
+						"status",
+						resp.Status,
+						"body",
+						string(bodyBytes),
+					)
 					// Close body *before* potential re-register call
 					resp.Body.Close()
 					if regErr := s.registerWithRegistry(); regErr != nil {
@@ -265,9 +332,11 @@ func (s *Server) stopHeartbeat() {
 func (s *Server) RunAndBlock() {
 	// 1. Register first
 	if err := s.registerWithRegistry(); err != nil {
-		// Decide if failure is fatal based on application requirements
-		Log.Errorw("Failed to register with registry on startup, continuing without registration/heartbeat", "error", err)
-		// To make it fatal: Log.Fatalw("Failed to register with registry on startup", "error", err)
+		Log.Warnw(
+			"Failed to register with registry on startup, continuing without registration/heartbeat",
+			"error",
+			err,
+		)
 	}
 
 	// Executor starts before registry
@@ -294,7 +363,7 @@ func (s *Server) RunAndBlock() {
 	}
 
 	address := fmt.Sprintf(":%d", s.port)
-	s.fasthttpServer = &fasthttp.Server{Handler: router} // Store server instance
+	s.fasthttpServer = &fasthttp.Server{Handler: router}
 
 	// Channel to signal fasthttp server startup errors
 	serverErrChan := make(chan error, 1)
@@ -392,7 +461,11 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
 		// Use structured logging
-		Log.Debugw("Read request processing finished", "latency_ms", time.Since(startTime).Milliseconds())
+		Log.Debugw(
+			"Read request processing finished",
+			"latency_ms",
+			time.Since(startTime).Milliseconds(),
+		)
 	}()
 
 	var req network.ReadRequest
@@ -404,7 +477,17 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	Log.Infow("Read request received", "dsName", req.DsName, "key", req.Key, "startTime", req.StartTime, "config", req.Config)
+	Log.Infow(
+		"Read request received",
+		"dsName",
+		req.DsName,
+		"key",
+		req.Key,
+		"startTime",
+		req.StartTime,
+		"config",
+		req.Config,
+	)
 
 	item, dataType, gk, err := s.reader.Read(req.DsName, req.Key, req.StartTime, req.Config, true)
 
@@ -436,13 +519,22 @@ func (s *Server) readHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	ctx.SetContentType("application/json")
-	ctx.Write(respBytes)
+	_, err = ctx.Write(respBytes)
+	if err != nil {
+		Log.Errorw("Failed to write response", "error", err)
+	}
 }
 
 func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
-		Log.Debugw("Prepare request processing finished", "latency_ms", time.Since(startTime).Milliseconds(), "Topic", "CheckPoint")
+		Log.Debugw(
+			"Prepare request processing finished",
+			"latency_ms",
+			time.Since(startTime).Milliseconds(),
+			"Topic",
+			"CheckPoint",
+		)
 	}()
 
 	var req network.PrepareRequest
@@ -454,18 +546,40 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	Log.Infow("Prepare request received", "dsName", req.DsName, "itemCount", len(req.ItemList), "startTime", req.StartTime, "config", req.Config, "validationMapKeys", getMapKeys(req.ValidationMap))
+	Log.Infow(
+		"Prepare request received",
+		"dsName",
+		req.DsName,
+		"itemCount",
+		len(req.ItemList),
+		"startTime",
+		req.StartTime,
+		"config",
+		req.Config,
+		"validationMapKeys",
+		getMapKeys(req.ValidationMap),
+	)
 
 	verMap, tCommit, err := s.committer.Prepare(req.DsName, req.ItemList,
 		req.StartTime, req.Config, req.ValidationMap)
 	var resp network.PrepareResponse
 	if err != nil {
-		Log.Warnw("Prepare operation failed", "dsName", req.DsName, "startTime", req.StartTime, "error", err)
+		Log.Warnw(
+			"Prepare operation failed",
+			"dsName",
+			req.DsName,
+			"startTime",
+			req.StartTime,
+			"error",
+			err,
+		)
 		resp = network.PrepareResponse{
 			Status: "Error",
 			ErrMsg: err.Error(),
 		}
-		ctx.SetStatusCode(fasthttp.StatusInternalServerError) // Or map specific errors (e.g., Conflict)
+		ctx.SetStatusCode(
+			fasthttp.StatusInternalServerError,
+		) // Or map specific errors (e.g., Conflict)
 	} else {
 		resp = network.PrepareResponse{
 			Status:  "OK",
@@ -483,13 +597,20 @@ func (s *Server) prepareHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	ctx.SetContentType("application/json")
-	ctx.Write(respBytes)
+	_, err = ctx.Write(respBytes)
+	if err != nil {
+		Log.Errorw("Failed to write response", "error", err)
+	}
 }
 
 func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
-		Log.Debugw("Commit request processing finished", "latency_ms", time.Since(startTime).Milliseconds())
+		Log.Debugw(
+			"Commit request processing finished",
+			"latency_ms",
+			time.Since(startTime).Milliseconds(),
+		)
 	}()
 
 	var req network.CommitRequest
@@ -501,7 +622,15 @@ func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	Log.Infow("Commit request received", "dsName", req.DsName, "commitInfoCount", len(req.List), "tCommit", req.TCommit)
+	Log.Infow(
+		"Commit request received",
+		"dsName",
+		req.DsName,
+		"commitInfoCount",
+		len(req.List),
+		"tCommit",
+		req.TCommit,
+	)
 
 	err := s.committer.Commit(req.DsName, req.List, req.TCommit)
 	var resp network.Response[string] // Generic response type
@@ -527,13 +656,20 @@ func (s *Server) commitHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	ctx.SetContentType("application/json")
-	ctx.Write(respBytes)
+	_, err = ctx.Write(respBytes)
+	if err != nil {
+		Log.Errorw("Failed to write response", "error", err)
+	}
 }
 
 func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 	startTime := time.Now()
 	defer func() {
-		Log.Debugw("Abort request processing finished", "latency_ms", time.Since(startTime).Milliseconds())
+		Log.Debugw(
+			"Abort request processing finished",
+			"latency_ms",
+			time.Since(startTime).Milliseconds(),
+		)
 	}()
 
 	var req network.AbortRequest
@@ -545,13 +681,29 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	Log.Infow("Abort request received", "dsName", req.DsName, "keyListCount", len(req.KeyList), "groupKey", req.GroupKeyList)
+	Log.Infow(
+		"Abort request received",
+		"dsName",
+		req.DsName,
+		"keyListCount",
+		len(req.KeyList),
+		"groupKey",
+		req.GroupKeyList,
+	)
 
 	err := s.committer.Abort(req.DsName, req.KeyList, req.GroupKeyList)
 	var resp network.Response[string] // Generic response type
 	if err != nil {
 		// Abort failing is usually just a warning unless it leaks resources
-		Log.Warnw("Abort operation failed", "dsName", req.DsName, "groupKey", req.GroupKeyList, "error", err)
+		Log.Warnw(
+			"Abort operation failed",
+			"dsName",
+			req.DsName,
+			"groupKey",
+			req.GroupKeyList,
+			"error",
+			err,
+		)
 		resp = network.Response[string]{
 			Status: "Error",
 			ErrMsg: err.Error(),
@@ -572,23 +724,50 @@ func (s *Server) abortHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 	ctx.SetContentType("application/json")
-	ctx.Write(respBytes)
+	_, err = ctx.Write(respBytes)
+	if err != nil {
+		Log.Errorw("Failed to write response", "error", err)
+	}
 }
 
 // --- Main Function and Setup ---
 
 // Command-line flags
 var (
-	port              = flag.Int("p", 8000, "Port to listen on")
-	poolSize          = flag.Int("s", 60, "Database connection pool size")
-	traceFlag         = flag.Bool("trace", false, "Enable execution tracing to trace.out")
-	pprofFlag         = flag.Bool("pprof", false, "Enable CPU profiling to executor_cpu_profile.prof")
-	workloadType      = flag.String("w", "", "Workload type (e.g., iot, social, order, ycsb)")
-	db_combination    = flag.String("db", "", "Database combination for YCSB workload (comma-separated, e.g., Redis,MongoDB1)")
-	benConfigPath     = flag.String("bc", "", "Path to benchmark configuration YAML file (required)")
-	cg                = flag.Bool("cg", false, "Enable Cherry Garcia Mode (config.Debug.CherryGarciaMode)")
-	advertiseAddrFlag = flag.String("advertise-addr", "", "Address (host:port) to advertise to the registry (e.g., 1.2.3.4:8000, defaults to localhost:port)")
-	registryAddrFlag  = flag.String("registry-addr", "", "HTTP address of the registry service (e.g., http://localhost:9000)")
+	port      = flag.Int("p", 8000, "Port to listen on")
+	poolSize  = flag.Int("s", 60, "Database connection pool size")
+	traceFlag = flag.Bool("trace", false, "Enable execution tracing to trace.out")
+	pprofFlag = flag.Bool(
+		"pprof",
+		false,
+		"Enable CPU profiling to executor_cpu_profile.prof",
+	)
+	workloadType   = flag.String("w", "", "Workload type (e.g., iot, social, order, ycsb)")
+	db_combination = flag.String(
+		"db",
+		"",
+		"Database combination for YCSB workload (comma-separated, e.g., Redis,MongoDB1)",
+	)
+	benConfigPath = flag.String(
+		"bc",
+		"",
+		"Path to benchmark configuration YAML file (required)",
+	)
+	cg = flag.Bool(
+		"cg",
+		false,
+		"Enable Cherry Garcia Mode (config.Debug.CherryGarciaMode)",
+	)
+	advertiseAddrFlag = flag.String(
+		"advertise-addr",
+		"",
+		"Address (host:port) to advertise to the registry (e.g., 1.2.3.4:8000, defaults to localhost:port)",
+	)
+	registryAddrFlag = flag.String(
+		"registry-addr",
+		"",
+		"HTTP address of the registry service (e.g., http://localhost:9000)",
+	)
 )
 
 var Log *zap.SugaredLogger
@@ -597,8 +776,8 @@ var Log *zap.SugaredLogger
 var benConfig = benconfig.BenchmarkConfig{}
 
 func main() {
-	flag.Parse() // Parse flags early
-	newLogger()  // Setup logger immediately after parsing
+	flag.Parse()
+	newLogger()
 
 	// Load benchmark configuration from YAML
 	err := loadConfig(*benConfigPath)
@@ -610,9 +789,11 @@ func main() {
 	if *benConfigPath == "" {
 		Log.Fatal("Benchmark Configuration Path (--bc) must be specified")
 	}
+
 	if *workloadType == "" {
 		Log.Fatal("Workload Type (--w) must be specified")
 	}
+
 	if *workloadType == "ycsb" && *db_combination == "" {
 		Log.Fatal("Database Combination (--db) must be specified for YCSB workload")
 	}
@@ -622,10 +803,14 @@ func main() {
 	}
 
 	if *registryAddrFlag == "" {
-		Log.Info("Registry address (--registry-addr) not specified, will load from benchmark config")
+		Log.Info(
+			"Registry address (--registry-addr) not specified, will load from benchmark config",
+		)
 
 		if benConfig.RegistryAddr == "" {
-			Log.Fatal("Registry address not specified in benchmark config, please provide --registry-addr or set it in the config")
+			Log.Fatal(
+				"Registry address not specified in benchmark config, please provide --registry-addr or set it in the config",
+			)
 		}
 		*registryAddrFlag = benConfig.RegistryAddr
 	}
@@ -649,7 +834,13 @@ func main() {
 	// Establish database connections based on workload
 	connMap := getConnMap(*workloadType, *db_combination)
 	if len(connMap) == 0 {
-		Log.Fatalw("No database connections established for workload", "workload", *workloadType, "db_combination", *db_combination)
+		Log.Fatalw(
+			"No database connections established for workload",
+			"workload",
+			*workloadType,
+			"db_combination",
+			*db_combination,
+		)
 	}
 
 	// Determine which datastore names this executor handles
@@ -660,8 +851,13 @@ func main() {
 	Log.Infow("Executor configured to handle datastores", "dsNames", handledDsNames)
 
 	// Validate registry address format
-	if *registryAddrFlag != "" && !strings.HasPrefix(*registryAddrFlag, "http://") && !strings.HasPrefix(*registryAddrFlag, "https://") {
-		Log.Warnw("Registry address might be missing scheme (http:// or https://), assuming http://", "registry-addr", *registryAddrFlag)
+	if *registryAddrFlag != "" && !strings.HasPrefix(*registryAddrFlag, "http://") &&
+		!strings.HasPrefix(*registryAddrFlag, "https://") {
+		Log.Warnw(
+			"Registry address might be missing scheme (http:// or https://), assuming http://",
+			"registry-addr",
+			*registryAddrFlag,
+		)
 		*registryAddrFlag = "http://" + *registryAddrFlag // Default to http if scheme missing
 	}
 
@@ -669,7 +865,15 @@ func main() {
 	oracle := timesource.NewGlobalTimeSource(benConfig.TimeOracleUrl)
 
 	// Create the main Server instance
-	server := NewServer(*port, *advertiseAddrFlag, *registryAddrFlag, handledDsNames, connMap, &redis.RedisItemFactory{}, oracle)
+	server := NewServer(
+		*port,
+		*advertiseAddrFlag,
+		*registryAddrFlag,
+		handledDsNames,
+		connMap,
+		&redis.RedisItemFactory{},
+		oracle,
+	)
 
 	// Run the server (this includes registration, heartbeat, fasthttp server, and blocks until shutdown)
 	server.RunAndBlock()
@@ -701,7 +905,11 @@ func loadConfig(configPath string) error {
 	if benConfig.TimeOracleUrl == "" {
 		return fmt.Errorf("timeOracleUrl must be specified in the benchmark configuration")
 	}
-	Log.Infow("Benchmark configuration loaded successfully", "timeOracleUrl", benConfig.TimeOracleUrl)
+	Log.Infow(
+		"Benchmark configuration loaded successfully",
+		"timeOracleUrl",
+		benConfig.TimeOracleUrl,
+	)
 	// Add more validation as needed (e.g., check required DB addresses based on workload)
 
 	return nil
@@ -721,11 +929,7 @@ func startCPUProfile() {
 		return
 	}
 	Log.Info("CPU profiling enabled, writing to executor_cpu_profile.prof")
-	// Schedule StopCPUProfile on shutdown (can be done via defer in main, but cleaner with explicit stop)
-	// For simplicity, using defer in main might be okay, but this is more robust if main structure changes.
-	// We'll rely on the OS signal handling to eventually stop it via process exit for now.
-	// A more robust way would be to hook into the shutdown signal handler.
-	// Let's add it to the shutdown sequence:
+
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -879,7 +1083,13 @@ func getConnMap(wType string, dbComb string) map[string]txn.Connector {
 	}
 
 	if len(connMap) == 0 {
-		Log.Warnw("No database connections were successfully configured based on workload and config", "workload", wType, "dbCombination", dbComb)
+		Log.Warnw(
+			"No database connections were successfully configured based on workload and config",
+			"workload",
+			wType,
+			"dbCombination",
+			dbComb,
+		)
 	} else {
 		dsNames := make([]string, 0, len(connMap))
 		for name := range connMap {
@@ -981,7 +1191,17 @@ func getMongoConn(id int) *mongo.MongoConnection {
 		Log.Fatalf("Invalid MongoDB connection ID requested: %d", id)
 		return nil // Should not be reached
 	}
-	Log.Infow("Connecting to MongoDB", "id", id, "address", address, "dbName", "oreo", "collection", "benchmark")
+	Log.Infow(
+		"Connecting to MongoDB",
+		"id",
+		id,
+		"address",
+		address,
+		"dbName",
+		"oreo",
+		"collection",
+		"benchmark",
+	)
 	mongoConn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
 		Address:        address,
 		DBName:         "oreo",      // Hardcoded DB name?
@@ -1046,7 +1266,13 @@ func getDynamoConn() *dynamodb.DynamoDBConnection {
 	})
 	err := dynamoConn.Connect() // Connect likely initializes the client
 	if err != nil {
-		Log.Fatalw("Failed to connect to DynamoDB", "endpoint", benConfig.DynamoDBAddr, "error", err)
+		Log.Fatalw(
+			"Failed to connect to DynamoDB",
+			"endpoint",
+			benConfig.DynamoDBAddr,
+			"error",
+			err,
+		)
 	}
 	Log.Info("Connected to DynamoDB successfully.")
 	return dynamoConn

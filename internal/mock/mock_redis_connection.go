@@ -26,7 +26,8 @@ type MockRedisConnection struct {
 }
 
 func NewMockRedisConnection(address string, port int, limit int,
-	isReturned bool, networkDelay time.Duration, debugFunc func() error) *MockRedisConnection {
+	isReturned bool, networkDelay time.Duration, debugFunc func() error,
+) *MockRedisConnection {
 	conn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address:  fmt.Sprintf("%s:%d", address, port),
 		Password: "password",
@@ -54,7 +55,11 @@ func (m *MockRedisConnection) Get(name string) (string, error) {
 	return m.RedisConnection.Get(name)
 }
 
-func (m *MockRedisConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+func (m *MockRedisConnection) ConditionalUpdate(
+	key string,
+	value txn.DataItem,
+	doCreate bool,
+) (string, error) {
 	time.Sleep(m.networkDelay)
 	defer func() { m.debugCounter--; m.PutTimes++ }()
 	if m.debugCounter == 0 {

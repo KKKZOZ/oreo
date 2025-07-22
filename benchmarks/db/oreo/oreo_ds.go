@@ -1,10 +1,10 @@
 package oreo
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/ycsb"
 	"context"
 
+	"benchmark/pkg/benconfig"
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
@@ -34,8 +34,11 @@ type OreoDatastore struct {
 	isRemote            bool
 }
 
-func NewOreoDatastore(connMap map[string]txn.Connector, globalDatastoreName string, isRemote bool) *OreoDatastore {
-
+func NewOreoDatastore(
+	connMap map[string]txn.Connector,
+	globalDatastoreName string,
+	isRemote bool,
+) *OreoDatastore {
 	return &OreoDatastore{
 		isRemote:            isRemote,
 		connMap:             connMap,
@@ -97,7 +100,11 @@ func (r *OreoDatastore) Close() error {
 	return nil
 }
 
-func (r *OreoDatastore) InitThread(ctx context.Context, threadID int, threadCount int) context.Context {
+func (r *OreoDatastore) InitThread(
+	ctx context.Context,
+	threadID int,
+	threadCount int,
+) context.Context {
 	return ctx
 }
 

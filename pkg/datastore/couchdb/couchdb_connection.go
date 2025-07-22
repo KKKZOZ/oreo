@@ -9,12 +9,11 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/go-kivik/kivik/v4"
+	"github.com/go-kivik/kivik/v4/couchdb"
+	_ "github.com/go-kivik/kivik/v4/couchdb"
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
-
-	"github.com/go-kivik/kivik/v4/couchdb"
-	_ "github.com/go-kivik/kivik/v4/couchdb"
 )
 
 var _ txn.Connector = (*CouchDBConnection)(nil)
@@ -72,7 +71,6 @@ func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 
 // Connect establishes a connection to the CouchDB server and selects database
 func (r *CouchDBConnection) Connect() error {
-
 	if r.hasConnected {
 		return nil
 	}
@@ -139,7 +137,11 @@ func (r *CouchDBConnection) PutItem(key string, value txn.DataItem) (string, err
 	return rev, nil
 }
 
-func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, doCreate bool) (string, error) {
+func (r *CouchDBConnection) ConditionalUpdate(
+	key string,
+	value txn.DataItem,
+	doCreate bool,
+) (string, error) {
 	if !r.hasConnected {
 		return "", fmt.Errorf("not connected to CouchDB")
 	}
@@ -175,7 +177,11 @@ func (r *CouchDBConnection) ConditionalUpdate(key string, value txn.DataItem, do
 	return newVer, nil
 }
 
-func (r *CouchDBConnection) ConditionalCommit(key string, version string, tCommit int64) (string, error) {
+func (r *CouchDBConnection) ConditionalCommit(
+	key string,
+	version string,
+	tCommit int64,
+) (string, error) {
 	if !r.hasConnected {
 		return "", fmt.Errorf("not connected to CouchDB")
 	}
@@ -185,7 +191,6 @@ func (r *CouchDBConnection) ConditionalCommit(key string, version string, tCommi
 
 	var existing CouchDBItem
 	err := r.db.Get(context.Background(), key).ScanDoc(&existing)
-
 	if err != nil {
 		return "", errors.New(txn.VersionMismatch)
 	}

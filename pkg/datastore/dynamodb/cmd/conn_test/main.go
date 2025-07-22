@@ -116,7 +116,6 @@ func main() {
 		log.Fatalf("Get failed: %v", err)
 	}
 	fmt.Printf("Get value: %s\n", value)
-
 }
 
 func randomString() string {

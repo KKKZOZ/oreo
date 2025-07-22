@@ -15,7 +15,6 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/logger" // Use provided logger for client ops
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 	"github.com/valyala/fasthttp"
-	// Using json-iterator for potential performance benefits in client methods
 )
 
 // Ensure RegistryClient implements the RemoteClient interface
@@ -80,7 +79,11 @@ func NewClient(registryListenAddr string, instanceTTL ...time.Duration) (*Client
 	}
 	// Warn if TTL is potentially too short compared to cleanup frequency
 	if ttl < cleanupInterval*2 {
-		stdlog.Printf("WARN: RegistryClient configured instance TTL (%v) is potentially too short compared to cleanup interval (%v)", ttl, cleanupInterval)
+		stdlog.Printf(
+			"WARN: RegistryClient configured instance TTL (%v) is potentially too short compared to cleanup interval (%v)",
+			ttl,
+			cleanupInterval,
+		)
 	}
 
 	// Create cancellable context for managing background goroutine lifecycle
@@ -108,7 +111,10 @@ func NewClient(registryListenAddr string, instanceTTL ...time.Duration) (*Client
 	mux.HandleFunc("/register", rc.handleRegister)
 	mux.HandleFunc("/deregister", rc.handleDeregister)
 	mux.HandleFunc("/heartbeat", rc.handleHeartbeat)
-	mux.HandleFunc("/services", rc.handleGetServices) // Optional: endpoint for viewing registered services
+	mux.HandleFunc(
+		"/services",
+		rc.handleGetServices,
+	) // Optional: endpoint for viewing registered services
 
 	rc.registryListener = &http.Server{
 		Addr:    registryListenAddr,
@@ -123,11 +129,20 @@ func NewClient(registryListenAddr string, instanceTTL ...time.Duration) (*Client
 	rc.wg.Add(1) // Increment counter for the listener goroutine
 	go func() {
 		defer rc.wg.Done() // Decrement counter when goroutine finishes
-		stdlog.Printf("Registry server starting on %s (TTL: %v)", registryListenAddr, rc.instanceTTL)
+		stdlog.Printf(
+			"Registry server starting on %s (TTL: %v)",
+			registryListenAddr,
+			rc.instanceTTL,
+		)
 		// ListenAndServe blocks until the server is shut down
-		if err := rc.registryListener.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := rc.registryListener.ListenAndServe(); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
 			// Use standard log for fatal errors during startup
-			stdlog.Fatalf("FATAL: Registry server failed to listen on %s: %v", registryListenAddr, err)
+			stdlog.Fatalf(
+				"FATAL: Registry server failed to listen on %s: %v",
+				registryListenAddr,
+				err,
+			)
 		}
 		// This log message is reached when ListenAndServe returns after Shutdown() is called
 		stdlog.Printf("Registry server on %s stopped listening.", registryListenAddr)
@@ -171,9 +186,15 @@ func (rc *Client) Shutdown(ctx context.Context) error {
 
 	select {
 	case <-waitChan:
-		stdlog.Printf("All background routines stopped gracefully (waited %v).", time.Since(shutdownStart))
+		stdlog.Printf(
+			"All background routines stopped gracefully (waited %v).",
+			time.Since(shutdownStart),
+		)
 	case <-ctx.Done():
-		stdlog.Printf("Shutdown context timed out after %v waiting for background routines.", time.Since(shutdownStart))
+		stdlog.Printf(
+			"Shutdown context timed out after %v waiting for background routines.",
+			time.Since(shutdownStart),
+		)
 		return fmt.Errorf("registry client shutdown timed out: %w", ctx.Err())
 	}
 
@@ -202,7 +223,10 @@ func (rc *Client) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(req.DsNames) == 0 {
-		stdlog.Printf("Warning: Registering instance %s without specific DsNames. Assuming it handles 'ALL'.", req.Address)
+		stdlog.Printf(
+			"Warning: Registering instance %s without specific DsNames. Assuming it handles 'ALL'.",
+			req.Address,
+		)
 		req.DsNames = []string{ALL} // Default to ALL if none provided
 	}
 
@@ -213,7 +237,12 @@ func (rc *Client) handleRegister(w http.ResponseWriter, r *http.Request) {
 	existing, exists := rc.instances[req.Address]
 
 	if exists {
-		stdlog.Printf("Re-registering/updating instance: %s (Old DsNames: %v, New DsNames: %v)", req.Address, existing.DsNames, req.DsNames)
+		stdlog.Printf(
+			"Re-registering/updating instance: %s (Old DsNames: %v, New DsNames: %v)",
+			req.Address,
+			existing.DsNames,
+			req.DsNames,
+		)
 		rc.removeInstanceFromDsNameIndexLocked(req.Address, existing.DsNames)
 		existing.LastHeartbeat = now
 		existing.DsNames = req.DsNames
@@ -256,7 +285,11 @@ func (rc *Client) handleDeregister(w http.ResponseWriter, r *http.Request) {
 
 	instance, ok := rc.instances[req.Address]
 	if ok {
-		stdlog.Printf("Deregistering instance: %s (handled DsNames: %v)", req.Address, instance.DsNames)
+		stdlog.Printf(
+			"Deregistering instance: %s (handled DsNames: %v)",
+			req.Address,
+			instance.DsNames,
+		)
 		delete(rc.instances, req.Address)
 		rc.removeInstanceFromDsNameIndexLocked(req.Address, instance.DsNames)
 
@@ -291,7 +324,10 @@ func (rc *Client) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 
 	instance, ok := rc.instances[req.Address]
 	if !ok {
-		stdlog.Printf("Heartbeat received from unknown instance: %s. Instance should re-register.", req.Address)
+		stdlog.Printf(
+			"Heartbeat received from unknown instance: %s. Instance should re-register.",
+			req.Address,
+		)
 		http.Error(w, "Instance not registered; please re-register", http.StatusNotFound)
 		return
 	}
@@ -395,7 +431,11 @@ func (rc *Client) cleanupStaleInstances() {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
-	stdlog.Printf("Starting stale instance cleanup routine (TTL: %v, Interval: %v)", rc.instanceTTL, cleanupInterval)
+	stdlog.Printf(
+		"Starting stale instance cleanup routine (TTL: %v, Interval: %v)",
+		rc.instanceTTL,
+		cleanupInterval,
+	)
 
 	for {
 		select {
@@ -408,7 +448,11 @@ func (rc *Client) cleanupStaleInstances() {
 
 			for addr, info := range rc.instances {
 				if now.Sub(info.LastHeartbeat) > rc.instanceTTL {
-					stdlog.Printf("Cleanup: Stale instance found: %s (last heartbeat: %v ago)", addr, now.Sub(info.LastHeartbeat).Round(time.Second))
+					stdlog.Printf(
+						"Cleanup: Stale instance found: %s (last heartbeat: %v ago)",
+						addr,
+						now.Sub(info.LastHeartbeat).Round(time.Second),
+					)
 					staleInstances[addr] = info.DsNames
 					delete(rc.instances, addr)
 					cleanedCount++
@@ -445,7 +489,10 @@ func (rc *Client) GetServerAddr(dsName string) (string, error) {
 		if !ok || len(addrList) == 0 {
 			rc.registryMutex.RUnlock()
 			logger.Log.Errorw("No active executor instance found for dsName", "dsName", dsName)
-			return "", fmt.Errorf("no active executor instance available for dsName %s (or ALL)", dsName)
+			return "", fmt.Errorf(
+				"no active executor instance available for dsName %s (or ALL)",
+				dsName,
+			)
 		}
 		dsName = ALL // Use ALL key for counter
 	}
@@ -484,14 +531,23 @@ func getRequestTimeout() time.Duration {
 }
 
 // Read sends a read request with timeout.
-func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig) (txn.DataItem, txn.RemoteDataStrategy, string, error) {
+func (rc *Client) Read(
+	dsName string,
+	key string,
+	ts int64,
+	cfg txn.RecordConfig,
+) (txn.DataItem, txn.RemoteDataStrategy, string, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
 	}
 
 	addr, err := rc.GetServerAddr(dsName)
 	if err != nil {
-		return nil, txn.Normal, "", fmt.Errorf("failed to get executor address for read dsName '%s': %w", dsName, err)
+		return nil, txn.Normal, "", fmt.Errorf(
+			"failed to get executor address for read dsName '%s': %w",
+			dsName,
+			err,
+		)
 	}
 	reqUrl := "http://" + addr + "/read"
 	logger.Log.Debugw("Executing Read request", "url", reqUrl, "dsName", dsName, "key", key)
@@ -519,12 +575,29 @@ func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig
 	if err != nil {
 		// Check specifically for timeout error
 		if errors.Is(err, fasthttp.ErrTimeout) {
-			logger.Log.Errorw("Read HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
-			return nil, txn.Normal, "", fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
+			logger.Log.Errorw(
+				"Read HTTP request timed out",
+				"url",
+				reqUrl,
+				"timeout",
+				timeout,
+				"error",
+				err,
+			)
+			return nil, txn.Normal, "", fmt.Errorf(
+				"request to executor %s timed out after %v: %w",
+				reqUrl,
+				timeout,
+				err,
+			)
 		}
 		// Handle other potential errors (connection refused, DNS error, etc.)
 		logger.Log.Errorw("Failed to execute Read HTTP request", "url", reqUrl, "error", err)
-		return nil, txn.Normal, "", fmt.Errorf("http request to executor %s failed: %w", reqUrl, err)
+		return nil, txn.Normal, "", fmt.Errorf(
+			"http request to executor %s failed: %w",
+			reqUrl,
+			err,
+		)
 	}
 
 	if resp.StatusCode() != fasthttp.StatusOK {
@@ -536,7 +609,15 @@ func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig
 	var response ReadResponse
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
-		logger.Log.Errorw("Failed to unmarshal Read response body", "url", reqUrl, "body", string(resp.Body()), "error", err)
+		logger.Log.Errorw(
+			"Failed to unmarshal Read response body",
+			"url",
+			reqUrl,
+			"body",
+			string(resp.Body()),
+			"error",
+			err,
+		)
 		return nil, txn.Normal, "", fmt.Errorf("unmarshal read response error: %w", err)
 	}
 
@@ -552,8 +633,8 @@ func (rc *Client) Read(dsName string, key string, ts int64, cfg txn.RecordConfig
 // Prepare sends a prepare request with timeout.
 func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 	startTime int64, cfg txn.RecordConfig,
-	validationMap map[string]txn.PredicateInfo) (map[string]string, int64, error) {
-
+	validationMap map[string]txn.PredicateInfo,
+) (map[string]string, int64, error) {
 	debugStart := time.Now()
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.HTTPAdditionalLatency)
@@ -561,12 +642,31 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 
 	addr, err := rc.GetServerAddr(dsName)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to get executor address for prepare dsName '%s': %w", dsName, err)
+		return nil, 0, fmt.Errorf(
+			"failed to get executor address for prepare dsName '%s': %w",
+			dsName,
+			err,
+		)
 	}
 	reqUrl := "http://" + addr + "/prepare"
-	logger.Log.Debugw("Executing Prepare request", "url", reqUrl, "dsName", dsName, "itemCount", len(itemList))
+	logger.Log.Debugw(
+		"Executing Prepare request",
+		"url",
+		reqUrl,
+		"dsName",
+		dsName,
+		"itemCount",
+		len(itemList),
+	)
 
-	reqData := PrepareRequest{DsName: dsName, ItemType: GetItemType(dsName), ItemList: itemList, StartTime: startTime, Config: cfg, ValidationMap: validationMap}
+	reqData := PrepareRequest{
+		DsName:        dsName,
+		ItemType:      GetItemType(dsName),
+		ItemList:      itemList,
+		StartTime:     startTime,
+		Config:        cfg,
+		ValidationMap: validationMap,
+	}
 	jsonData, err := json2.Marshal(reqData)
 	if err != nil {
 		logger.Log.Errorw("Failed to marshal Prepare request body", "error", err)
@@ -586,13 +686,40 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 	// Execute with timeout
 	timeout := getRequestTimeout()
 	debugMsg := fmt.Sprintf("HttpClient.DoTimeout(Prepare) to %s", reqUrl)
-	logger.Log.Debugw("Before "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint", "Timeout", timeout)
+	logger.Log.Debugw(
+		"Before "+debugMsg,
+		"LatencyInFunc",
+		time.Since(debugStart),
+		"Topic",
+		"CheckPoint",
+		"Timeout",
+		timeout,
+	)
 	err = rc.httpClient.DoTimeout(req, resp, timeout)
-	logger.Log.Debugw("After "+debugMsg, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
+	logger.Log.Debugw(
+		"After "+debugMsg,
+		"LatencyInFunc",
+		time.Since(debugStart),
+		"Topic",
+		"CheckPoint",
+	)
 	if err != nil {
 		if errors.Is(err, fasthttp.ErrTimeout) {
-			logger.Log.Errorw("Prepare HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
-			return nil, 0, fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
+			logger.Log.Errorw(
+				"Prepare HTTP request timed out",
+				"url",
+				reqUrl,
+				"timeout",
+				timeout,
+				"error",
+				err,
+			)
+			return nil, 0, fmt.Errorf(
+				"request to executor %s timed out after %v: %w",
+				reqUrl,
+				timeout,
+				err,
+			)
 		}
 		logger.Log.Errorw("Failed to execute Prepare HTTP request", "url", reqUrl, "error", err)
 		return nil, 0, fmt.Errorf("http request to executor %s failed: %w", reqUrl, err)
@@ -607,7 +734,15 @@ func (rc *Client) Prepare(dsName string, itemList []txn.DataItem,
 	var response PrepareResponse
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
-		logger.Log.Errorw("Failed to unmarshal Prepare response body", "url", reqUrl, "body", string(resp.Body()), "error", err)
+		logger.Log.Errorw(
+			"Failed to unmarshal Prepare response body",
+			"url",
+			reqUrl,
+			"body",
+			string(resp.Body()),
+			"error",
+			err,
+		)
 		return nil, 0, fmt.Errorf("unmarshal prepare response error: %w", err)
 	}
 
@@ -631,7 +766,15 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 		return fmt.Errorf("failed to get executor address for commit dsName '%s': %w", dsName, err)
 	}
 	reqUrl := "http://" + addr + "/commit"
-	logger.Log.Debugw("Executing Commit request", "url", reqUrl, "dsName", dsName, "infoCount", len(infoList))
+	logger.Log.Debugw(
+		"Executing Commit request",
+		"url",
+		reqUrl,
+		"dsName",
+		dsName,
+		"infoCount",
+		len(infoList),
+	)
 
 	reqData := CommitRequest{DsName: dsName, List: infoList, TCommit: tCommit}
 	jsonData, err := json2.Marshal(reqData)
@@ -655,7 +798,15 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 	err = rc.httpClient.DoTimeout(req, resp, timeout)
 	if err != nil {
 		if errors.Is(err, fasthttp.ErrTimeout) {
-			logger.Log.Errorw("Commit HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
+			logger.Log.Errorw(
+				"Commit HTTP request timed out",
+				"url",
+				reqUrl,
+				"timeout",
+				timeout,
+				"error",
+				err,
+			)
 			return fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
 		}
 		logger.Log.Errorw("Failed to execute Commit HTTP request", "url", reqUrl, "error", err)
@@ -671,7 +822,15 @@ func (rc *Client) Commit(dsName string, infoList []txn.CommitInfo, tCommit int64
 	var response Response[string] // Generic response structure
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
-		logger.Log.Errorw("Failed to unmarshal Commit response body", "url", reqUrl, "body", string(resp.Body()), "error", err)
+		logger.Log.Errorw(
+			"Failed to unmarshal Commit response body",
+			"url",
+			reqUrl,
+			"body",
+			string(resp.Body()),
+			"error",
+			err,
+		)
 		return fmt.Errorf("unmarshal commit response error: %w", err)
 	}
 
@@ -695,7 +854,15 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 		return fmt.Errorf("failed to get executor address for abort dsName '%s': %w", dsName, err)
 	}
 	reqUrl := "http://" + addr + "/abort"
-	logger.Log.Debugw("Executing Abort request", "url", reqUrl, "dsName", dsName, "keyCount", len(keyList))
+	logger.Log.Debugw(
+		"Executing Abort request",
+		"url",
+		reqUrl,
+		"dsName",
+		dsName,
+		"keyCount",
+		len(keyList),
+	)
 
 	reqData := AbortRequest{DsName: dsName, KeyList: keyList, GroupKeyList: groupKeyList}
 	jsonData, err := json2.Marshal(reqData)
@@ -719,7 +886,15 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 	err = rc.httpClient.DoTimeout(req, resp, timeout)
 	if err != nil {
 		if errors.Is(err, fasthttp.ErrTimeout) {
-			logger.Log.Errorw("Abort HTTP request timed out", "url", reqUrl, "timeout", timeout, "error", err)
+			logger.Log.Errorw(
+				"Abort HTTP request timed out",
+				"url",
+				reqUrl,
+				"timeout",
+				timeout,
+				"error",
+				err,
+			)
 			return fmt.Errorf("request to executor %s timed out after %v: %w", reqUrl, timeout, err)
 		}
 		logger.Log.Errorw("Failed to execute Abort HTTP request", "url", reqUrl, "error", err)
@@ -735,7 +910,15 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 	var response Response[string] // Generic response structure
 	err = json2.Unmarshal(resp.Body(), &response)
 	if err != nil {
-		logger.Log.Errorw("Failed to unmarshal Abort response body", "url", reqUrl, "body", string(resp.Body()), "error", err)
+		logger.Log.Errorw(
+			"Failed to unmarshal Abort response body",
+			"url",
+			reqUrl,
+			"body",
+			string(resp.Body()),
+			"error",
+			err,
+		)
 		return fmt.Errorf("unmarshal abort response error: %w", err)
 	}
 

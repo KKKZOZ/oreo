@@ -2,8 +2,7 @@ package serializer
 
 import "encoding/json"
 
-type JSONSerializer struct {
-}
+type JSONSerializer struct{}
 
 func NewJSONSerializer() *JSONSerializer {
 	return &JSONSerializer{}

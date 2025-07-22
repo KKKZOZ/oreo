@@ -1,12 +1,13 @@
 package workload
 
 import (
-	"benchmark/pkg/generator"
-	"benchmark/pkg/util"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"sync"
+
+	"benchmark/pkg/generator"
+	"benchmark/pkg/util"
+	"benchmark/ycsb"
 )
 
 type AcrossDatastoreWorkload struct {
@@ -22,7 +23,6 @@ type AcrossDatastoreWorkload struct {
 var _ Workload = (*AcrossDatastoreWorkload)(nil)
 
 func NewAcrossDatastoreWorkload(wp *WorkloadParameter) *AcrossDatastoreWorkload {
-
 	amountMap := make(map[string]int)
 	amountMap["redis"] = 0
 	amountMap["mongo"] = 0
@@ -41,8 +41,8 @@ func NewAcrossDatastoreWorkload(wp *WorkloadParameter) *AcrossDatastoreWorkload 
 // + Oreo
 // + Redis-Mongo
 func (wl *AcrossDatastoreWorkload) Load(ctx context.Context, opCount int,
-	db ycsb.DB) {
-
+	db ycsb.DB,
+) {
 	if txnDB, ok := db.(ycsb.TransactionDB); ok {
 		err := txnDB.Start()
 		if err != nil {
@@ -71,7 +71,8 @@ func (wl *AcrossDatastoreWorkload) Load(ctx context.Context, opCount int,
 }
 
 func (wl *AcrossDatastoreWorkload) Run(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	for i := 0; i < opCount; i++ {
 		if wl.wp.DBName == "oreo" {
 			_ = wl.doInOreo(ctx, db)
@@ -90,7 +91,8 @@ func (wl *AcrossDatastoreWorkload) NeedRawDB() bool {
 }
 
 func (wl *AcrossDatastoreWorkload) PostCheck(ctx context.Context, db ycsb.DB,
-	resChan chan int) {
+	resChan chan int,
+) {
 	redisAmount := 0
 	mongoAmount := 0
 	if txnDB, ok := db.(ycsb.TransactionDB); ok {
@@ -173,7 +175,6 @@ func (wl *AcrossDatastoreWorkload) doInOreo(ctx context.Context, db ycsb.DB) err
 }
 
 func (wl *AcrossDatastoreWorkload) doInOthers(ctx context.Context, db ycsb.DB) error {
-
 	dbSet := db
 
 	transferAmount := wl.wp.TransferAmountPerTxn

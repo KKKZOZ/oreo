@@ -20,7 +20,6 @@ import (
 )
 
 func TestCouchDB_TxnWrite(t *testing.T) {
-
 	txn1 := NewTransactionWithSetup(COUCHDB)
 	expected := testutil.NewDefaultPerson()
 
@@ -66,7 +65,6 @@ func TestCouchDB_TxnWrite(t *testing.T) {
 }
 
 func TestCouchDB_ReadOwnWrite(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -103,11 +101,9 @@ func TestCouchDB_ReadOwnWrite(t *testing.T) {
 	if actual != expected {
 		t.Errorf("Expected %v, got %v", expected, actual)
 	}
-
 }
 
 func TestCouchDB_SingleKeyWriteConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -135,11 +131,9 @@ func TestCouchDB_SingleKeyWriteConflict(t *testing.T) {
 	if postPerson != person {
 		t.Errorf("got %v want %v", postPerson, person)
 	}
-
 }
 
 func TestCouchDB_MultileKeyWriteConflict(t *testing.T) {
-
 	// clear the data
 	conn := NewConnectionWithSetup(COUCHDB)
 	conn.Delete("item1")
@@ -217,7 +211,6 @@ func TestCouchDB_MultileKeyWriteConflict(t *testing.T) {
 }
 
 func TestCouchDB_RepeatableReadWhenRecordDeleted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -246,7 +239,6 @@ func TestCouchDB_RepeatableReadWhenRecordDeleted(t *testing.T) {
 }
 
 func TestCouchDB_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -297,7 +289,6 @@ func TestCouchDB_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 //
 // two read in txn2 should be the same
 func TestCouchDB_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -370,7 +361,6 @@ func TestCouchDB_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 //
 // two read in txn2 should be the same
 func TestCouchDB_RepeatableReadWhenAnotherCommitted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -433,7 +423,6 @@ func TestCouchDB_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 }
 
 func TestCouchDB_TxnAbort(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	expected := testutil.NewDefaultPerson()
@@ -460,7 +449,6 @@ func TestCouchDB_TxnAbort(t *testing.T) {
 
 // TODO: WTF why this test failed when using CLI
 func TestCouchDB_TxnAbortCausedByWriteConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -510,7 +498,6 @@ func TestCouchDB_TxnAbortCausedByWriteConflict(t *testing.T) {
 }
 
 func TestCouchDB_ConcurrentTransaction(t *testing.T) {
-
 	// Create a new redis datastore instance
 	redisDst1 := redis.NewRedisDatastore("redis1", NewConnectionWithSetup(COUCHDB))
 
@@ -613,7 +600,6 @@ func TestCouchDB_SimpleExpiredRead(t *testing.T) {
 		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
 	}
 	// assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
-
 }
 
 // A complex test
@@ -645,7 +631,6 @@ func TestCouchDB_SimpleExpiredRead(t *testing.T) {
 //   - item4-fast COMMITTED
 //   - item5-fast COMMITTED
 func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -716,7 +701,6 @@ func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 
 	err = postTxn.Commit()
 	assert.NoError(t, err)
-
 }
 
 // A complex test
@@ -749,7 +733,6 @@ func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) 
 //   - item4-fast COMMITTED
 //   - item5 COMMITTED
 func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -862,7 +845,6 @@ func TestCouchDB_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T
 //   - item4 rollback to COMMITTED
 //   - item5 rollback to COMMITTED
 func TestCouchDB_TransactionAbortWhenWritingTSR(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(COUCHDB)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -912,13 +894,11 @@ func TestCouchDB_TransactionAbortWhenWritingTSR(t *testing.T) {
 }
 
 func TestCouchDB_LinkedRecord(t *testing.T) {
-
 	t.Cleanup(func() {
 		config.Config.MaxRecordLength = 2
 	})
 
 	t.Run("commit time less than MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -950,7 +930,6 @@ func TestCouchDB_LinkedRecord(t *testing.T) {
 	})
 
 	t.Run("commit time equals MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -982,7 +961,6 @@ func TestCouchDB_LinkedRecord(t *testing.T) {
 	})
 
 	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -1014,7 +992,6 @@ func TestCouchDB_LinkedRecord(t *testing.T) {
 }
 
 func TestCouchDB_RollbackConflict(t *testing.T) {
-
 	// there is a broken item
 	//   - txnA reads the item, decides to roll back
 	//   - txnB reads the item, decides to roll back
@@ -1145,7 +1122,6 @@ func TestCouchDB_RollbackConflict(t *testing.T) {
 		redisItem2.SetVersion(previousItem.Version())
 		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 	})
-
 }
 
 // there is a broken item
@@ -1190,7 +1166,6 @@ func TestCouchDB_RollForwardConflict(t *testing.T) {
 		var item testutil.TestItem
 		err := txnA.Read(COUCHDB, "item1", &item)
 		assert.NotNil(t, err)
-
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -1218,11 +1193,9 @@ func TestCouchDB_RollForwardConflict(t *testing.T) {
 	redisItem2.CLinkedLen = 1
 	redisItem2.SetVersion(previousItem.Version())
 	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
-
 }
 
 func TestCouchDB_ConcurrentDirectWrite(t *testing.T) {
-
 	conn := NewConnectionWithSetup(COUCHDB)
 	conn.Delete("item1")
 
@@ -1291,10 +1264,8 @@ func TestCouchDB_TxnDelete(t *testing.T) {
 }
 
 func TestCouchDB_PreventLostUpdatesValidation(t *testing.T) {
-
 	t.Run("Case 1-1(with read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
-
 			preTxn := NewTransactionWithSetup(COUCHDB)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
@@ -1329,9 +1300,9 @@ func TestCouchDB_PreventLostUpdatesValidation(t *testing.T) {
 			assert.Equal(t, itemA, item1)
 		})
 
-	t.Run("Case 1-2(without read): The target record has been updated by the concurrent transaction",
+	t.Run(
+		"Case 1-2(without read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
-
 			preTxn := NewTransactionWithSetup(COUCHDB)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
@@ -1360,10 +1331,10 @@ func TestCouchDB_PreventLostUpdatesValidation(t *testing.T) {
 			var item1 testutil.TestItem
 			postTxn.Read(COUCHDB, "item1", &item1)
 			assert.Equal(t, itemA, item1)
-		})
+		},
+	)
 
 	t.Run("Case 2-1(with read): There is no conflict", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
@@ -1397,7 +1368,6 @@ func TestCouchDB_PreventLostUpdatesValidation(t *testing.T) {
 	})
 
 	t.Run("Case 2-2(without read): There is no conflict", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
@@ -1508,11 +1478,9 @@ func TestCouchDB_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "item1-A", itemPost.Value)
 	})
-
 }
 
 func TestCouchDB_DeleteTimingProblems(t *testing.T) {
-
 	// conn Puts an item with an empty Prev field
 	//  - txnA reads the item, decides to delete
 	//  - txnB reads the item, updates and commmits
@@ -1560,12 +1528,10 @@ func TestCouchDB_DeleteTimingProblems(t *testing.T) {
 		resItem, err := testConn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-
 	})
 }
 
 func TestCouchDB_VisibilityResults(t *testing.T) {
-
 	t.Run("a normal chain", func(t *testing.T) {
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
@@ -1588,7 +1554,6 @@ func TestCouchDB_VisibilityResults(t *testing.T) {
 			err = txn.Commit()
 			assert.NoError(t, err)
 		}
-
 	})
 }
 
@@ -1599,9 +1564,7 @@ func TestCouchDB_VisibilityResults(t *testing.T) {
 //  - call `Put` 2X+2 times
 
 func TestCouchDB_ReadModifyWritePattern(t *testing.T) {
-
 	t.Run("when X = 1", func(t *testing.T) {
-
 		X := 1
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
@@ -1634,7 +1597,6 @@ func TestCouchDB_ReadModifyWritePattern(t *testing.T) {
 	})
 
 	t.Run("when X = 5", func(t *testing.T) {
-
 		X := 5
 		preTxn := NewTransactionWithSetup(COUCHDB)
 		preTxn.Start()
@@ -1669,5 +1631,4 @@ func TestCouchDB_ReadModifyWritePattern(t *testing.T) {
 		assert.Equal(t, X+1, mockConn.GetTimes)
 		assert.Equal(t, 2*X+2, mockConn.PutTimes)
 	})
-
 }

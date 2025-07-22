@@ -147,5 +147,4 @@ func DeleteAllItems(d *dynamodb.Client, tableName string) error {
 		offset = result.LastEvaluatedKey
 	}
 	return nil
-
 }

@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	// a random string
 	key := randomString()
 	couchItem := couchdb.NewCouchDBItem(txn.ItemOptions{
@@ -76,7 +75,6 @@ func main() {
 	}
 	wg.Wait()
 	fmt.Printf("successNum: %d\n", successNum)
-
 }
 
 func randomString() string {

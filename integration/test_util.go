@@ -19,7 +19,6 @@ const (
 )
 
 func NewConnectionWithSetup(dsType string) txn.Connector {
-
 	var conn txn.Connector
 
 	if dsType == "redis" {
@@ -56,12 +55,6 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 
 func NewTransactionWithSetup(dsType string) *txn.Transaction {
 	txn := txn.NewTransaction()
-	if dsType == "memory" {
-		// conn := memory.NewMemoryConnection("localhost", 8321)
-		// mds := memory.NewMemoryDatastore("memory", conn)
-		// txn.AddDatastore(mds)
-		// txn.SetGlobalDatastore(mds)
-	}
 	if dsType == "redis" {
 		conn := redis.NewRedisConnection(&redis.ConnectionOptions{
 			Address:  "localhost:6379",
@@ -106,8 +99,8 @@ func NewTransactionWithSetup(dsType string) *txn.Transaction {
 }
 
 func NewTransactionWithMockConn(dsType string, limit int,
-	isReturned bool, networkDelay time.Duration, debugFunc func() error) *txn.Transaction {
-
+	isReturned bool, networkDelay time.Duration, debugFunc func() error,
+) *txn.Transaction {
 	txn := txn.NewTransaction()
 	if dsType == "redis" {
 		mockConn := mock.NewMockRedisConnection(

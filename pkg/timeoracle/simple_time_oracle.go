@@ -114,7 +114,6 @@ func (s *SimpleTimeOracle) serveUnlock(w http.ResponseWriter, r *http.Request) {
 // It then starts the server and listens for incoming requests.
 // Returns an error if there was a problem starting the server.
 func (s *SimpleTimeOracle) Start() error {
-
 	router := mux.NewRouter()
 	router.HandleFunc("/time", s.serveTime).Methods("GET")
 	router.HandleFunc("/lock", s.serveLock).Methods("GET")

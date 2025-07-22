@@ -12,20 +12,19 @@ import (
 var _ txn.DataItem = (*DynamoDBItem)(nil)
 
 type DynamoDBItem struct {
-	DKey          string       `dynamodbav:"ID" json:"Key"`                    // 分区键
-	DValue        string       `dynamodbav:"Value" json:"Value"`               // 值
+	DKey          string       `dynamodbav:"ID"           json:"Key"`          // 分区键
+	DValue        string       `dynamodbav:"Value"        json:"Value"`        // 值
 	DGroupKeyList string       `dynamodbav:"GroupKeyList" json:"GroupKeyList"` // 组键列表
-	DTxnState     config.State `dynamodbav:"TxnState" json:"TxnState"`         // 事务状态
-	DTValid       int64        `dynamodbav:"TValid" json:"TValid"`             // 有效时间戳
-	DTLease       time.Time    `dynamodbav:"TLease" json:"TLease"`             // 租约时间
-	DPrev         string       `dynamodbav:"Prev" json:"Prev"`                 // 前驱
-	DLinkedLen    int          `dynamodbav:"LinkedLen" json:"LinkedLen"`       // 链接长度
-	DIsDeleted    bool         `dynamodbav:"IsDeleted" json:"IsDeleted"`       // 删除标记
-	DVersion      string       `dynamodbav:"Version" json:"Version"`           // 版本号
+	DTxnState     config.State `dynamodbav:"TxnState"     json:"TxnState"`     // 事务状态
+	DTValid       int64        `dynamodbav:"TValid"       json:"TValid"`       // 有效时间戳
+	DTLease       time.Time    `dynamodbav:"TLease"       json:"TLease"`       // 租约时间
+	DPrev         string       `dynamodbav:"Prev"         json:"Prev"`         // 前驱
+	DLinkedLen    int          `dynamodbav:"LinkedLen"    json:"LinkedLen"`    // 链接长度
+	DIsDeleted    bool         `dynamodbav:"IsDeleted"    json:"IsDeleted"`    // 删除标记
+	DVersion      string       `dynamodbav:"Version"      json:"Version"`      // 版本号
 }
 
 func NewDynamoDBItem(options txn.ItemOptions) *DynamoDBItem {
-
 	if options.Value == nil {
 		options.Value = ""
 	}

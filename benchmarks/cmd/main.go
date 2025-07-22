@@ -1,11 +1,6 @@
 package main
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/pkg/client"
-	"benchmark/pkg/measurement"
-	"benchmark/pkg/workload"
-	"benchmark/ycsb"
 	"flag"
 	"fmt"
 	"log"
@@ -14,30 +9,35 @@ import (
 	"runtime/trace"
 	"time"
 
+	"benchmark/pkg/benconfig"
+	"benchmark/pkg/client"
+	"benchmark/pkg/measurement"
+	"benchmark/pkg/workload"
+	"benchmark/ycsb"
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	cfg "github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/network"
 )
 
-var (
-	benConfig = benconfig.BenchmarkConfig{}
-)
+var benConfig = benconfig.BenchmarkConfig{}
 
-var help = flag.Bool("help", false, "Show help")
-var dbType = ""
-var mode = "load"
-var workloadType = ""
-var workloadConfigPath = ""
-var benConfigPath = ""
-var threadNum = 1
-var traceFlag = false
-var pprofFlag = false
-var isRemote = false
-var preset = ""
-var readStrategy = ""
-var ablationLevel = 4
-var isFaultTolerance = false
+var (
+	help               = flag.Bool("help", false, "Show help")
+	dbType             = ""
+	mode               = "load"
+	workloadType       = ""
+	workloadConfigPath = ""
+	benConfigPath      = ""
+	threadNum          = 1
+	traceFlag          = false
+	pprofFlag          = false
+	isRemote           = false
+	preset             = ""
+	readStrategy       = ""
+	ablationLevel      = 4
+	isFaultTolerance   = false
+)
 
 func main() {
 	parseAndValidateFlag()
@@ -155,7 +155,6 @@ func main() {
 	if mode == "load" {
 		time.Sleep(2 * time.Second)
 	}
-
 }
 
 // func warmUpHttpClient() {
@@ -246,7 +245,11 @@ func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
 	}
 }
 
-func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbName string) *client.Client {
+func generateClient(
+	wl *workload.Workload,
+	wp *workload.WorkloadParameter,
+	dbName string,
+) *client.Client {
 	if dbType == "" {
 		panic("DBType should be specified")
 	}
@@ -395,7 +398,6 @@ func generateClient(wl *workload.Workload, wp *workload.WorkloadParameter, dbNam
 }
 
 func parseAndValidateFlag() {
-
 	flag.StringVar(&dbType, "d", "", "DB type")
 	flag.StringVar(&mode, "m", "load", "Mode: load or run")
 	flag.StringVar(&workloadType, "wl", "", "Workload type")
@@ -424,7 +426,6 @@ func parseAndValidateFlag() {
 		panic("ThreadNum should be a positive integer")
 	}
 	benconfig.GlobalIsFaultTolerance = isFaultTolerance
-
 }
 
 func displayBenchmarkInfo() {
@@ -435,9 +436,13 @@ func displayBenchmarkInfo() {
 	fmt.Printf("ThreadNum: %d\n", threadNum)
 	fmt.Printf("Remote Mode: %v\n", isRemote)
 	fmt.Printf("Read Strategy: %v\n", readStrategy)
-	fmt.Printf("ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
-		cfg.Config.ConcurrentOptimizationLevel, cfg.Config.AsyncLevel,
-		cfg.Config.MaxOutstandingRequest, cfg.Config.MaxRecordLength)
+	fmt.Printf(
+		"ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
+		cfg.Config.ConcurrentOptimizationLevel,
+		cfg.Config.AsyncLevel,
+		cfg.Config.MaxOutstandingRequest,
+		cfg.Config.MaxRecordLength,
+	)
 	fmt.Printf("HTTPAdditionalLatency: %v ConnAdditionalLatency: %v\n",
 		cfg.Debug.HTTPAdditionalLatency, cfg.Debug.ConnAdditionalLatency)
 	fmt.Printf("LeaseTime: %v\n", cfg.Config.LeaseTime)
@@ -446,7 +451,6 @@ func displayBenchmarkInfo() {
 }
 
 func loadConfig() *workload.WorkloadParameter {
-
 	bcLoader := aconfig.LoaderFor(&benConfig, aconfig.Config{
 		SkipDefaults:       true,
 		SkipFiles:          false,
@@ -465,7 +469,9 @@ func loadConfig() *workload.WorkloadParameter {
 	}
 
 	benConfig.Latency = time.Duration(benConfig.LatencyValue) * time.Millisecond
-	benConfig.FaultToleranceRequestInterval = time.Duration(benConfig.FaultToleranceRequestIntervalValue) * time.Millisecond
+	benConfig.FaultToleranceRequestInterval = time.Duration(
+		benConfig.FaultToleranceRequestIntervalValue,
+	) * time.Millisecond
 
 	benconfig.ExecutorAddressMap = benConfig.ExecutorAddressMap
 	benconfig.TimeOracleUrl = benConfig.TimeOracleUrl

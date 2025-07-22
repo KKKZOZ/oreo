@@ -13,9 +13,11 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var port int
-var oracleType string
-var Log *zap.SugaredLogger
+var (
+	port       int
+	oracleType string
+	Log        *zap.SugaredLogger
+)
 
 type TimeOracleServer struct {
 	oracle timesource.TimeSourcer
@@ -26,7 +28,13 @@ type TimeOracleServer struct {
 func (t TimeOracleServer) handleTimestamp(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	defer func() {
-		Log.Debugw("handleTimestamp", "LatencyInFunction", time.Since(startTime).Microseconds(), "Topic", "CheckPoint")
+		Log.Debugw(
+			"handleTimestamp",
+			"LatencyInFunction",
+			time.Since(startTime).Microseconds(),
+			"Topic",
+			"CheckPoint",
+		)
 	}()
 	timestamp, _ := t.oracle.GetTime("pattern")
 	w.Write([]byte(fmt.Sprintf("%d", timestamp)))

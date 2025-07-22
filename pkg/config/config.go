@@ -65,7 +65,6 @@ type debug struct {
 }
 
 type config struct {
-
 	// Mode specifies the mode of the transaction.
 	// It can be either REMOTE or LOCAL.
 	Mode Mode

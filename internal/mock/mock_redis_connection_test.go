@@ -9,7 +9,6 @@ import (
 
 func TestRedis_DebugCounter(t *testing.T) {
 	t.Run("test less than limit", func(t *testing.T) {
-
 		conn := NewMockRedisConnection("localhost", 6379, 10, true,
 			0, func() error { return errors.New("error") })
 
@@ -42,11 +41,9 @@ func TestRedis_DebugCounter(t *testing.T) {
 		err = conn.Put("key4", "value4")
 		assert.EqualError(t, err, "error")
 	})
-
 }
 
 func TestRedis_DebugFunc(t *testing.T) {
-
 	t.Run("trigger debugFunc", func(t *testing.T) {
 		conn := NewMockRedisConnection("localhost", 6379, 3, true,
 			0, func() error { return errors.New("my error") })

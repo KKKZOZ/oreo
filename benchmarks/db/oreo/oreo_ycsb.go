@@ -1,10 +1,10 @@
 package oreo
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/ycsb"
 	"context"
 
+	"benchmark/pkg/benconfig"
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
@@ -38,8 +38,11 @@ type OreoYCSBDatastore struct {
 	mode                string
 }
 
-func NewOreoYCSBDatastore(connMap map[string]txn.Connector, globalDatastoreName string, mode string) *OreoYCSBDatastore {
-
+func NewOreoYCSBDatastore(
+	connMap map[string]txn.Connector,
+	globalDatastoreName string,
+	mode string,
+) *OreoYCSBDatastore {
 	return &OreoYCSBDatastore{
 		connMap:             connMap,
 		globalDatastoreName: globalDatastoreName,
@@ -141,7 +144,11 @@ func (r *OreoYCSBDatastore) Close() error {
 	return nil
 }
 
-func (r *OreoYCSBDatastore) InitThread(ctx context.Context, threadID int, threadCount int) context.Context {
+func (r *OreoYCSBDatastore) InitThread(
+	ctx context.Context,
+	threadID int,
+	threadCount int,
+) context.Context {
 	return ctx
 }
 
@@ -159,12 +166,22 @@ func (r *OreoYCSBDatastore) Read(ctx context.Context, table string, key string) 
 	return value, nil
 }
 
-func (r *OreoYCSBDatastore) Update(ctx context.Context, table string, key string, value string) error {
+func (r *OreoYCSBDatastore) Update(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) error {
 	key = r.addPrefix(key)
 	return r.txn.Write(table, key, value)
 }
 
-func (r *OreoYCSBDatastore) Insert(ctx context.Context, table string, key string, value string) error {
+func (r *OreoYCSBDatastore) Insert(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) error {
 	key = r.addPrefix(key)
 	return r.txn.Write(table, key, value)
 }

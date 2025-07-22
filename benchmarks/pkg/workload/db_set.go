@@ -1,9 +1,10 @@
 package workload
 
 import (
-	"benchmark/ycsb"
 	"context"
 	"errors"
+
+	"benchmark/ycsb"
 )
 
 var _ ycsb.DB = (*DBSet)(nil)
@@ -53,7 +54,6 @@ func (m *DBSet) Read(context context.Context, table string, key string) (string,
 	} else {
 		return "", errors.New("table not found")
 	}
-
 }
 
 func (m *DBSet) Update(context context.Context, table string, key string, value string) error {

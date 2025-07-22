@@ -1,14 +1,15 @@
 package client
 
 import (
-	"benchmark/pkg/workload"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"log"
 	"math/rand"
 	"os"
 	"time"
+
+	"benchmark/pkg/workload"
+	"benchmark/ycsb"
 )
 
 type worker struct {
@@ -25,8 +26,8 @@ func newWorker(
 	wl workload.Workload,
 	wp *workload.WorkloadParameter,
 	threadID int, threadCount int,
-	workDBMap map[string]ycsb.DB) *worker {
-
+	workDBMap map[string]ycsb.DB,
+) *worker {
 	w := &worker{
 		wl:           wl,
 		wp:           wp,

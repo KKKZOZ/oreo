@@ -131,6 +131,7 @@ func AddToString(s string, i int) string {
 	num := ToInt(s) + ToInt(i)
 	return ToString(num)
 }
+
 func FormatErrorStack(stackError *errors.Error) string {
 	return strings.Replace(stackError.ErrorStack(), "\\n", "\n", -1)
 }

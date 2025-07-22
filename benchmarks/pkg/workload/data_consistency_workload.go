@@ -1,11 +1,12 @@
 package workload
 
 import (
-	"benchmark/pkg/util"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"sync"
+
+	"benchmark/pkg/util"
+	"benchmark/ycsb"
 )
 
 type DataConsistencyWorkload struct {
@@ -29,7 +30,8 @@ func NewDataConsistencyWorkload(wp *WorkloadParameter) *DataConsistencyWorkload 
 }
 
 func (wl *DataConsistencyWorkload) Load(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	if txnDB, ok := db.(ycsb.TransactionDB); ok {
 		err := txnDB.Start()
 		if err != nil {
@@ -55,7 +57,8 @@ func (wl *DataConsistencyWorkload) Load(ctx context.Context, opCount int,
 }
 
 func (wl *DataConsistencyWorkload) Run(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	for i := 0; i <= opCount; i++ {
 		_ = wl.doAccountTransaction(ctx, db)
 	}
@@ -70,7 +73,8 @@ func (wl *DataConsistencyWorkload) NeedRawDB() bool {
 }
 
 func (wl *DataConsistencyWorkload) PostCheck(ctx context.Context, db ycsb.DB,
-	resChan chan int) {
+	resChan chan int,
+) {
 	totalAmount := 0
 	if txnDB, ok := db.(ycsb.TransactionDB); ok {
 		txnDB.Start()

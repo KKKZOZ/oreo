@@ -18,7 +18,6 @@ type User struct {
 }
 
 func main() {
-
 	conn := red.NewRedisConnection(&red.ConnectionOptions{
 		Address:  "localhost:6666",
 		Password: "",

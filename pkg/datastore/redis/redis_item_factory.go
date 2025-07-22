@@ -9,7 +9,6 @@ var _ txn.DataItemFactory = (*RedisItemFactory)(nil)
 type RedisItemFactory struct{}
 
 func (r *RedisItemFactory) NewDataItem(options txn.ItemOptions) txn.DataItem {
-
 	if options.Value == nil {
 		options.Value = ""
 	}

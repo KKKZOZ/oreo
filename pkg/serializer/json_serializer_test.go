@@ -50,6 +50,10 @@ func TestJSONSerializer_Deserialize(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(testStruct, loadedStruct) {
-		t.Errorf("Original and deserialized data do not match. Original = %v, Deserialized = %v", testStruct, loadedStruct)
+		t.Errorf(
+			"Original and deserialized data do not match. Original = %v, Deserialized = %v",
+			testStruct,
+			loadedStruct,
+		)
 	}
 }

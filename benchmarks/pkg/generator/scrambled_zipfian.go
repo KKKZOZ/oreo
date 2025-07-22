@@ -1,9 +1,10 @@
 package generator
 
 import (
-	"benchmark/pkg/util"
 	"fmt"
 	"math/rand"
+
+	"benchmark/pkg/util"
 )
 
 // ScrambledZipfian produces a sequence of items, such that some items are more popular than
@@ -31,8 +32,8 @@ func NewScrambledZipfian(min int64, max int64, zipfianConstant float64) *Scrambl
 	// if zipfianConstant == usedZipfianConstant {
 	// 	s.gen = NewZipfian(0, itemCount, zipfianConstant, zetan)
 	// } else {
-		fmt.Println("Re-calulate zetan...")
-		s.gen = NewZipfianWithRange(0, s.itemCount, zipfianConstant)
+	fmt.Println("Re-calulate zetan...")
+	s.gen = NewZipfianWithRange(0, s.itemCount, zipfianConstant)
 	// }
 	return s
 }

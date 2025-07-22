@@ -1,9 +1,10 @@
 package generator
 
 import (
-	"benchmark/pkg/util"
 	"math/rand"
 	"sync/atomic"
+
+	"benchmark/pkg/util"
 )
 
 const (

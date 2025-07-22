@@ -61,7 +61,12 @@ func TestSimpleTimeOracle_ServeLock(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK || rr.Body.String() != "OK" {
-		t.Errorf("Status code differ or Body not OK. Expected %d OK.\n Got %d %s", http.StatusOK, rr.Code, rr.Body.String())
+		t.Errorf(
+			"Status code differ or Body not OK. Expected %d OK.\n Got %d %s",
+			http.StatusOK,
+			rr.Code,
+			rr.Body.String(),
+		)
 	}
 }
 
@@ -87,7 +92,12 @@ func TestSimpleTimeOracle_ServeUnlock(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK || rr.Body.String() != "OK" {
-		t.Errorf("Status code differ or Body not OK. Expected %d OK.\n Got %d %s", http.StatusOK, rr.Code, rr.Body.String())
+		t.Errorf(
+			"Status code differ or Body not OK. Expected %d OK.\n Got %d %s",
+			http.StatusOK,
+			rr.Code,
+			rr.Body.String(),
+		)
 	}
 }
 
@@ -109,7 +119,12 @@ func TestSimpleTimeOracle_ServeLockValidation(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadRequest || rr.Body.String() != "Missing parameters" {
-		t.Errorf("Status code differ or Body not Lock failed. Expected %d Lock failed.\n Got %d %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+		t.Errorf(
+			"Status code differ or Body not Lock failed. Expected %d Lock failed.\n Got %d %s",
+			http.StatusBadRequest,
+			rr.Code,
+			rr.Body.String(),
+		)
 	}
 }
 
@@ -213,7 +228,11 @@ func TestSimpleTimeOracle_BadParameterValidation(t *testing.T) {
 			bodyString := string(bodyBytes)
 
 			if !strings.Contains(bodyString, tc.wantError) {
-				t.Errorf("Expected error message to contain '%s', got '%s'", tc.wantError, bodyString)
+				t.Errorf(
+					"Expected error message to contain '%s', got '%s'",
+					tc.wantError,
+					bodyString,
+				)
 			}
 		})
 	}

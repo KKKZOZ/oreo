@@ -182,7 +182,11 @@ func testCassandra(hosts []string, iterations int) {
 		duration := time.Since(start)
 
 		if err != nil {
-			log.Printf("[Cassandra] Iteration %d: Error during query or closing iterator: %v", i+1, err)
+			log.Printf(
+				"[Cassandra] Iteration %d: Error during query or closing iterator: %v",
+				i+1,
+				err,
+			)
 		} else if !scanSuccessful && err == nil { // Scan 可能未成功但 Close 没有错误 (例如表空)
 			log.Printf("[Cassandra] Iteration %d: Query (%s) took: %v, but no rows returned/scanned.", i+1, query, duration)
 		} else {

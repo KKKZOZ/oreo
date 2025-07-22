@@ -44,8 +44,10 @@ var truncateStatements = []string{
 	"TRUNCATE oreo.kv",
 }
 
-var op = ""
-var ip = ""
+var (
+	op = ""
+	ip = ""
+)
 
 func main() {
 	// Parse command line arguments

@@ -9,8 +9,10 @@ type ErrCntItem struct {
 	Count int
 }
 
-var mu sync.Mutex
-var errRecorder *ErrRecorder
+var (
+	mu          sync.Mutex
+	errRecorder *ErrRecorder
+)
 
 func init() {
 	errRecorder = NewErrRecorder()

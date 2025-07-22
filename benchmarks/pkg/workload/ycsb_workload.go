@@ -1,13 +1,14 @@
 package workload
 
 import (
-	"benchmark/pkg/measurement"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
+
+	"benchmark/pkg/measurement"
+	"benchmark/ycsb"
 )
 
 type YCSBWorkload struct {
@@ -21,7 +22,6 @@ type YCSBWorkload struct {
 var _ Workload = (*YCSBWorkload)(nil)
 
 func NewYCSBWorkload(wp *WorkloadParameter) *YCSBWorkload {
-
 	return &YCSBWorkload{
 		Randomizer: *NewRandomizer(wp),
 		wp:         wp,
@@ -30,7 +30,8 @@ func NewYCSBWorkload(wp *WorkloadParameter) *YCSBWorkload {
 }
 
 func (wl *YCSBWorkload) Load(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	if txnDB, ok := db.(ycsb.TransactionDB); ok {
 		err := txnDB.Start()
 		if err != nil {
@@ -132,7 +133,6 @@ func (wl *YCSBWorkload) DisplayCheckResult() {
 	for i := 0; i < topN && i < len(pairs); i++ {
 		fmt.Printf("Key: %s, Count: %d\n", pairs[i].key, pairs[i].value)
 	}
-
 }
 
 func (wl *YCSBWorkload) doRead(ctx context.Context, db ycsb.DB) error {

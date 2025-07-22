@@ -1,12 +1,13 @@
 package workload
 
 import (
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
+
+	"benchmark/ycsb"
 )
 
 type MultiYCSBWorkload struct {
@@ -20,7 +21,6 @@ type MultiYCSBWorkload struct {
 var _ Workload = (*YCSBWorkload)(nil)
 
 func NewMultiYCSBWorkload(wp *WorkloadParameter) *MultiYCSBWorkload {
-
 	return &MultiYCSBWorkload{
 		Randomizer: *NewRandomizer(wp),
 		wp:         wp,
@@ -29,7 +29,8 @@ func NewMultiYCSBWorkload(wp *WorkloadParameter) *MultiYCSBWorkload {
 }
 
 func (wl *MultiYCSBWorkload) Load(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	panic("please load data to each datastore separately")
 }
 
@@ -110,7 +111,6 @@ func (wl *MultiYCSBWorkload) DisplayCheckResult() {
 	for i := 0; i < topN && i < len(pairs); i++ {
 		fmt.Printf("Key: %s, Count: %d\n", pairs[i].key, pairs[i].value)
 	}
-
 }
 
 func (wl *MultiYCSBWorkload) doRead(ctx context.Context, db ycsb.DB, dsName string) error {
@@ -145,7 +145,11 @@ func (wl *MultiYCSBWorkload) doInsert(ctx context.Context, db ycsb.DB, dsName st
 	return nil
 }
 
-func (wl *MultiYCSBWorkload) doReadModifyWrite(ctx context.Context, db ycsb.DB, dsName string) error {
+func (wl *MultiYCSBWorkload) doReadModifyWrite(
+	ctx context.Context,
+	db ycsb.DB,
+	dsName string,
+) error {
 	keyName := wl.NextKeyName()
 	value := wl.BuildRandomValue()
 

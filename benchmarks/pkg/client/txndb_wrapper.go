@@ -1,17 +1,20 @@
 package client
 
 import (
-	"benchmark/pkg/errrecord"
-	"benchmark/pkg/measurement"
-	"benchmark/ycsb"
 	"context"
 	"fmt"
 	"log"
 	"time"
+
+	"benchmark/pkg/errrecord"
+	"benchmark/pkg/measurement"
+	"benchmark/ycsb"
 )
 
-var _ ycsb.DB = (*TxnDbWrapper)(nil)
-var _ ycsb.TransactionDB = (*TxnDbWrapper)(nil)
+var (
+	_ ycsb.DB            = (*TxnDbWrapper)(nil)
+	_ ycsb.TransactionDB = (*TxnDbWrapper)(nil)
+)
 
 // TxnDbWrapper stores the pointer to a implementation of ycsb.TransactionDB
 type TxnDbWrapper struct {
@@ -23,7 +26,6 @@ func (db *TxnDbWrapper) Start() (err error) {
 	db.TxnStart = time.Now()
 	start := time.Now()
 	defer func() {
-
 		if err != nil {
 			log.Printf("Error in Start: %v\n", err)
 			fmeasure(db.TxnStart, "TXN", err)
@@ -58,7 +60,11 @@ func (db *TxnDbWrapper) Close() error {
 	return db.DB.Close()
 }
 
-func (db *TxnDbWrapper) InitThread(ctx context.Context, threadID int, threadCount int) context.Context {
+func (db *TxnDbWrapper) InitThread(
+	ctx context.Context,
+	threadID int,
+	threadCount int,
+) context.Context {
 	return db.DB.InitThread(ctx, threadID, threadCount)
 }
 
@@ -80,7 +86,12 @@ func (db *TxnDbWrapper) Read(ctx context.Context, table string, key string) (_ s
 	return db.DB.Read(ctx, table, key)
 }
 
-func (db *TxnDbWrapper) BatchRead(ctx context.Context, table string, keys []string, fields []string) (_ []map[string][]byte, err error) {
+func (db *TxnDbWrapper) BatchRead(
+	ctx context.Context,
+	table string,
+	keys []string,
+	fields []string,
+) (_ []map[string][]byte, err error) {
 	batchDB, ok := db.DB.(ycsb.BatchDB)
 	if ok {
 		start := time.Now()
@@ -107,7 +118,12 @@ func (db *TxnDbWrapper) BatchRead(ctx context.Context, table string, keys []stri
 // 	return db.DB.Scan(ctx, table, startKey, count, fields)
 // }
 
-func (db *TxnDbWrapper) Update(ctx context.Context, table string, key string, value string) (err error) {
+func (db *TxnDbWrapper) Update(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) (err error) {
 	start := time.Now()
 	defer func() {
 		measure(start, "UPDATE", err)
@@ -117,7 +133,12 @@ func (db *TxnDbWrapper) Update(ctx context.Context, table string, key string, va
 	return db.DB.Update(ctx, table, key, value)
 }
 
-func (db *TxnDbWrapper) BatchUpdate(ctx context.Context, table string, keys []string, values []string) (err error) {
+func (db *TxnDbWrapper) BatchUpdate(
+	ctx context.Context,
+	table string,
+	keys []string,
+	values []string,
+) (err error) {
 	// batchDB, ok := db.DB.(ycsb.BatchDB)
 	// if ok {
 	// 	start := time.Now()
@@ -135,7 +156,12 @@ func (db *TxnDbWrapper) BatchUpdate(ctx context.Context, table string, keys []st
 	return nil
 }
 
-func (db *TxnDbWrapper) Insert(ctx context.Context, table string, key string, value string) (err error) {
+func (db *TxnDbWrapper) Insert(
+	ctx context.Context,
+	table string,
+	key string,
+	value string,
+) (err error) {
 	start := time.Now()
 	defer func() {
 		measure(start, "INSERT", err)
@@ -145,7 +171,12 @@ func (db *TxnDbWrapper) Insert(ctx context.Context, table string, key string, va
 	return db.DB.Insert(ctx, table, key, value)
 }
 
-func (db *TxnDbWrapper) BatchInsert(ctx context.Context, table string, keys []string, values []string) (err error) {
+func (db *TxnDbWrapper) BatchInsert(
+	ctx context.Context,
+	table string,
+	keys []string,
+	values []string,
+) (err error) {
 	// batchDB, ok := db.DB.(ycsb.BatchDB)
 	// if ok {
 	// 	start := time.Now()

@@ -1,11 +1,11 @@
 package oreo
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/ycsb"
 	"context"
 	"sync"
 
+	"benchmark/pkg/benconfig"
+	"benchmark/ycsb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
@@ -42,7 +42,6 @@ type MongoDatastore struct {
 }
 
 func NewMongoDatastore(conn *mongo.MongoConnection, isRemote bool) *MongoDatastore {
-
 	return &MongoDatastore{
 		isRemote: isRemote,
 		conn:     conn,
@@ -81,7 +80,11 @@ func (r *MongoDatastore) Close() error {
 	return nil
 }
 
-func (r *MongoDatastore) InitThread(ctx context.Context, threadID int, threadCount int) context.Context {
+func (r *MongoDatastore) InitThread(
+	ctx context.Context,
+	threadID int,
+	threadCount int,
+) context.Context {
 	return ctx
 }
 

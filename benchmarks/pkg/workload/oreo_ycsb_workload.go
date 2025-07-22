@@ -1,8 +1,6 @@
 package workload
 
 import (
-	"benchmark/pkg/benconfig"
-	"benchmark/ycsb"
 	"context"
 	"errors" // Added for error handling
 	"fmt"
@@ -12,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"benchmark/pkg/benconfig"
+	"benchmark/ycsb"
 )
 
 type OreoYCSBWorkload struct {
@@ -59,17 +60,30 @@ func NewOreoYCSBWorkload(wp *WorkloadParameter) *OreoYCSBWorkload {
 		// return nil
 	}
 	if len(activeDBs) < wp.InvolvedDBNum {
-		log.Fatalf("Oreo YCSB Workload: Not enough active databases (%d) to satisfy InvolvedDBNum (%d). Active DBs: %v", len(activeDBs), wp.InvolvedDBNum, activeDBs)
+		log.Fatalf(
+			"Oreo YCSB Workload: Not enough active databases (%d) to satisfy InvolvedDBNum (%d). Active DBs: %v",
+			len(activeDBs),
+			wp.InvolvedDBNum,
+			activeDBs,
+		)
 		return nil
 	}
 	if wp.TxnOperationGroup > 0 && wp.TxnOperationGroup < wp.InvolvedDBNum {
-		log.Fatalf("TxnOperationGroup (%d) is less than InvolvedDBNum (%d). Not all selected databases might be used in every transaction.", wp.TxnOperationGroup, wp.InvolvedDBNum)
+		log.Fatalf(
+			"TxnOperationGroup (%d) is less than InvolvedDBNum (%d). Not all selected databases might be used in every transaction.",
+			wp.TxnOperationGroup,
+			wp.InvolvedDBNum,
+		)
 	}
 
 	combinations := generateCombinations(activeDBs, wp.InvolvedDBNum)
 	if len(combinations) == 0 {
 		// This should theoretically not happen if len(activeDBs) >= InvolvedDBNum > 0
-		log.Fatalf("Oreo YCSB Workload: Failed to generate database combinations for InvolvedDBNum=%d from %v", wp.InvolvedDBNum, activeDBs)
+		log.Fatalf(
+			"Oreo YCSB Workload: Failed to generate database combinations for InvolvedDBNum=%d from %v",
+			wp.InvolvedDBNum,
+			activeDBs,
+		)
 		return nil
 	}
 
@@ -89,7 +103,8 @@ func NewOreoYCSBWorkload(wp *WorkloadParameter) *OreoYCSBWorkload {
 // --- Load function remains largely the same, uses activeDBs ---
 
 func (wl *OreoYCSBWorkload) Load(ctx context.Context, opCount int,
-	db ycsb.DB) {
+	db ycsb.DB,
+) {
 	txnDB, ok := db.(ycsb.TransactionDB)
 	if !ok {
 		fmt.Println("The DB does not support transactions")
@@ -112,7 +127,12 @@ func (wl *OreoYCSBWorkload) Load(ctx context.Context, opCount int,
 }
 
 // Transactional Load
-func (wl *OreoYCSBWorkload) doLoad(ctx context.Context, db ycsb.TransactionDB, dbList []string, opCount int) error {
+func (wl *OreoYCSBWorkload) doLoad(
+	ctx context.Context,
+	db ycsb.TransactionDB,
+	dbList []string,
+	opCount int,
+) error {
 	if opCount == 0 {
 		return nil
 	}
@@ -141,7 +161,12 @@ func (wl *OreoYCSBWorkload) doLoad(ctx context.Context, db ycsb.TransactionDB, d
 			for _, dsName := range dbList {
 				err := db.Insert(ctx, dsName, keyName, value)
 				if err != nil {
-					fmt.Printf("Error inserting key %s into %s during load: %v\n", keyName, dsName, err)
+					fmt.Printf(
+						"Error inserting key %s into %s during load: %v\n",
+						keyName,
+						dsName,
+						err,
+					)
 				}
 			}
 		}
@@ -203,9 +228,10 @@ func getDatabases(wp WorkloadParameter) []string {
 // --- Run and doTxn are modified ---
 
 func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
-
 	if len(wl.dbCombinations) == 0 {
-		fmt.Println("Error: No database combinations available for Run phase. Check configuration and InvolvedDBNum.")
+		fmt.Println(
+			"Error: No database combinations available for Run phase. Check configuration and InvolvedDBNum.",
+		)
 		return
 	}
 
@@ -217,7 +243,9 @@ func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 
 	for i := 0; i < opCount; i++ {
 		if benconfig.GlobalIsFaultTolerance {
-			interval := rand.Intn(int(benconfig.GlobalFaultToleranceRequestInterval.Milliseconds())+1) + 1
+			interval := rand.Intn(
+				int(benconfig.GlobalFaultToleranceRequestInterval.Milliseconds())+1,
+			) + 1
 			time.Sleep(time.Duration(interval) * time.Millisecond)
 		}
 		wl.doTxn(ctx, txnDB)
@@ -225,7 +253,6 @@ func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 }
 
 func (wl *OreoYCSBWorkload) doTxn(ctx context.Context, db ycsb.TransactionDB) {
-
 	threadID := ctx.Value("threadID").(int)
 	// 1. Select a combination of databases for this transaction uniformly.
 	// Use the workload's random source for reproducibility if seeded.
@@ -320,7 +347,11 @@ func (wl *OreoYCSBWorkload) doInsert(ctx context.Context, db ycsb.DB, dsName str
 	return nil
 }
 
-func (wl *OreoYCSBWorkload) doReadModifyWrite(ctx context.Context, db ycsb.DB, dsName string) error {
+func (wl *OreoYCSBWorkload) doReadModifyWrite(
+	ctx context.Context,
+	db ycsb.DB,
+	dsName string,
+) error {
 	keyName := wl.NextKeyName()
 	value := wl.BuildRandomValue() // Build value *before* read? Ok if value is independent
 

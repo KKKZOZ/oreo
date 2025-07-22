@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	client, err := network.NewClient(":9000")
 	if err != nil {
 		panic(err)
@@ -72,5 +71,4 @@ func main() {
 		panic(err)
 	}
 	fmt.Printf("Read values: %s, %s\n", value1, value2)
-
 }

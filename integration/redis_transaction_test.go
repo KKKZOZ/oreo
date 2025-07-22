@@ -18,7 +18,6 @@ import (
 )
 
 func TestRedis_TxnWrite(t *testing.T) {
-
 	txn1 := NewTransactionWithSetup(REDIS)
 	expected := testutil.NewDefaultPerson()
 
@@ -64,7 +63,6 @@ func TestRedis_TxnWrite(t *testing.T) {
 }
 
 func TestRedis_ReadOwnWrite(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -101,11 +99,9 @@ func TestRedis_ReadOwnWrite(t *testing.T) {
 	if actual != expected {
 		t.Errorf("Expected %v, got %v", expected, actual)
 	}
-
 }
 
 func TestRedis_SingleKeyWriteConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -133,11 +129,9 @@ func TestRedis_SingleKeyWriteConflict(t *testing.T) {
 	if postPerson != person {
 		t.Errorf("got %v want %v", postPerson, person)
 	}
-
 }
 
 func TestRedis_MultileKeyWriteConflict(t *testing.T) {
-
 	// clear the data
 	conn := NewConnectionWithSetup(REDIS)
 	conn.Delete("item1")
@@ -215,7 +209,6 @@ func TestRedis_MultileKeyWriteConflict(t *testing.T) {
 }
 
 func TestRedis_RepeatableReadWhenRecordDeleted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -244,7 +237,6 @@ func TestRedis_RepeatableReadWhenRecordDeleted(t *testing.T) {
 }
 
 func TestRedis_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -295,7 +287,6 @@ func TestRedis_RepeatableReadWhenRecordUpdatedTwice(t *testing.T) {
 //
 // two read in txn2 should be the same
 func TestRedis_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -368,7 +359,6 @@ func TestRedis_RepeatableReadWhenAnotherUncommitted(t *testing.T) {
 //
 // two read in txn2 should be the same
 func TestRedis_RepeatableReadWhenAnotherCommitted(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	dataPerson := testutil.NewDefaultPerson()
 	preTxn.Start()
@@ -431,7 +421,6 @@ func TestRedis_RepeatableReadWhenAnotherCommitted(t *testing.T) {
 }
 
 func TestRedis_TxnAbort(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	expected := testutil.NewDefaultPerson()
@@ -459,7 +448,6 @@ func TestRedis_TxnAbort(t *testing.T) {
 
 // TODO: WTF why this test failed when using CLI
 func TestRedis_TxnAbortCausedByWriteConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -509,7 +497,6 @@ func TestRedis_TxnAbortCausedByWriteConflict(t *testing.T) {
 }
 
 func TestRedis_ConcurrentTransaction(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	person := testutil.NewDefaultPerson()
@@ -600,7 +587,6 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 		t.Errorf("\ngot\n%v\nwant\n%v", actual, tarMemItem)
 	}
 	// assert.Equal(t, util.ToJSONString(tarMemItem), util.ToJSONString(actual))
-
 }
 
 // A complex test
@@ -632,7 +618,6 @@ func TestRedis_SimpleExpiredRead(t *testing.T) {
 //   - item4-fast COMMITTED
 //   - item5-fast COMMITTED
 func TestRedis_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -704,7 +689,6 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 
 	err = postTxn.Commit()
 	assert.NoError(t, err)
-
 }
 
 // A complex test
@@ -737,7 +721,6 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_Conflict(t *testing.T) {
 //   - item4-fast COMMITTED
 //   - item5 COMMITTED
 func TestRedis_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -851,7 +834,6 @@ func TestRedis_SlowTransactionRecordExpiredWhenPrepare_NoConflict(t *testing.T) 
 //   - item4 rollback to COMMITTED
 //   - item5 rollback to COMMITTED
 func TestRedis_TransactionAbortWhenWritingTSR(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	for _, item := range testutil.InputItemList {
@@ -902,13 +884,11 @@ func TestRedis_TransactionAbortWhenWritingTSR(t *testing.T) {
 }
 
 func TestRedis_LinkedRecord(t *testing.T) {
-
 	t.Cleanup(func() {
 		config.Config.MaxRecordLength = 2
 	})
 
 	t.Run("commit time less than MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -940,7 +920,6 @@ func TestRedis_LinkedRecord(t *testing.T) {
 	})
 
 	t.Run("commit time equals MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -972,7 +951,6 @@ func TestRedis_LinkedRecord(t *testing.T) {
 	})
 
 	t.Run("commit times bigger than MaxLen", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
 		person := testutil.NewDefaultPerson()
@@ -1004,7 +982,6 @@ func TestRedis_LinkedRecord(t *testing.T) {
 }
 
 func TestRedis_RollbackConflict(t *testing.T) {
-
 	// there is a broken item
 	//   - txnA reads the item, decides to roll back
 	//   - txnB reads the item, decides to roll back
@@ -1122,7 +1099,6 @@ func TestRedis_RollbackConflict(t *testing.T) {
 		redisItem2.RVersion = util.AddToString(redisItem2.RVersion, 1)
 		assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
 	})
-
 }
 
 // there is a broken item
@@ -1165,7 +1141,6 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 		var item testutil.TestItem
 		err := txnA.Read(REDIS, "item1", &item)
 		assert.NotNil(t, err)
-
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -1188,11 +1163,9 @@ func TestRedis_RollForwardConflict(t *testing.T) {
 	redisItem2.RLinkedLen = 1
 	redisItem2.RVersion = "3"
 	assert.Equal(t, util.ToJSONString(redisItem2), resItem.Prev())
-
 }
 
 func TestRedis_ConcurrentDirectWrite(t *testing.T) {
-
 	conn := NewConnectionWithSetup(REDIS)
 	conn.Delete("item1")
 
@@ -1261,10 +1234,8 @@ func TestRedis_TxnDelete(t *testing.T) {
 }
 
 func TestRedis_PreventLostUpdatesValidation(t *testing.T) {
-
 	t.Run("Case 1-1(with read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
-
 			preTxn := NewTransactionWithSetup(REDIS)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
@@ -1299,9 +1270,9 @@ func TestRedis_PreventLostUpdatesValidation(t *testing.T) {
 			assert.Equal(t, itemA, item1)
 		})
 
-	t.Run("Case 1-2(without read): The target record has been updated by the concurrent transaction",
+	t.Run(
+		"Case 1-2(without read): The target record has been updated by the concurrent transaction",
 		func(t *testing.T) {
-
 			preTxn := NewTransactionWithSetup(REDIS)
 			preTxn.Start()
 			item := testutil.NewTestItem("item1-pre")
@@ -1330,10 +1301,10 @@ func TestRedis_PreventLostUpdatesValidation(t *testing.T) {
 			var item1 testutil.TestItem
 			postTxn.Read(REDIS, "item1", &item1)
 			assert.Equal(t, itemA, item1)
-		})
+		},
+	)
 
 	t.Run("Case 2-1(with read): There is no conflict", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
@@ -1367,7 +1338,6 @@ func TestRedis_PreventLostUpdatesValidation(t *testing.T) {
 	})
 
 	t.Run("Case 2-2(without read): There is no conflict", func(t *testing.T) {
-
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
 		item := testutil.NewTestItem("item1-pre")
@@ -1479,11 +1449,9 @@ func TestRedis_RepeatableReadWhenDirtyRead(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "item1-A", itemPost.Value)
 	})
-
 }
 
 func TestRedis_DeleteTimingProblems(t *testing.T) {
-
 	// conn Puts an item with an empty Prev field
 	//  - txnA reads the item, decides to delete
 	//  - txnB reads the item, updates and commmits
@@ -1531,12 +1499,10 @@ func TestRedis_DeleteTimingProblems(t *testing.T) {
 		resItem, err := testConn.GetItem("item1")
 		assert.NoError(t, err)
 		assert.Equal(t, util.ToJSONString(testutil.NewTestItem("item1-B")), resItem.Value())
-
 	})
 }
 
 func TestRedis_VisibilityResults(t *testing.T) {
-
 	t.Run("a normal chain", func(t *testing.T) {
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
@@ -1559,7 +1525,6 @@ func TestRedis_VisibilityResults(t *testing.T) {
 			err = txn.Commit()
 			assert.NoError(t, err)
 		}
-
 	})
 }
 
@@ -1570,9 +1535,7 @@ func TestRedis_VisibilityResults(t *testing.T) {
 //  - call `Put` 2X+2 times
 
 func TestRedis_ReadModifyWritePattern(t *testing.T) {
-
 	t.Run("when X = 1", func(t *testing.T) {
-
 		X := 1
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
@@ -1606,7 +1569,6 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 	})
 
 	t.Run("when X = 5", func(t *testing.T) {
-
 		X := 5
 		preTxn := NewTransactionWithSetup(REDIS)
 		preTxn.Start()
@@ -1643,7 +1605,6 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 		assert.Equal(t, X+1, mockConn.GetTimes)
 		assert.Equal(t, 2*X+2, mockConn.PutTimes)
 	})
-
 }
 
 // A timing case.
@@ -1653,7 +1614,6 @@ func TestRedis_ReadModifyWritePattern(t *testing.T) {
 //   - txnB modifies item1 and commit
 //   - txnA tries to bring item1 to COMMITTED state, it should fail
 func TestRedis_CommitTimingCase(t *testing.T) {
-
 	preTxn := NewTransactionWithSetup(REDIS)
 	preTxn.Start()
 	item := testutil.NewTestItem("item1-pre")
@@ -1662,7 +1622,6 @@ func TestRedis_CommitTimingCase(t *testing.T) {
 	assert.NoError(t, err)
 
 	go func() {
-
 		txnA := NewTransactionWithMockConn(REDIS, 2, false,
 			0, func() error { time.Sleep(1 * time.Second); return nil })
 		txnA.Start()
@@ -1694,13 +1653,10 @@ func TestRedis_CommitTimingCase(t *testing.T) {
 	err = postTxn.Read(REDIS, "item1", &resItem)
 	assert.NoError(t, err)
 	assert.Equal(t, "item1-B", resItem.Value)
-
 }
 
 func TestRedis_ConcurrentOptimization(t *testing.T) {
-
 	t.Run("test datastore.Commit() should be concurrent", func(t *testing.T) {
-
 		// Params
 		X := 5
 		delay := 50 * time.Millisecond
@@ -1747,7 +1703,6 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 	})
 
 	t.Run("test transaction.Commit() should be concurrent", func(t *testing.T) {
-
 		// Params
 		X := 5
 		delay := 50 * time.Millisecond
@@ -1807,11 +1762,9 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 		assert.True(t, ok)
 		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
 			executionTime, time.Duration(4*X+4)*delay, threshold)
-
 	})
 
 	t.Run("test PARALLELIZE_ON_UPDATE", func(t *testing.T) {
-
 		// Params
 		config.Config.ConcurrentOptimizationLevel = config.PARALLELIZE_ON_UPDATE
 		X := 10
@@ -1858,7 +1811,6 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 	})
 
 	t.Run("test PARALLELIZE_ON_PREPARE", func(t *testing.T) {
-
 		// Params
 		config.Config.ConcurrentOptimizationLevel = config.PARALLELIZE_ON_PREPARE
 		X := 5
@@ -1920,7 +1872,6 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 		t.Logf("Execution time: %v\n Expected Time: %v +-%v ",
 			executionTime, time.Duration(2*X+5)*delay, threshold)
 		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
-
 	})
 
 	t.Run("test read-only transaction", func(t *testing.T) {
@@ -1965,11 +1916,9 @@ func TestRedis_ConcurrentOptimization(t *testing.T) {
 			executionTime, time.Duration(X)*delay, threshold)
 		config.Config.ConcurrentOptimizationLevel = config.DEFAULT
 	})
-
 }
 
 func TestRedis_AsyncLevel(t *testing.T) {
-
 	t.Run("test AsyncLevelZero", func(t *testing.T) {
 		// Params
 		config.Config.AsyncLevel = config.AsyncLevelZero

@@ -28,12 +28,18 @@ func TestSetState(t *testing.T) {
 
 	err := sm.SetState(config.STARTED)
 	if err != nil {
-		t.Errorf("Expected no error when setting state from EMPTY to STARTED, received: %s", err.Error())
+		t.Errorf(
+			"Expected no error when setting state from EMPTY to STARTED, received: %s",
+			err.Error(),
+		)
 	}
 
 	err = sm.SetState(config.COMMITTED)
 	if err != nil {
-		t.Errorf("Expected no error when setting state from STARTED to COMMITTED, received: %s", err.Error())
+		t.Errorf(
+			"Expected no error when setting state from STARTED to COMMITTED, received: %s",
+			err.Error(),
+		)
 	}
 }
 

@@ -16,7 +16,6 @@ import (
 var operation = ""
 
 func main() {
-
 	flag.StringVar(&operation, "op", "", "operation")
 	flag.Parse()
 
@@ -92,5 +91,4 @@ func main() {
 			log.Fatal("CreateTable failed", err)
 		}
 	}
-
 }
