@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"benchmark/ycsb"
-
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/redis/go-redis/v9"
 )

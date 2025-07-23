@@ -13,7 +13,6 @@ import (
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
-
 	"github.com/kkkzoz/oreo/pkg/config"
 )
 

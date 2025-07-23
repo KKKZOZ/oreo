@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"benchmark/pkg/util"
-
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 

@@ -6,7 +6,6 @@ import (
 
 	"benchmark/pkg/benconfig"
 	"benchmark/ycsb"
-
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/timesource"
 	"github.com/kkkzoz/oreo/pkg/txn"

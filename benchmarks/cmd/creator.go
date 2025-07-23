@@ -15,7 +15,6 @@ import (
 	"benchmark/db/redis"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
-
 	"github.com/go-kivik/kivik/v4"
 	"github.com/kkkzoz/oreo/pkg/datastore/cassandra"
 	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"

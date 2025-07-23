@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"benchmark/pkg/benconfig" //nolint
-
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	jsoniter "github.com/json-iterator/go"

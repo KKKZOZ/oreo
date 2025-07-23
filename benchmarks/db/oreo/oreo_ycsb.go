@@ -5,7 +5,6 @@ import (
 
 	"benchmark/pkg/benconfig"
 	"benchmark/ycsb"
-
 	"github.com/kkkzoz/oreo/pkg/datastore/cassandra"
 	"github.com/kkkzoz/oreo/pkg/datastore/couchdb"
 	"github.com/kkkzoz/oreo/pkg/datastore/dynamodb"

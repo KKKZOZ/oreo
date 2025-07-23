@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"benchmark/ycsb"
-
 	"github.com/go-kivik/kivik/v4"
 	"github.com/kkkzoz/oreo/pkg/config"
 )

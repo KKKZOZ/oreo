@@ -7,3 +7,8 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-added-large-files
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.2.2
+    hooks:
+      - id: golangci-lint-fmt
+      - id: golangci-lint-full

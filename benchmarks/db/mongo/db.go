@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"benchmark/ycsb"
-
 	"github.com/kkkzoz/oreo/pkg/config"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
