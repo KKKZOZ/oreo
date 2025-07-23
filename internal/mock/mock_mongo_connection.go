@@ -67,7 +67,7 @@ func (m *MockMongoConnection) ConditionalUpdate(
 		if m.isReturned {
 			return "", m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.MongoConnection.ConditionalUpdate(key, value, doCreate)
@@ -80,7 +80,7 @@ func (m *MockMongoConnection) PutItem(key string, value txn.DataItem) (string, e
 		if m.isReturned {
 			return "", m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.MongoConnection.PutItem(key, value)
@@ -93,7 +93,7 @@ func (m *MockMongoConnection) Put(name string, value any) error {
 		if m.isReturned {
 			return m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.MongoConnection.Put(name, value)
@@ -106,7 +106,7 @@ func (m *MockMongoConnection) Delete(name string) error {
 		if m.isReturned {
 			return m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.MongoConnection.Delete(name)

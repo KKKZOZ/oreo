@@ -2,17 +2,17 @@ package workload
 
 import (
 	"context"
-	"errors" // Added for error handling
+	"errors"
 	"fmt"
-	"log" // Added for random selection within combination
+	"log"
 	"math/rand"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
 
-	"benchmark/pkg/benconfig"
-	"benchmark/ycsb"
+	"benchmark/pkg/benconfig" // Added for random selection within combination
+	"benchmark/ycsb"          // Added for error handling
 )
 
 type OreoYCSBWorkload struct {

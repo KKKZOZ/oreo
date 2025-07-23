@@ -415,29 +415,29 @@ func (d *DynamoDBConnection) Delete(key string) error {
 	return err
 }
 
-func buildCreateTableInput(tableName string) *dynamodb.CreateTableInput {
-	return &dynamodb.CreateTableInput{
-		AttributeDefinitions: []types.AttributeDefinition{
-			{
-				AttributeName: aws.String("PK"),
-				AttributeType: types.ScalarAttributeTypeS,
-			},
-			{
-				AttributeName: aws.String("SK"),
-				AttributeType: types.ScalarAttributeTypeS,
-			},
-		},
-		KeySchema: []types.KeySchemaElement{
-			{
-				AttributeName: aws.String("PK"),
-				KeyType:       types.KeyTypeHash,
-			},
-			{
-				AttributeName: aws.String("SK"),
-				KeyType:       types.KeyTypeRange,
-			},
-		},
-		TableName:   aws.String(tableName),
-		BillingMode: types.BillingModePayPerRequest,
-	}
-}
+// func buildCreateTableInput(tableName string) *dynamodb.CreateTableInput {
+// 	return &dynamodb.CreateTableInput{
+// 		AttributeDefinitions: []types.AttributeDefinition{
+// 			{
+// 				AttributeName: aws.String("PK"),
+// 				AttributeType: types.ScalarAttributeTypeS,
+// 			},
+// 			{
+// 				AttributeName: aws.String("SK"),
+// 				AttributeType: types.ScalarAttributeTypeS,
+// 			},
+// 		},
+// 		KeySchema: []types.KeySchemaElement{
+// 			{
+// 				AttributeName: aws.String("PK"),
+// 				KeyType:       types.KeyTypeHash,
+// 			},
+// 			{
+// 				AttributeName: aws.String("SK"),
+// 				KeyType:       types.KeyTypeRange,
+// 			},
+// 		},
+// 		TableName:   aws.String(tableName),
+// 		BillingMode: types.BillingModePayPerRequest,
+// 	}
+// }

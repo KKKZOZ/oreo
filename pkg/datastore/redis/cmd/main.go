@@ -8,7 +8,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	red "github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
-	. "github.com/oreo-dtx-lab/oreo/pkg/logger"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
@@ -48,7 +48,7 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	Log.Infow("Get success", "item.Value", item.Value())
+	logger.Infow("Get success", "item.Value", item.Value())
 	// testutil.Log.Infow("failed to fetch URL",
 	// 	// Structured context as loosely typed key-value pairs.
 	// 	"url", 12313123,

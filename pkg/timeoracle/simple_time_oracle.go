@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/oreo-dtx-lab/oreo/pkg/locker"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
 )
 
 // SimpleTimeOracle represents a simple time oracle that provides time-related information.
@@ -45,14 +46,16 @@ func (s *SimpleTimeOracle) GetTime() time.Time {
 }
 
 func (s *SimpleTimeOracle) serveTime(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "%s", s.GetTime())
+	_, err := fmt.Fprintf(w, "%s", s.GetTime())
+	logger.CheckAndLogError("Failed to write time response", err)
 }
 
 func (s *SimpleTimeOracle) serveLock(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Bad request")
+		_, err = fmt.Fprintf(w, "Bad request")
+		logger.CheckAndLogError("Failed to write response", err)
 		return
 	}
 	// Access form values
@@ -63,30 +66,35 @@ func (s *SimpleTimeOracle) serveLock(w http.ResponseWriter, r *http.Request) {
 	// validate
 	if key == "" || id == "" || durationStr == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Missing parameters")
+		_, err := fmt.Fprintf(w, "Missing parameters")
+		logger.CheckAndLogError("Failed to write response", err)
 		return
 	}
 
 	duration, err := strconv.Atoi(durationStr)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Invalid duration")
+		_, err = fmt.Fprintf(w, "Invalid duration")
+		logger.CheckAndLogError("Failed to write response", err)
 		return
 	}
 	err = s.locker.Lock(key, id, time.Duration(duration)*time.Millisecond)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Lock failed")
+		_, err = fmt.Fprintf(w, "Lock failed")
+		logger.CheckAndLogError("Failed to write response", err)
 		return
 	}
-	fmt.Fprintf(w, "OK")
+	_, err = fmt.Fprintf(w, "OK")
+	logger.CheckAndLogError("Failed to write response", err)
 }
 
 func (s *SimpleTimeOracle) serveUnlock(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, err.Error())
+		_, err = fmt.Fprint(w, err.Error())
+		logger.CheckAndLogError("Failed to parse form", err)
 		return
 	}
 	// Access form values
@@ -96,17 +104,20 @@ func (s *SimpleTimeOracle) serveUnlock(w http.ResponseWriter, r *http.Request) {
 	// validate
 	if key == "" || id == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "Missing parameters")
+		_, err = fmt.Fprintf(w, "Missing parameters")
+		logger.CheckAndLogError("Failed to write response", err)
 		return
 	}
 
 	err = s.locker.Unlock(key, id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, err.Error())
+		_, err = fmt.Fprint(w, err.Error())
+		logger.CheckAndLogError("Failed to write response", err)
 		return
 	}
-	fmt.Fprintf(w, "OK")
+	_, err = fmt.Fprintf(w, "OK")
+	logger.CheckAndLogError("Failed to write response", err)
 }
 
 // Start starts the SimpleTimeOracle server.
@@ -154,7 +165,7 @@ func (s *SimpleTimeOracle) WaitForStartUp(timeout time.Duration) error {
 func (s *SimpleTimeOracle) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	s.server.Shutdown(ctx)
+	_ = s.server.Shutdown(ctx)
 	go func() { s.MsgChan <- "Simple Time Oracle stopped" }()
 	return nil
 }

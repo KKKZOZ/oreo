@@ -33,14 +33,16 @@ func testTimestamp(t *testing.T, _ txn.Connector, _ Helper) {
 
 func testConnection_GetItemNotFound(t *testing.T, conn txn.Connector, _ Helper) {
 	key := "test_key_not_found"
-	conn.Delete(key)
-	_, err := conn.GetItem(key)
+	err := conn.Delete(key)
+	assert.NoError(t, err)
+	_, err = conn.GetItem(key)
 	assert.EqualError(t, err, txn.KeyNotFound.Error())
 }
 
 func testConnectionPutItemAndGetItem(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_put_get"
-	conn.Delete(key)
+	err := conn.Delete(key)
+	assert.NoError(t, err)
 
 	expectedValue := testutil.NewDefaultPerson()
 	expectedItem := h.MakeItem(txn.ItemOptions{
@@ -53,7 +55,7 @@ func testConnectionPutItemAndGetItem(t *testing.T, conn txn.Connector, h Helper)
 		Version:      "2",
 	})
 
-	_, err := conn.PutItem(key, expectedItem)
+	_, err = conn.PutItem(key, expectedItem)
 	assert.NoError(t, err)
 
 	item, err := conn.GetItem(key)
@@ -63,7 +65,8 @@ func testConnectionPutItemAndGetItem(t *testing.T, conn txn.Connector, h Helper)
 
 func testConnectionReplaceAndGetItem(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_replace_get"
-	conn.Delete(key)
+	err := conn.Delete(key)
+	assert.NoError(t, err)
 
 	older := testutil.NewDefaultPerson()
 	olderItem := h.MakeItem(txn.ItemOptions{
@@ -100,7 +103,8 @@ func testConnectionReplaceAndGetItem(t *testing.T, conn txn.Connector, h Helper)
 
 func testConnectionConditionalUpdateSuccess(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_cu_success"
-	conn.Delete(key)
+	err := conn.Delete(key)
+	assert.NoError(t, err)
 
 	// old item
 	olderItem := h.MakeItem(txn.ItemOptions{
@@ -127,7 +131,7 @@ func testConnectionConditionalUpdateSuccess(t *testing.T, conn txn.Connector, h 
 		Version:      "2",
 	})
 
-	_, err := conn.ConditionalUpdate(key, newerItem, false)
+	_, err = conn.ConditionalUpdate(key, newerItem, false)
 	assert.NoError(t, err)
 
 	item, _ := conn.GetItem(key)
@@ -137,7 +141,7 @@ func testConnectionConditionalUpdateSuccess(t *testing.T, conn txn.Connector, h 
 
 func testConnectionConditionalUpdateFail(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_cu_fail"
-	conn.Delete(key)
+	_ = conn.Delete(key)
 
 	olderItem := h.MakeItem(txn.ItemOptions{
 		Key:          key,
@@ -169,7 +173,7 @@ func testConnectionConditionalUpdateFail(t *testing.T, conn txn.Connector, h Hel
 
 func testConnectionConditionalUpdateNonExist(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_cu_nonexist"
-	conn.Delete(key)
+	_ = conn.Delete(key)
 
 	newer := h.MakeItem(txn.ItemOptions{
 		Key:          key,
@@ -193,7 +197,7 @@ func testConnectionConditionalUpdateConcurrently(t *testing.T, conn txn.Connecto
 	// update existing key in parallel
 	t.Run("update-in-parallel", func(t *testing.T) {
 		key := "test_key_concurrent_update"
-		conn.Delete(key)
+		_ = conn.Delete(key)
 
 		base := h.MakeItem(txn.ItemOptions{
 			Key:          key,
@@ -249,7 +253,7 @@ func testConnectionConditionalUpdateConcurrently(t *testing.T, conn txn.Connecto
 	// create concurrently
 	t.Run("create-in-parallel", func(t *testing.T) {
 		key := "test_key_concurrent_create"
-		conn.Delete(key)
+		_ = conn.Delete(key)
 
 		resCh := make(chan bool)
 		currentNum := 100
@@ -294,7 +298,7 @@ func testConnectionConditionalUpdateConcurrently(t *testing.T, conn txn.Connecto
 
 func testConnectionPutAndGet(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_put_get_raw"
-	conn.Delete(key)
+	_ = conn.Delete(key)
 
 	se := serializer.NewJSONSerializer()
 	item := h.MakeItem(txn.ItemOptions{
@@ -318,7 +322,7 @@ func testConnectionPutAndGet(t *testing.T, conn txn.Connector, h Helper) {
 
 func testConnectionReplaceAndGet(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_replace_get_raw"
-	conn.Delete(key)
+	_ = conn.Delete(key)
 
 	se := serializer.NewJSONSerializer()
 	item := h.MakeItem(txn.ItemOptions{
@@ -346,14 +350,14 @@ func testConnectionReplaceAndGet(t *testing.T, conn txn.Connector, h Helper) {
 
 func testConnectionGetNoExist(t *testing.T, conn txn.Connector, _ Helper) {
 	key := "test_key_get_no_exist"
-	conn.Delete(key)
+	_ = conn.Delete(key)
 	_, err := conn.Get(key)
 	assert.EqualError(t, err, "key not found")
 }
 
 func testConnectionPutDirectItem(t *testing.T, conn txn.Connector, h Helper) {
 	key := "test_key_put_direct"
-	conn.Delete(key)
+	_ = conn.Delete(key)
 
 	item := h.MakeItem(txn.ItemOptions{
 		Key:          key,
@@ -406,25 +410,25 @@ func testConnectionConditionalUpdateDoCreate(t *testing.T, conn txn.Connector, h
 	})
 
 	t.Run("no item & doCreate true", func(t *testing.T) {
-		conn.Delete(cacheItem.Key())
+		_ = conn.Delete(cacheItem.Key())
 		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, true)
 		assert.NoError(t, err)
 	})
 
 	t.Run("has item & doCreate true", func(t *testing.T) {
-		conn.PutItem(dbItem.Key(), dbItem)
+		_, _ = conn.PutItem(dbItem.Key(), dbItem)
 		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, true)
 		assert.EqualError(t, err, txn.VersionMismatch.Error())
 	})
 
 	t.Run("no item & doCreate false", func(t *testing.T) {
-		conn.Delete(cacheItem.Key())
+		_ = conn.Delete(cacheItem.Key())
 		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, false)
 		assert.EqualError(t, err, txn.VersionMismatch.Error())
 	})
 
 	t.Run("has item & doCreate false", func(t *testing.T) {
-		conn.PutItem(dbItem.Key(), dbItem)
+		_, _ = conn.PutItem(dbItem.Key(), dbItem)
 		_, err := conn.ConditionalUpdate(cacheItem.Key(), cacheItem, false)
 		assert.NoError(t, err)
 	})
@@ -441,7 +445,7 @@ func testConnectionConditionalCommit(t *testing.T, conn txn.Connector, h Helper)
 		Version:      "1",
 	})
 
-	conn.PutItem(dbItem.Key(), dbItem)
+	_, _ = conn.PutItem(dbItem.Key(), dbItem)
 
 	_, err := conn.ConditionalCommit(dbItem.Key(), dbItem.Version(), 100)
 	assert.NoError(t, err)

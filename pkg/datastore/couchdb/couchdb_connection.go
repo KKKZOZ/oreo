@@ -10,7 +10,6 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/go-kivik/kivik/v4"
 	"github.com/go-kivik/kivik/v4/couchdb"
-	_ "github.com/go-kivik/kivik/v4/couchdb"
 	"github.com/oreo-dtx-lab/oreo/internal/util"
 	"github.com/oreo-dtx-lab/oreo/pkg/config"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"

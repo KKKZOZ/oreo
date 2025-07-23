@@ -479,7 +479,7 @@ func TestSimpleReadWhenDeleted(t *testing.T) {
 	conn.PutItem(dbItem.Key(), dbItem)
 
 	txn1 := NewTransactionWithSetup()
-	txn1.Start()
+	_ = txn1.Start()
 
 	var item testutil.TestItem
 	err := txn1.Read("redis", "item2", &item)

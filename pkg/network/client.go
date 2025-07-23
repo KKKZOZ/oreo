@@ -260,7 +260,7 @@ func (rc *Client) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Registered successfully")
+	_, _ = fmt.Fprintln(w, "Registered successfully")
 }
 
 // handleDeregister handles POST requests from executors gracefully leaving the pool.
@@ -295,7 +295,7 @@ func (rc *Client) handleDeregister(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "Deregistered successfully")
+		_, _ = fmt.Fprintln(w, "Deregistered successfully")
 	} else {
 		stdlog.Printf("Deregister attempt for unknown or already removed instance: %s", req.Address)
 		http.Error(w, "Instance not found", http.StatusNotFound)
@@ -337,7 +337,7 @@ func (rc *Client) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Heartbeat received")
+	_, _ = fmt.Fprintln(w, "Heartbeat received")
 }
 
 // handleGetServices provides an optional diagnostic endpoint (GET /services)
@@ -386,7 +386,7 @@ func (rc *Client) handleGetServices(w http.ResponseWriter, r *http.Request) {
 // It MUST be called while holding the registryMutex write lock.
 func (rc *Client) addInstanceToDsNameIndexLocked(instanceAddr string, dsNames []string) {
 	for _, dsName := range dsNames {
-		list, _ := rc.dsNameIndex[dsName]
+		list := rc.dsNameIndex[dsName]
 		found := false
 		for _, addr := range list {
 			if addr == instanceAddr {

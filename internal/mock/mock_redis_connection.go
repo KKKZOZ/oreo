@@ -66,7 +66,7 @@ func (m *MockRedisConnection) ConditionalUpdate(
 		if m.isReturned {
 			return "", m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.RedisConnection.ConditionalUpdate(key, value, doCreate)
@@ -79,7 +79,7 @@ func (m *MockRedisConnection) PutItem(key string, value txn.DataItem) (string, e
 		if m.isReturned {
 			return "", m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.RedisConnection.PutItem(key, value)
@@ -92,7 +92,7 @@ func (m *MockRedisConnection) Put(name string, value any) error {
 		if m.isReturned {
 			return m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.RedisConnection.Put(name, value)
@@ -105,7 +105,7 @@ func (m *MockRedisConnection) Delete(name string) error {
 		if m.isReturned {
 			return m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.RedisConnection.Delete(name)

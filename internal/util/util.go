@@ -133,5 +133,5 @@ func AddToString(s string, i int) string {
 }
 
 func FormatErrorStack(stackError *errors.Error) string {
-	return strings.Replace(stackError.ErrorStack(), "\\n", "\n", -1)
+	return strings.ReplaceAll(stackError.ErrorStack(), "\\n", "\n")
 }

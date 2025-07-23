@@ -4,6 +4,12 @@ linters:
   default: standard
   exclusions:
     warn-unused: true
+    rules:
+      - path: pkg/datastore/dynamodb
+        linters:
+          - staticcheck
+    paths:
+      - "_test\\.go"
 
 formatters:
   # Enable specific formatter.

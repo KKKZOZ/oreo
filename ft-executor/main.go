@@ -1,25 +1,25 @@
 package main
 
 import (
-	"bytes"         // Import bytes
-	"context"       // Import context
-	"encoding/json" // Standard JSON for registry communication
+	"bytes"
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io" // Import io
+	"io"
 	"log"
-	"net/http" // Import net/http for registry communication
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime/pprof"
 	"runtime/trace"
 	"strings"
-	"sync" // Import sync
+	"sync"
 	"syscall"
 	"time"
 
-	"benchmark/pkg/benconfig"
+	"benchmark/pkg/benconfig" //nolint
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	jsoniter "github.com/json-iterator/go" // Keep for application logic if needed
@@ -145,10 +145,10 @@ func (s *Server) registerWithRegistry() error {
 	if err != nil {
 		return fmt.Errorf("failed to send register request to %s: %w", s.registryAddr, err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body) // Read body for detailed error
+		_ = resp.Body.Close()                 // Explicitly ignore close error for error path
 		return fmt.Errorf(
 			"registry at %s returned non-OK status for register: %s Body: %s",
 			s.registryAddr,
@@ -202,10 +202,10 @@ func (s *Server) deregisterFromRegistry() error {
 		Log.Warnw("Failed to send deregister request", "registry", s.registryAddr, "error", err)
 		return err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body) // Read body
+		_ = resp.Body.Close()
 		Log.Warnw(
 			"Registry returned non-OK status for deregister",
 			"registry",
@@ -299,14 +299,14 @@ func (s *Server) startHeartbeat() {
 						string(bodyBytes),
 					)
 					// Close body *before* potential re-register call
-					resp.Body.Close()
+					_ = resp.Body.Close()
 					if regErr := s.registerWithRegistry(); regErr != nil {
 						Log.Errorw("Failed to re-register after failed heartbeat", "error", regErr)
 					}
 				} else {
 					// Success, ensure body is read and closed to reuse connection
 					_, _ = io.Copy(io.Discard, resp.Body)
-					resp.Body.Close()
+					_ = resp.Body.Close()
 				}
 
 				// Cancel context after request is done (success or handled error)
@@ -925,7 +925,7 @@ func startCPUProfile() {
 	}
 	if err := pprof.StartCPUProfile(f); err != nil {
 		Log.Errorw("Cannot start CPU profile", "error", err)
-		f.Close() // Close the file if starting profile fails
+		_ = f.Close() // Close the file if starting profile fails
 		return
 	}
 	Log.Info("CPU profiling enabled, writing to executor_cpu_profile.prof")
@@ -936,7 +936,7 @@ func startCPUProfile() {
 		<-sigs // Wait for shutdown signal
 		Log.Info("Stopping CPU profile due to shutdown signal...")
 		pprof.StopCPUProfile()
-		f.Close() // Close the profile file
+		_ = f.Close() // Close the profile file
 		Log.Info("CPU profile stopped.")
 	}()
 }
@@ -950,14 +950,14 @@ func startTrace() func() {
 	err = trace.Start(f)
 	if err != nil {
 		Log.Errorw("Cannot start trace", "error", err)
-		f.Close()
+		_ = f.Close()
 		return func() {} // Return no-op stop function
 	}
 	Log.Info("Execution tracing enabled, writing to trace.out")
 	return func() {
 		Log.Info("Stopping execution trace...")
 		trace.Stop()
-		f.Close() // Close the trace file
+		_ = f.Close() // Close the trace file
 		Log.Info("Execution trace stopped.")
 	}
 }

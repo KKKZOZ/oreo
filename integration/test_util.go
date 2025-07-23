@@ -7,6 +7,7 @@ import (
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/couchdb"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
 	"github.com/oreo-dtx-lab/oreo/pkg/datastore/redis"
+	"github.com/oreo-dtx-lab/oreo/pkg/logger"
 	"github.com/oreo-dtx-lab/oreo/pkg/txn"
 )
 
@@ -49,7 +50,8 @@ func NewConnectionWithSetup(dsType string) txn.Connector {
 			Password: "password",
 		})
 	}
-	conn.Connect()
+	err := conn.Connect()
+	logger.CheckAndLogError("Failed to connect to datastore", err)
 	return conn
 }
 

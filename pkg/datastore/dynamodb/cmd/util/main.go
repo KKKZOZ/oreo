@@ -41,7 +41,10 @@ func main() {
 	if operation == "reset" {
 		fmt.Printf("Resetting table %s\n", tableName)
 		if tableExists(client, tableName) {
-			DeleteAllItems(client, tableName)
+			err = DeleteAllItems(client, tableName)
+			if err != nil {
+				log.Fatal("DeleteAllItems failed", err)
+			}
 		}
 	}
 
@@ -54,8 +57,8 @@ func main() {
 			log.Fatal("DeleteTable failed", err)
 		}
 	}
-	if operation == "create" {
 
+	if operation == "create" {
 		if tableExists(client, tableName) {
 			fmt.Printf("Deleting table %s\n", tableName)
 			_, err = client.DeleteTable(context.TODO(), &dynamodb.DeleteTableInput{

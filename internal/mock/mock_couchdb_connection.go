@@ -64,7 +64,7 @@ func (m *MockCouchDBConnection) ConditionalUpdate(
 		if m.isReturned {
 			return "", m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.CouchDBConnection.ConditionalUpdate(key, value, doCreate)
@@ -77,7 +77,7 @@ func (m *MockCouchDBConnection) PutItem(key string, value txn.DataItem) (string,
 		if m.isReturned {
 			return "", m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.CouchDBConnection.PutItem(key, value)
@@ -90,7 +90,7 @@ func (m *MockCouchDBConnection) Put(name string, value any) error {
 		if m.isReturned {
 			return m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.CouchDBConnection.Put(name, value)
@@ -103,7 +103,7 @@ func (m *MockCouchDBConnection) Delete(name string) error {
 		if m.isReturned {
 			return m.debugFunc()
 		} else {
-			m.debugFunc()
+			_ = m.debugFunc()
 		}
 	}
 	return m.CouchDBConnection.Delete(name)
