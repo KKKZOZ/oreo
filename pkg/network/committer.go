@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/alitto/pond/v2"
-	"github.com/oreo-dtx-lab/oreo/internal/util"
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
-	"github.com/oreo-dtx-lab/oreo/pkg/logger"
-	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
-	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/logger"
+	"github.com/kkkzoz/oreo/pkg/serializer"
+	"github.com/kkkzoz/oreo/pkg/timesource"
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"golang.org/x/sync/errgroup"
 )
 

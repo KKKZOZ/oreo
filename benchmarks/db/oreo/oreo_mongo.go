@@ -6,9 +6,10 @@ import (
 
 	"benchmark/pkg/benconfig"
 	"benchmark/ycsb"
-	"github.com/oreo-dtx-lab/oreo/pkg/datastore/mongo"
-	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+
+	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
+	"github.com/kkkzoz/oreo/pkg/timesource"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 var _ ycsb.DBCreator = (*OreoMongoCreator)(nil)

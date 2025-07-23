@@ -1,7 +1,8 @@
 # Oreo
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/oreo-dtx-lab/oreo)](https://goreportcard.com/report/github.com/oreo-framework/oreo)
-[![Go Reference](https://pkg.go.dev/badge/github.com/oreo-dtx-lab/oreo.svg)](https://pkg.go.dev/github.com/oreo-framework/oreo)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kkkzoz/oreo)](https://goreportcard.com/report/github.com/kkkzoz/oreo)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kkkzoz/oreo.svg)](https://pkg.go.dev/github.com/kkkzoz/oreo)
+[![golangci-lint](https://github.com/kkkzoz/oreo/actions/workflows/golangci-lint.yml/badge.svg)](https://github.com/kkkzoz/oreo/actions/workflows/golangci-lint.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 <div align="center">

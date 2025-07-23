@@ -3,7 +3,7 @@ package txn
 import (
 	"time"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/config"
 )
 
 type ItemOptions struct {

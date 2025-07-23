@@ -14,10 +14,11 @@ import (
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
+
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
-	cfg "github.com/oreo-dtx-lab/oreo/pkg/config"
-	"github.com/oreo-dtx-lab/oreo/pkg/network"
+	cfg "github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/network"
 )
 
 var benConfig = benconfig.BenchmarkConfig{}

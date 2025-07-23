@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/generator"
-	"github.com/oreo-dtx-lab/oreo/pkg/serializer"
+	"github.com/kkkzoz/oreo/pkg/generator"
+	"github.com/kkkzoz/oreo/pkg/serializer"
 	"go.uber.org/zap/zapcore"
 )
 

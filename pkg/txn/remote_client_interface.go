@@ -1,7 +1,7 @@
 package txn
 
 import (
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/config"
 )
 
 type RemoteDataStrategy string

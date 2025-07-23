@@ -1,4 +1,4 @@
-module github.com/oreo-dtx-lab/oreo
+module github.com/kkkzoz/oreo
 
 go 1.23.0
 

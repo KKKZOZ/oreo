@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
-	"github.com/oreo-dtx-lab/oreo/pkg/logger" // Use provided logger for client ops
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/logger" // Use provided logger for client ops
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/valyala/fasthttp"
 )
 

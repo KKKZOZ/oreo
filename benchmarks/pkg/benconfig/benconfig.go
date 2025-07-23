@@ -3,7 +3,7 @@ package benconfig
 import (
 	"time"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/network"
+	"github.com/kkkzoz/oreo/pkg/network"
 )
 
 var (

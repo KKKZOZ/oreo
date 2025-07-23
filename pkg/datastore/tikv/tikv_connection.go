@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
-	"github.com/oreo-dtx-lab/oreo/internal/util"
-	oreoconfig "github.com/oreo-dtx-lab/oreo/pkg/config"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/internal/util"
+	oreoconfig "github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/tikv/client-go/v2/config"
 	"github.com/tikv/client-go/v2/rawkv"
 )

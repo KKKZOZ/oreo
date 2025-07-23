@@ -7,10 +7,10 @@ package mongo
 // 	"testing"
 // 	"time"
 
-// 	"github.com/oreo-dtx-lab/oreo/internal/testutil"
-// 	"github.com/oreo-dtx-lab/oreo/internal/util"
-// 	"github.com/oreo-dtx-lab/oreo/pkg/config"
-// 	trxn "github.com/oreo-dtx-lab/oreo/pkg/txn"
+// 	"github.com/kkkzoz/oreo/internal/testutil"
+// 	"github.com/kkkzoz/oreo/internal/util"
+// 	"github.com/kkkzoz/oreo/pkg/config"
+// 	trxn "github.com/kkkzoz/oreo/pkg/txn"
 // 	"github.com/stretchr/testify/assert"
 // )
 

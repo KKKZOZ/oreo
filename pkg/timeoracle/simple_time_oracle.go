@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/oreo-dtx-lab/oreo/pkg/locker"
-	"github.com/oreo-dtx-lab/oreo/pkg/logger"
+	"github.com/kkkzoz/oreo/pkg/locker"
+	"github.com/kkkzoz/oreo/pkg/logger"
 )
 
 // SimpleTimeOracle represents a simple time oracle that provides time-related information.

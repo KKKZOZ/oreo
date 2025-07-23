@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"benchmark/ycsb"
+
 	"github.com/go-kivik/kivik/v4"
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/config"
 )
 
 var _ ycsb.DBCreator = (*CouchDBCreator)(nil)

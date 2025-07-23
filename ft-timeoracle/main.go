@@ -10,7 +10,7 @@ import (
 
 	// Assuming timesource is in the correct relative path or GOPATH
 	// Adjust the import path if necessary, e.g., "your_module/pkg/timesource"
-	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
+	"github.com/kkkzoz/oreo/pkg/timesource"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

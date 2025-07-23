@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/datastore/cassandra"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/pkg/datastore/cassandra"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 func main() {

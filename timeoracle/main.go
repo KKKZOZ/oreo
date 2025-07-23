@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/logger"
-	"github.com/oreo-dtx-lab/oreo/pkg/timesource"
+	"github.com/kkkzoz/oreo/pkg/logger"
+	"github.com/kkkzoz/oreo/pkg/timesource"
 )
 
 var (

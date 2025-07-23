@@ -10,9 +10,9 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/go-kivik/kivik/v4"
 	"github.com/go-kivik/kivik/v4/couchdb"
-	"github.com/oreo-dtx-lab/oreo/internal/util"
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 var _ txn.Connector = (*CouchDBConnection)(nil)

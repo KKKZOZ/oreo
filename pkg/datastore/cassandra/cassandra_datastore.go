@@ -1,6 +1,6 @@
 package cassandra
 
-import "github.com/oreo-dtx-lab/oreo/pkg/txn"
+import "github.com/kkkzoz/oreo/pkg/txn"
 
 type CassandraDatastore struct {
 	*txn.Datastore

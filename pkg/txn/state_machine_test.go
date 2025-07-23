@@ -3,7 +3,7 @@ package txn
 import (
 	"testing"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/config"
 )
 
 func TestNewStateMachine(t *testing.T) {

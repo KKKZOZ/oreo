@@ -3,7 +3,7 @@ package timesource
 import (
 	"errors"
 
-	"github.com/oreo-dtx-lab/oreo/internal/util"
+	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/valyala/fasthttp"
 )
 

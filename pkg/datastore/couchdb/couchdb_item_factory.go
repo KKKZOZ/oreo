@@ -1,6 +1,6 @@
 package couchdb
 
-import "github.com/oreo-dtx-lab/oreo/pkg/txn"
+import "github.com/kkkzoz/oreo/pkg/txn"
 
 var _ txn.DataItemFactory = (*CouchDBItemFactory)(nil)
 

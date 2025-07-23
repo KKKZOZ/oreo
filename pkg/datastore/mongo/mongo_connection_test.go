@@ -7,9 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/oreo-dtx-lab/oreo/internal/util"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn/testsuite"
+	"github.com/kkkzoz/oreo/internal/util"
+	"github.com/kkkzoz/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/pkg/txn/testsuite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )

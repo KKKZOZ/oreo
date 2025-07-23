@@ -9,8 +9,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/oreo-dtx-lab/oreo/pkg/datastore/dynamodb"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/pkg/datastore/dynamodb"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 func main() {

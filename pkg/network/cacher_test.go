@@ -6,7 +6,8 @@ import (
 	"testing"
 
 	"benchmark/pkg/util"
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 // MockGroupKeyItem 是 txn.GroupKeyItem 的一个简单模拟。

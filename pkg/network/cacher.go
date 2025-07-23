@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/oreo-dtx-lab/oreo/pkg/txn"
+	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 type Cacher struct {
