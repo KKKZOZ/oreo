@@ -1,0 +1,14 @@
+registry_addr: "http://localhost:9000"
+time_oracle_url: "http://localhost:8012/timestamp/common"
+
+# Redis configuration
+redis_addr: "localhost:6379"
+redis_password: "kkkzoz"
+
+# MongoDB configuration
+mongodb_addr1: "mongodb://localhost:27017"
+mongodb_username: "admin"
+mongodb_password: "password"
+
+# Cassandra configuration
+cassandra_addr: ["localhost:9042"]

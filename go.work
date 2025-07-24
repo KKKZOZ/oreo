@@ -6,4 +6,5 @@ use (
 	.
 	./benchmarks
 	./examples/basic-usage
+	./examples/iot-platform 
 )

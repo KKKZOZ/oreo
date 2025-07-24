@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  haproxy:
+    image: haproxy:latest
+    container_name: haproxy-service
+    ports:
+      - "8009:8009"
+    command: >
+      sh -c "echo 'global
+          log stdout format raw local0 info
+      
+      defaults
+          log global
+          mode http
+          option httplog
+          timeout connect 5000ms
+          timeout client 30000ms
+          timeout server 30000ms
+          retries 3
+          option redispatch
+          option abortonclose
+      
+      frontend http_frontend
+          bind *:8009
+          mode http
+          default_backend time_oracle_nodes
+          stats enable
+          stats uri /haproxy?stats
+          stats realm Haproxy\\\\ Statistics
+          stats auth admin:password
+          stats refresh 30s
+      
+      backend time_oracle_nodes
+          mode http
+          balance roundrobin
+          option httpchk
+          http-check send meth GET uri /health ver HTTP/1.1 hdr Host time-oracle-health
+          http-check expect status 200
+          server primary host.docker.internal:8012 check inter 2s fall 2 rise 2
+          server backup host.docker.internal:8013 check inter 2s fall 2 rise 2' > /tmp/haproxy.cfg && haproxy -f /tmp/haproxy.cfg"
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - mongodb
+      - cassandra
+    networks:
+      - iot-network
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: always
+    networks:
+      - iot-network
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    restart: always
+    networks:
+      - iot-network
+
+  cassandra:
+    image: cassandra:latest
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    restart: unless-stopped
+    networks:
+      - iot-network
+
+networks:
+  iot-network:
+    driver: bridge

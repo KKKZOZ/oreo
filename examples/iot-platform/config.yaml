@@ -1,0 +1,30 @@
+# Benchmark system configuration
+executor_address_map:
+  "Redis":
+    - "http://localhost:8002"
+  "MongoDB1":
+    - "http://localhost:8002"
+  "Cassandra":
+    - "http://localhost:8003"
+
+fault_tolerance_request_interval_value: 1
+time_oracle_url: "http://localhost:8012/timestamp/common"
+server_port: ":8081"
+zipfian_constant: 0.1
+latency_value: 0
+
+# Redis configuration
+redis_addr: "localhost:6379"
+redis_password: "kkkzoz"
+
+# MongoDB configuration
+mongodb_addr1: "mongodb://localhost:27017"
+mongodb_username: "admin"
+mongodb_password: "password"
+
+# Cassandra configuration
+cassandra_hosts:
+  - "localhost:9042"
+cassandra_keyspace: "iot_data"
+cassandra_username: "cassandra"
+cassandra_password: "cassandra"
