@@ -20,7 +20,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// Config 配置结构体
+// Config configuration structure
 type Config struct {
 	RegistryAddr          string   `yaml:"registry_addr"`
 	TimeOracleURL         string   `yaml:"time_oracle_url"`
@@ -38,7 +38,7 @@ type Config struct {
 	CassandraPassword     string   `yaml:"cassandra_password"`
 }
 
-// IoT 设备结构体
+// Device IoT device structure
 type Device struct {
 	DeviceID     string    `json:"device_id"`
 	DeviceName   string    `json:"device_name"`
@@ -48,7 +48,7 @@ type Device struct {
 	RegisteredAt time.Time `json:"registered_at"`
 }
 
-// IoT 数据结构体
+// SensorData IoT sensor data structure
 type SensorData struct {
 	DeviceID   string    `json:"device_id"`
 	SensorType string    `json:"sensor_type"`
@@ -58,7 +58,7 @@ type SensorData struct {
 	Location   string    `json:"location"`
 }
 
-// 设备统计信息
+// DeviceStats device statistics information
 type DeviceStats struct {
 	DeviceID      string    `json:"device_id"`
 	TotalReadings int       `json:"total_readings"`
@@ -68,17 +68,17 @@ type DeviceStats struct {
 	MaxValue      float64   `json:"max_value"`
 }
 
-// 全局变量
+// Global variables
 var (
-	client             *network.Client
-	oracle             timesource.TimeSourcer
-	redisDatastore     txn.Datastorer
-	mongoDatastore     txn.Datastorer
-	cassandraDatastore txn.Datastorer
-	config             Config
+	client        *network.Client
+	oracle        timesource.TimeSourcer
+	redisConn     *redis.RedisConnection
+	mongoConn     *mongo.MongoConnection
+	cassandraConn *cassandra.CassandraConnection
+	config        Config
 )
 
-// 加载配置文件
+// loadConfig loads configuration file
 func loadConfig(configPath string) error {
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
@@ -90,9 +90,9 @@ func loadConfig(configPath string) error {
 		return fmt.Errorf("failed to parse config file: %v", err)
 	}
 
-	// 设置默认值
+	// Set default values
 	if config.ServerPort == "" {
-		config.ServerPort = ":8080"
+		config.ServerPort = ":8081"
 	}
 	if config.MongoDBDBName == "" {
 		config.MongoDBDBName = "iot_platform"
@@ -107,114 +107,106 @@ func loadConfig(configPath string) error {
 	return nil
 }
 
-// 初始化数据库连接
+// initConnections initializes database connections
 func initConnections() error {
 	var err error
 
-	// 从registry_addr中提取端口
-	registryPort := ":9000" // 默认端口
+	// Extract port from registry_addr
+	registryPort := ":9000" // Default port
 	if strings.Contains(config.RegistryAddr, ":") {
-		// 如果是完整URL格式，提取端口部分
+		// If it's a complete URL format, extract the port part
 		if strings.HasPrefix(config.RegistryAddr, "http://") {
-			// 从 "http://localhost:9000" 提取 ":9000"
+			// Extract ":9000" from "http://localhost:9000"
 			parts := strings.Split(config.RegistryAddr, ":")
 			if len(parts) >= 3 {
 				registryPort = ":" + parts[2]
 			}
 		} else if strings.HasPrefix(config.RegistryAddr, ":") {
-			// 如果已经是端口格式，直接使用
+			// If it's already in port format, use it directly
 			registryPort = config.RegistryAddr
 		}
 	}
 
-	// 初始化网络客户端
+	// Initialize network client
 	client, err = network.NewClient(registryPort)
 	if err != nil {
 		return fmt.Errorf("failed to create network client: %v", err)
 	}
 
-	// 初始化时间源
+	// Initialize time source
 	oracle = timesource.NewGlobalTimeSource(config.TimeOracleURL)
 
-	// 初始化Redis连接 - 用于缓存设备状态和实时数据
-	redisConn := redis.NewRedisConnection(&redis.ConnectionOptions{
-		Address:  config.RedisAddr,
-		Password: config.RedisPassword,
-	})
-
-	// 初始化MongoDB连接 - 用于存储设备信息和历史数据
-	mongoConn := mongo.NewMongoConnection(&mongo.ConnectionOptions{
-		Address:        config.MongoDBAddr,
-		Username:       config.MongoDBUsername,
-		Password:       config.MongoDBPassword,
-		DBName:         config.MongoDBDBName,
-		CollectionName: config.MongoDBCollectionName,
-	})
-
-	// 初始化Cassandra连接
-	cassandraConn := cassandra.NewCassandraConnection(&cassandra.ConnectionOptions{
-		Hosts:    config.CassandraHosts,
-		Keyspace: config.CassandraKeyspace,
-		Username: config.CassandraUsername,
-		Password: config.CassandraPassword,
-	})
-
-	// 连接到数据库
-	log.Println("Attempting to connect to databases...")
-
-	// 尝试连接 Redis
+	// Initialize Redis connector
 	if len(config.RedisAddr) > 0 {
-		if err := redisConn.Connect(); err != nil {
-			log.Printf("Warning: Failed to connect to Redis: %v", err)
-			redisDatastore = nil
-		} else {
-			log.Println("Redis connected successfully")
-			redisDatastore = redis.NewRedisDatastore("Redis", redisConn)
-		}
+		redisConn = redis.NewRedisConnection(&redis.ConnectionOptions{
+			Address:  config.RedisAddr,
+			Password: config.RedisPassword,
+		})
+		log.Println("Redis connector initialized")
 	} else {
-		log.Println("Warning: Failed to connect to Redis: no address provided")
-		redisDatastore = nil
+		log.Println("Warning: Redis not configured")
+		redisConn = nil
 	}
 
-	// 尝试连接 MongoDB
+	// Initialize MongoDB connector
 	if len(config.MongoDBAddr) > 0 {
-		if err := mongoConn.Connect(); err != nil {
-			log.Printf("Warning: Failed to connect to MongoDB: %v", err)
-			mongoDatastore = nil
-		} else {
-			log.Println("MongoDB connected successfully")
-			mongoDatastore = mongo.NewMongoDatastore("MongoDB1", mongoConn)
-		}
+		mongoConn = mongo.NewMongoConnection(&mongo.ConnectionOptions{
+			Address:        config.MongoDBAddr,
+			Username:       config.MongoDBUsername,
+			Password:       config.MongoDBPassword,
+			DBName:         config.MongoDBDBName,
+			CollectionName: config.MongoDBCollectionName,
+		})
+		log.Println("MongoDB connector initialized")
 	} else {
-		log.Println("Warning: Failed to connect to MongoDB: no URI provided")
-		mongoDatastore = nil
+		log.Println("Warning: MongoDB not configured")
+		mongoConn = nil
 	}
 
-	// 尝试连接Cassandra
+	// Initialize Cassandra connector
 	if len(config.CassandraHosts) > 0 {
-		if err := cassandraConn.Connect(); err != nil {
-			log.Printf("Warning: Failed to connect to Cassandra: %v", err)
-			cassandraDatastore = nil
-		} else {
-			log.Println("Cassandra connected successfully")
-			cassandraDatastore = cassandra.NewCassandraDatastore("Cassandra", cassandraConn)
-		}
+		cassandraConn = cassandra.NewCassandraConnection(&cassandra.ConnectionOptions{
+			Hosts:    config.CassandraHosts,
+			Keyspace: config.CassandraKeyspace,
+			Username: config.CassandraUsername,
+			Password: config.CassandraPassword,
+		})
+		log.Println("Cassandra connector initialized")
 	} else {
-		log.Println("Warning: Failed to connect to Cassandra: no hosts provided")
-		cassandraDatastore = nil
+		log.Println("Warning: Cassandra not configured")
+		cassandraConn = nil
 	}
 
-	// 检查至少有一个数据库连接成功
-	if redisDatastore == nil && mongoDatastore == nil && cassandraDatastore == nil {
-		return fmt.Errorf("failed to connect to any database")
-	}
-
-	log.Println("Database initialization completed")
+	log.Println("Database connectors initialization completed")
 
 	return nil
 }
 
-// 设备注册 API
+// createDatastoresForTransaction creates datastores for transaction
+func createDatastoresForTransaction() []txn.Datastorer {
+	var datastores []txn.Datastorer
+
+	if redisConn != nil {
+		redisDatastore := redis.NewRedisDatastore("Redis", redisConn)
+		datastores = append(datastores, redisDatastore)
+	}
+
+	if mongoConn != nil {
+		mongoDatastore := mongo.NewMongoDatastore("MongoDB1", mongoConn)
+		datastores = append(datastores, mongoDatastore)
+	}
+
+	if cassandraConn != nil {
+		cassandraDatastore := cassandra.NewCassandraDatastore("Cassandra", cassandraConn)
+		datastores = append(datastores, cassandraDatastore)
+	}
+
+	return datastores
+}
+
+// API handler functions
+
+// registerDevice device registration API
 func registerDevice(c *fiber.Ctx) error {
 	var device Device
 	if err := c.BodyParser(&device); err != nil {
@@ -223,29 +215,18 @@ func registerDevice(c *fiber.Ctx) error {
 		})
 	}
 
-	// 设置注册时间
+	// Set registration time
 	device.RegisteredAt = time.Now()
-	device.Status = "active"
+	if device.Status == "" {
+		device.Status = "active"
+	}
 
-	// 创建分布式事务
+	// Create distributed transaction
 	txn := txn.NewTransactionWithRemote(client, oracle)
 
-	// 添加所有可用的数据存储
-	if redisDatastore != nil && mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil && mongoDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore)
-	} else if redisDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, cassandraDatastore)
-	} else if mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil {
-		txn.AddDatastores(redisDatastore)
-	} else if mongoDatastore != nil {
-		txn.AddDatastores(mongoDatastore)
-	} else if cassandraDatastore != nil {
-		txn.AddDatastores(cassandraDatastore)
-	}
+	// Create datastores for transaction
+	datastores := createDatastoresForTransaction()
+	txn.AddDatastores(datastores...)
 
 	if err := txn.Start(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -253,8 +234,8 @@ func registerDevice(c *fiber.Ctx) error {
 		})
 	}
 
-	// 在Redis中缓存设备状态
-	if redisDatastore != nil {
+	// Cache device status in Redis
+	if redisConn != nil {
 		deviceStatusKey := fmt.Sprintf("device:status:%s", device.DeviceID)
 		if err := txn.Write("Redis", deviceStatusKey, device.Status); err != nil {
 			return c.Status(500).JSON(fiber.Map{
@@ -263,8 +244,8 @@ func registerDevice(c *fiber.Ctx) error {
 		}
 	}
 
-	// 在MongoDB中存储设备信息
-	if mongoDatastore != nil {
+	// Store device information in MongoDB
+	if mongoConn != nil {
 		deviceInfoKey := fmt.Sprintf("device:info:%s", device.DeviceID)
 		deviceJSON, _ := json.Marshal(device)
 		if err := txn.Write("MongoDB1", deviceInfoKey, string(deviceJSON)); err != nil {
@@ -274,8 +255,8 @@ func registerDevice(c *fiber.Ctx) error {
 		}
 	}
 
-	// 在Cassandra中初始化设备统计
-	if cassandraDatastore != nil {
+	// Initialize device statistics in Cassandra
+	if cassandraConn != nil {
 		stats := DeviceStats{
 			DeviceID:      device.DeviceID,
 			TotalReadings: 0,
@@ -293,7 +274,7 @@ func registerDevice(c *fiber.Ctx) error {
 		}
 	}
 
-	// 提交事务
+	// Commit transaction
 	if err := txn.Commit(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to commit transaction: %v", err),
@@ -306,7 +287,7 @@ func registerDevice(c *fiber.Ctx) error {
 	})
 }
 
-// 数据上报 API
+// reportSensorData data reporting API
 func reportSensorData(c *fiber.Ctx) error {
 	var sensorData SensorData
 	if err := c.BodyParser(&sensorData); err != nil {
@@ -315,28 +296,15 @@ func reportSensorData(c *fiber.Ctx) error {
 		})
 	}
 
-	// 设置时间戳
+	// Set timestamp
 	sensorData.Timestamp = time.Now()
 
-	// 创建分布式事务
+	// Create distributed transaction
 	txn := txn.NewTransactionWithRemote(client, oracle)
 
-	// 添加所有可用的数据存储
-	if redisDatastore != nil && mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil && mongoDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore)
-	} else if redisDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, cassandraDatastore)
-	} else if mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil {
-		txn.AddDatastores(redisDatastore)
-	} else if mongoDatastore != nil {
-		txn.AddDatastores(mongoDatastore)
-	} else if cassandraDatastore != nil {
-		txn.AddDatastores(cassandraDatastore)
-	}
+	// Create datastores for transaction
+	datastores := createDatastoresForTransaction()
+	txn.AddDatastores(datastores...)
 
 	if err := txn.Start(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -344,9 +312,9 @@ func reportSensorData(c *fiber.Ctx) error {
 		})
 	}
 
-	// 在Redis中更新最新数据
+	// Update latest data in Redis
 	sensorJSON, _ := json.Marshal(sensorData)
-	if redisDatastore != nil {
+	if redisConn != nil {
 		latestDataKey := fmt.Sprintf(
 			"device:latest:%s:%s",
 			sensorData.DeviceID,
@@ -359,8 +327,9 @@ func reportSensorData(c *fiber.Ctx) error {
 		}
 	}
 
-	// 在MongoDB中存储历史数据
-	if mongoDatastore != nil {
+	// Store historical data in MongoDB
+	if mongoConn != nil {
+		// Store historical data in MongoDB
 		historyKey := fmt.Sprintf(
 			"sensor:history:%s:%d",
 			sensorData.DeviceID,
@@ -373,12 +342,12 @@ func reportSensorData(c *fiber.Ctx) error {
 		}
 	}
 
-	// 读取并更新Cassandra中的统计信息
-	if cassandraDatastore != nil {
+	// Read and update statistics in Cassandra
+	if cassandraConn != nil {
 		statsKey := fmt.Sprintf("device:stats:%s", sensorData.DeviceID)
 		var statsJSON string
 		if err := txn.Read("Cassandra", statsKey, &statsJSON); err != nil {
-			// 如果统计信息不存在，创建新的
+			// If statistics don't exist, create new ones
 			stats := DeviceStats{
 				DeviceID:      sensorData.DeviceID,
 				TotalReadings: 1,
@@ -394,15 +363,15 @@ func reportSensorData(c *fiber.Ctx) error {
 				})
 			}
 		} else {
-			// 更新现有统计信息
+			// Update existing statistics
 			var stats DeviceStats
 			if err := json.Unmarshal([]byte(statsJSON), &stats); err != nil {
 				return c.Status(500).JSON(fiber.Map{
-					"error": fmt.Sprintf("Failed to unmarshal stats: %v", err),
+					"error": fmt.Sprintf("Failed to parse device stats: %v", err),
 				})
 			}
 
-			// 更新统计数据
+			// Update statistical data
 			stats.TotalReadings++
 			stats.LastReading = sensorData.Timestamp
 			stats.AvgValue = (stats.AvgValue*float64(stats.TotalReadings-1) + sensorData.Value) / float64(stats.TotalReadings)
@@ -422,7 +391,7 @@ func reportSensorData(c *fiber.Ctx) error {
 		}
 	}
 
-	// 提交事务
+	// Commit transaction
 	if err := txn.Commit(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to commit transaction: %v", err),
@@ -435,7 +404,7 @@ func reportSensorData(c *fiber.Ctx) error {
 	})
 }
 
-// 获取设备信息 API
+// getDeviceInfo get device information API
 func getDeviceInfo(c *fiber.Ctx) error {
 	deviceID := c.Params("deviceId")
 	if deviceID == "" {
@@ -444,25 +413,12 @@ func getDeviceInfo(c *fiber.Ctx) error {
 		})
 	}
 
-	// 创建只读事务
+	// Create read-only transaction
 	txn := txn.NewTransactionWithRemote(client, oracle)
 
-	// 添加所有可用的数据存储
-	if redisDatastore != nil && mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil && mongoDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore)
-	} else if redisDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, cassandraDatastore)
-	} else if mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil {
-		txn.AddDatastores(redisDatastore)
-	} else if mongoDatastore != nil {
-		txn.AddDatastores(mongoDatastore)
-	} else if cassandraDatastore != nil {
-		txn.AddDatastores(cassandraDatastore)
-	}
+	// Create datastores for transaction
+	datastores := createDatastoresForTransaction()
+	txn.AddDatastores(datastores...)
 
 	if err := txn.Start(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -470,7 +426,7 @@ func getDeviceInfo(c *fiber.Ctx) error {
 		})
 	}
 
-	// 从Redis读取设备状态
+	// Read device status from Redis
 	deviceStatusKey := fmt.Sprintf("device:status:%s", deviceID)
 	var status string
 	if err := txn.Read("Redis", deviceStatusKey, &status); err != nil {
@@ -479,7 +435,7 @@ func getDeviceInfo(c *fiber.Ctx) error {
 		})
 	}
 
-	// 从MongoDB读取设备信息
+	// Read device information from MongoDB
 	deviceInfoKey := fmt.Sprintf("device:info:%s", deviceID)
 	var deviceJSON string
 	if err := txn.Read("MongoDB1", deviceInfoKey, &deviceJSON); err != nil {
@@ -488,31 +444,31 @@ func getDeviceInfo(c *fiber.Ctx) error {
 		})
 	}
 
-	// 从Cassandra读取统计信息
+	// Read statistics from Cassandra
 	var statsJSON string
 	var hasStats bool
-	if cassandraDatastore != nil {
+	if cassandraConn != nil {
 		statsKey := fmt.Sprintf("device:stats:%s", deviceID)
 		if err := txn.Read("Cassandra", statsKey, &statsJSON); err != nil {
-			// 统计信息不存在或读取失败，继续处理
+			// Statistics don't exist or read failed, continue processing
 			hasStats = false
 		} else {
 			hasStats = true
 		}
 	}
 
-	// 提交事务
+	// Commit transaction
 	if err := txn.Commit(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to commit transaction: %v", err),
 		})
 	}
 
-	// 解析数据
+	// Parse data
 	var device Device
 	if err := json.Unmarshal([]byte(deviceJSON), &device); err != nil {
 		return c.Status(500).JSON(fiber.Map{
-			"error": fmt.Sprintf("Failed to unmarshal device data: %v", err),
+			"error": fmt.Sprintf("Failed to parse device info: %v", err),
 		})
 	}
 
@@ -520,12 +476,12 @@ func getDeviceInfo(c *fiber.Ctx) error {
 		"device": device,
 	}
 
-	// 如果有统计信息，添加到响应中
+	// If statistics exist, add to response
 	if hasStats {
 		var stats DeviceStats
 		if err := json.Unmarshal([]byte(statsJSON), &stats); err != nil {
 			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to unmarshal stats data: %v", err),
+				"error": fmt.Sprintf("Failed to parse device stats: %v", err),
 			})
 		}
 		response["stats"] = stats
@@ -534,7 +490,7 @@ func getDeviceInfo(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-// 获取设备最新数据 API
+// getLatestSensorData get device latest data API
 func getLatestSensorData(c *fiber.Ctx) error {
 	deviceID := c.Params("deviceId")
 	sensorType := c.Query("sensor_type")
@@ -545,11 +501,12 @@ func getLatestSensorData(c *fiber.Ctx) error {
 		})
 	}
 
-	// 创建只读事务
+	// Create read-only transaction
 	txn := txn.NewTransactionWithRemote(client, oracle)
 
-	// 添加所有可用的数据存储
-	if redisDatastore != nil {
+	// Only need Redis datastore
+	if redisConn != nil {
+		redisDatastore := redis.NewRedisDatastore("Redis", redisConn)
 		txn.AddDatastores(redisDatastore)
 	}
 
@@ -560,8 +517,12 @@ func getLatestSensorData(c *fiber.Ctx) error {
 	}
 
 	if sensorType != "" {
-		// 获取特定传感器类型的最新数据
-		latestDataKey := fmt.Sprintf("device:latest:%s:%s", deviceID, sensorType)
+		// Get latest data for specific sensor type
+		latestDataKey := fmt.Sprintf(
+			"device:latest:%s:%s",
+			deviceID,
+			sensorType,
+		)
 		var sensorJSON string
 		if err := txn.Read("Redis", latestDataKey, &sensorJSON); err != nil {
 			return c.Status(404).JSON(fiber.Map{
@@ -578,7 +539,7 @@ func getLatestSensorData(c *fiber.Ctx) error {
 		var sensorData SensorData
 		if err := json.Unmarshal([]byte(sensorJSON), &sensorData); err != nil {
 			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to unmarshal sensor data: %v", err),
+				"error": fmt.Sprintf("Failed to parse sensor data: %v", err),
 			})
 		}
 		return c.JSON(sensorData)
@@ -589,7 +550,7 @@ func getLatestSensorData(c *fiber.Ctx) error {
 	}
 }
 
-// 批量数据处理 API
+// batchProcessData batch data processing API
 func batchProcessData(c *fiber.Ctx) error {
 	var batchData []SensorData
 	if err := c.BodyParser(&batchData); err != nil {
@@ -604,25 +565,12 @@ func batchProcessData(c *fiber.Ctx) error {
 		})
 	}
 
-	// 创建分布式事务
+	// Create distributed transaction
 	txn := txn.NewTransactionWithRemote(client, oracle)
 
-	// 添加所有可用的数据存储
-	if redisDatastore != nil && mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil && mongoDatastore != nil {
-		txn.AddDatastores(redisDatastore, mongoDatastore)
-	} else if redisDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(redisDatastore, cassandraDatastore)
-	} else if mongoDatastore != nil && cassandraDatastore != nil {
-		txn.AddDatastores(mongoDatastore, cassandraDatastore)
-	} else if redisDatastore != nil {
-		txn.AddDatastores(redisDatastore)
-	} else if mongoDatastore != nil {
-		txn.AddDatastores(mongoDatastore)
-	} else if cassandraDatastore != nil {
-		txn.AddDatastores(cassandraDatastore)
-	}
+	// Create datastores for transaction
+	datastores := createDatastoresForTransaction()
+	txn.AddDatastores(datastores...)
 
 	if err := txn.Start(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
@@ -634,23 +582,21 @@ func batchProcessData(c *fiber.Ctx) error {
 	for _, sensorData := range batchData {
 		sensorData.Timestamp = time.Now()
 
-		// 在Redis中更新最新数据
+		// Update latest data in Redis
 		latestDataKey := fmt.Sprintf(
 			"device:latest:%s:%s",
 			sensorData.DeviceID,
-			sensorData.SensorType,
-		)
+			sensorData.SensorType)
 		sensorJSON, _ := json.Marshal(sensorData)
 		if err := txn.Write("Redis", latestDataKey, string(sensorJSON)); err != nil {
 			continue
 		}
 
-		// 在MongoDB中存储历史数据
+		// Store historical data in MongoDB
 		historyKey := fmt.Sprintf(
 			"sensor:history:%s:%d",
 			sensorData.DeviceID,
-			sensorData.Timestamp.Unix(),
-		)
+			sensorData.Timestamp.Unix())
 		if err := txn.Write("MongoDB1", historyKey, string(sensorJSON)); err != nil {
 			continue
 		}
@@ -658,7 +604,7 @@ func batchProcessData(c *fiber.Ctx) error {
 		processedCount++
 	}
 
-	// 提交事务
+	// Commit transaction
 	if err := txn.Commit(); err != nil {
 		return c.Status(500).JSON(fiber.Map{
 			"error": fmt.Sprintf("Failed to commit transaction: %v", err),
@@ -673,30 +619,30 @@ func batchProcessData(c *fiber.Ctx) error {
 }
 
 func main() {
-	// 加载配置
+	// Load configuration
 	if err := loadConfig("config.yaml"); err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// 初始化连接
+	// Initialize connections
 	if err := initConnections(); err != nil {
 		log.Fatalf("Failed to initialize connections: %v", err)
 	}
 
-	// 等待执行器连接
+	// Wait for executor connections
 	fmt.Println("Waiting for executor connections...")
 	time.Sleep(3 * time.Second)
 
-	// 创建Fiber应用
+	// Create Fiber application
 	app := fiber.New(fiber.Config{
 		AppName: "IoT Platform API",
 	})
 
-	// 中间件
+	// Middleware
 	app.Use(logger.New())
 	app.Use(cors.New())
 
-	// 健康检查
+	// Health check
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status": "healthy",
@@ -704,19 +650,19 @@ func main() {
 		})
 	})
 
-	// API 路由
+	// API routes
 	api := app.Group("/api/v1")
 
-	// 设备管理
+	// Device management
 	api.Post("/devices", registerDevice)
 	api.Get("/devices/:deviceId", getDeviceInfo)
 
-	// 数据管理
+	// Data management
 	api.Post("/data", reportSensorData)
 	api.Get("/devices/:deviceId/latest", getLatestSensorData)
 	api.Post("/data/batch", batchProcessData)
 
-	// 启动服务器
+	// Start server
 	fmt.Printf("IoT Platform API server starting on port %s...\n", config.ServerPort)
 	log.Fatal(app.Listen(config.ServerPort))
 }

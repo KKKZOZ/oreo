@@ -1,5 +1,4 @@
 # Benchmark system configuration
-registry_addr: "http://localhost:9000"
 executor_address_map:
   "Redis":
     - "http://localhost:8002"
