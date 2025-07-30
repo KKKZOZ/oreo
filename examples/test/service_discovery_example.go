@@ -23,12 +23,16 @@ func etcdCompleteExample() {
 	config.InstanceTTL = 30 * time.Second
 
 	// Create EtcdServiceRegistry instance
-	registry, err := discovery.NewEtcdServiceRegistry([]string{"localhost:2379"}, "/oreo/services", config)
+	registry, err := discovery.NewEtcdServiceRegistry(
+		[]string{"localhost:2379"},
+		"/oreo/services",
+		config,
+	)
 	if err != nil {
 		log.Printf("Failed to create EtcdServiceRegistry: %v", err)
 		return
 	}
-	defer registry.Close()
+	defer func() { _ = registry.Close() }()
 
 	ctx := context.Background()
 
@@ -60,12 +64,16 @@ func etcdCompleteExample() {
 
 	// Now use EtcdServiceDiscovery to discover services
 	fmt.Println("\n--- Using EtcdServiceDiscovery to discover services ---")
-	serviceDiscovery, err := discovery.NewEtcdServiceDiscovery([]string{"localhost:2379"}, "/oreo/services", config)
+	serviceDiscovery, err := discovery.NewEtcdServiceDiscovery(
+		[]string{"localhost:2379"},
+		"/oreo/services",
+		config,
+	)
 	if err != nil {
 		log.Printf("Failed to create EtcdServiceDiscovery: %v", err)
 		return
 	}
-	defer serviceDiscovery.Close()
+	defer func() { _ = serviceDiscovery.Close() }()
 
 	// Wait for etcd connection establishment and data synchronization
 	time.Sleep(3 * time.Second)
