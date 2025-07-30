@@ -1,11 +1,33 @@
-FROM alpine:latest
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
-COPY ./ft-executor /app/
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY . .
+
+WORKDIR /app/ft-executor
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o ft-executor .
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+RUN addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser
+
+WORKDIR /app
 
 RUN mkdir -p /app/config
 
-RUN chmod +x /app/ft-executor
+COPY --from=builder /app/ft-executor/ft-executor .
 
-ENTRYPOINT ["/app/ft-executor"]
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+EXPOSE 8001 8002 8003
+
+CMD ["./ft-executor", "-p", "8001", "--advertise-addr", "localhost:8001", "-w", "social", "-bc", "/app/config/config.yaml"]

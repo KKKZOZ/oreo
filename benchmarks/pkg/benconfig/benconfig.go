@@ -47,9 +47,11 @@ type BenchmarkConfig struct {
 	CouchDBUsername string `yaml:"couchdb_username"`
 	CouchDBPassword string `yaml:"couchdb_password"`
 
-	CassandraAddr []string `yaml:"cassandra_addr"`
-	DynamoDBAddr  string   `yaml:"dynamodb_addr"`
-	TiKVAddr      []string `yaml:"tikv_addr"`
+	CassandraAddr     []string `yaml:"cassandra_addr"`
+	CassandraUsername string   `yaml:"cassandra_username"`
+	CassandraPassword string   `yaml:"cassandra_password"`
+	DynamoDBAddr      string   `yaml:"dynamodb_addr"`
+	TiKVAddr          []string `yaml:"tikv_addr"`
 
 	// DBCombination []string `yaml:"db_combination"`
 }
