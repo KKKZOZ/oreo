@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -66,8 +67,15 @@ func (e *EtcdServiceRegistry) Register(
 		e.leaseGranted = true
 	}
 
+	// Generate unique ID for the service instance
+	serviceID, err := generateUUID()
+	if err != nil {
+		return fmt.Errorf("failed to generate service ID: %w", err)
+	}
+
 	// Construct service information
 	serviceInfo := ServiceInfo{
+		ID:            serviceID,
 		Address:       address,
 		DsNames:       dsNames,
 		LastHeartbeat: time.Now(),
@@ -266,4 +274,14 @@ func (e *EtcdServiceRegistry) getServiceKey(address string) string {
 	safeAddr := strings.ReplaceAll(address, ":", "_")
 	safeAddr = strings.ReplaceAll(safeAddr, ".", "-")
 	return path.Join(e.keyPrefix, safeAddr)
+}
+
+// generateUUID generates a simple UUID-like string
+func generateUUID() (string, error) {
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }
