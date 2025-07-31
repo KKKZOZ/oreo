@@ -2,12 +2,25 @@
 
 An IoT platform example based on the Oreo distributed transaction framework, demonstrating how to handle IoT device data in a multi-database environment.
 
-# Startup
+# Deployment Options
+
+## Docker Compose Deployment
+
+For quick and easy deployment, use Docker Compose:
+
+```bash
+cd examples/iot-platform
+
+# Start all services
+docker compose up -d
+```
+
+## Manual Deployment
 
 ## 1. Start Database Services
 
 ```powershell
-docker compose -f './docker-compose.yml' up -d --build
+docker compose -f './docker-compose.yml' up -d cassandra redis mongodb
 ```
 
 ## 2. Configure Cassandra

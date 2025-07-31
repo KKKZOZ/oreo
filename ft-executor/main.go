@@ -1247,6 +1247,8 @@ func getCassandraConn() *cassandra.CassandraConnection {
 	cassConn := cassandra.NewCassandraConnection(&cassandra.ConnectionOptions{
 		Hosts:    benConfig.CassandraAddr,
 		Keyspace: "oreo", // Hardcoded keyspace?
+		Username: benConfig.CassandraUsername,
+		Password: benConfig.CassandraPassword,
 		// PoolSize (NumConns) might be configurable via options if needed
 	})
 	err := cassConn.Connect()

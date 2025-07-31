@@ -8,8 +8,8 @@ RUN go mod download
 
 COPY . .
 
-WORKDIR /app/ft-executor
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o ft-executor .
+WORKDIR /app/examples/iot-platform
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o iot-platform .
 
 FROM alpine:latest
 
@@ -22,12 +22,12 @@ WORKDIR /app
 
 RUN mkdir -p /app/config
 
-COPY --from=builder /app/ft-executor/ft-executor .
+COPY --from=builder /app/examples/iot-platform/iot-platform .
 
 RUN chown -R appuser:appgroup /app
 
 USER appuser
 
-EXPOSE 8001 8002 8003
+EXPOSE 9000
 
-CMD ["./ft-executor", "-p", "8001", "--advertise-addr", "localhost:8001", "-w", "social", "-bc", "/app/config/config.yaml"]
+CMD ["./iot-platform"]

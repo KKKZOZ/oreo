@@ -1,0 +1,37 @@
+registry_addr: "http://iot-platform:9000"
+executor_address_map:
+  "Redis":
+    - "http://ft-executor-1:8002"
+  "MongoDB1":
+    - "http://ft-executor-1:8002"
+  "Cassandra":
+    - "http://ft-executor-2:8003"
+
+service_discovery:
+  enabled: false
+  etcd_endpoints:
+    - "etcd:2379"
+  service_prefix: "oreo/executors"
+  dial_timeout: "5s"
+  service_name: "ft-executor"
+  service_id: ""
+  advertise_addr: ""
+  metadata:
+    version: "1.0.0"
+    region: "default"
+
+fault_tolerance_request_interval_value: 1
+time_oracle_url: "http://ft-timeoracle-primary:8012/timestamp/common"
+zipfian_constant: 0.1
+latency_value: 0
+
+redis_addr: "redis:6379"
+redis_password: ""
+
+mongodb_addr1: "mongodb://admin:password@mongodb:27017"
+mongodb_username: "admin"
+mongodb_password: "password"
+
+cassandra_addr: ["cassandra:9042"]
+cassandra_username: "oreo_user"
+cassandra_password: "oreo_password"
