@@ -1,78 +1,205 @@
-version: '3.8'
-
 services:
   haproxy:
-    image: haproxy:latest
+    image: haproxy:${HAPROXY_VERSION:-2.8}-alpine
     container_name: haproxy-service
     ports:
       - "8009:8009"
-    command: >
-      sh -c "echo 'global
-          log stdout format raw local0 info
-      
-      defaults
-          log global
-          mode http
-          option httplog
-          timeout connect 5000ms
-          timeout client 30000ms
-          timeout server 30000ms
-          retries 3
-          option redispatch
-          option abortonclose
-      
-      frontend http_frontend
-          bind *:8009
-          mode http
-          default_backend time_oracle_nodes
-          stats enable
-          stats uri /haproxy?stats
-          stats realm Haproxy\\\\ Statistics
-          stats auth admin:password
-          stats refresh 30s
-      
-      backend time_oracle_nodes
-          mode http
-          balance roundrobin
-          option httpchk
-          http-check send meth GET uri /health ver HTTP/1.1 hdr Host time-oracle-health
-          http-check expect status 200
-          server primary host.docker.internal:8012 check inter 2s fall 2 rise 2
-          server backup host.docker.internal:8013 check inter 2s fall 2 rise 2' > /tmp/haproxy.cfg && haproxy -f /tmp/haproxy.cfg"
+    volumes:
+      - ./docker/configs/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     restart: unless-stopped
     depends_on:
-      - redis
-      - mongodb
-      - cassandra
+      - ft-timeoracle-primary
+      - ft-timeoracle-backup
     networks:
       - iot-network
 
   redis:
-    image: redis:latest
+    image: redis:${REDIS_VERSION:-7.2}-alpine
     container_name: redis
     ports:
       - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: always
     networks:
       - iot-network
 
   mongodb:
-    image: mongo:latest
+    image: mongo:${MONGO_VERSION:-7.0}
     container_name: mongodb
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - ./mongodb-data:/data
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     restart: always
     networks:
       - iot-network
 
   cassandra:
-    image: cassandra:latest
+    image: bitnami/cassandra:${CASSANDRA_VERSION:-4.1}
     container_name: cassandra
     ports:
       - "9042:9042"
+    environment:
+      - CASSANDRA_USERNAME=${CASSANDRA_USERNAME}
+      - CASSANDRA_PASSWORD=${CASSANDRA_PASSWORD}
+      - CASSANDRA_PASSWORD_SEEDER=yes
+      - CASSANDRA_SEEDS=cassandra
+    volumes:
+      - ./docker/cassandra:/docker-entrypoint-initdb.d
+      - ./cassandra-data:/bitnami/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -u ${CASSANDRA_USERNAME} -p ${CASSANDRA_PASSWORD} -e 'SELECT now() FROM system.local;' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - iot-network
+  
+  iot-platform:
+    build:
+      context: ../..
+      dockerfile: examples/iot-platform/Dockerfile
+    container_name: iot-platform
+    ports:
+      - "8081:8081"
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./docker/configs/iot-platform.yaml:/app/config.yaml:ro
+    depends_on:
+      - redis
+      - mongodb
+      - cassandra
+      - ft-executor-1
+      - ft-executor-2
+    restart: unless-stopped
+    networks:
+      - iot-network
+
+  ft-timeoracle-primary:
+    build:
+      context: ../..
+      dockerfile: ft-timeoracle/Dockerfile
+    container_name: ft-timeoracle-primary
+    ports:
+      - "8012:8012"
+    environment:
+      - LOG_LEVEL=INFO
+    command: [
+      "./ft-timeoracle",
+      "-role", "primary",
+      "-p", "8012",
+      "-type", "hybrid",
+      "-max-skew", "50ms"
+    ]
+    restart: unless-stopped
+    networks:
+      - iot-network
+
+  ft-timeoracle-backup:
+    build:
+      context: ../..
+      dockerfile: ft-timeoracle/Dockerfile
+    container_name: ft-timeoracle-backup
+    ports:
+      - "8013:8013"
+    environment:
+      - LOG_LEVEL=INFO
+    command: [
+      "./ft-timeoracle",
+      "-role", "backup",
+      "-p", "8013",
+      "-type", "hybrid",
+      "-max-skew", "50ms",
+      "-primary-addr", "http://ft-timeoracle-primary:8012",
+      "-health-check-interval", "2s",
+      "-health-check-timeout", "1s",
+      "-failure-threshold", "3"
+    ]
+    depends_on:
+      - ft-timeoracle-primary
+    restart: unless-stopped
+    networks:
+      - iot-network
+
+  ft-executor-1:
+    build:
+      context: ../..
+      dockerfile: ft-executor/Dockerfile
+    container_name: ft-executor-1
+    ports:
+      - "8002:8002"
+    environment:
+      - LOG_LEVEL=INFO
+    command: [
+      "./ft-executor",
+      "-p", "8002",
+      "-w", "iot",
+      "-bc", "/app/config/config.yaml",
+      "-advertise-addr", "ft-executor-1:8002",
+      "-db", "Redis,MongoDB1"
+    ]
+    volumes:
+      - ./docker/configs/ft-executor.yaml:/app/config/config.yaml:ro  
+    depends_on:
+      - ft-timeoracle-primary
+      - ft-timeoracle-backup
+      - mongodb
+      - redis
+      - cassandra
+    restart: unless-stopped
+    networks: 
+      - iot-network
+
+  ft-executor-2:
+    build:
+      context: ../..
+      dockerfile: ft-executor/Dockerfile
+    container_name: ft-executor-2
+    ports:
+      - "8003:8003"
+    environment:
+      - LOG_LEVEL=INFO
+    command: [
+      "./ft-executor",
+      "-p", "8003",
+      "--advertise-addr", "ft-executor-2:8003",
+      "-w", "ycsb",
+      "-bc", "/app/config/config.yaml",
+      "-db", "Cassandra"
+    ]
+    volumes:
+      - ./docker/configs/ft-executor.yaml:/app/config/config.yaml:ro 
+    depends_on:
+      - ft-timeoracle-primary
+      - ft-timeoracle-backup
+      - cassandra
     restart: unless-stopped
     networks:
       - iot-network
@@ -80,3 +207,9 @@ services:
 networks:
   iot-network:
     driver: bridge
+
+volumes:
+  redis-data:
+  mongodb-data:
+  cassandra-data:
+

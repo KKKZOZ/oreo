@@ -7,6 +7,7 @@ import (
 
 // ServiceInfo represents information about a registered service instance
 type ServiceInfo struct {
+	ID            string            // Unique identifier for the service instance (e.g., UUID)
 	Address       string            // The advertised network address (e.g., "1.2.3.4:8000")
 	LastHeartbeat time.Time         // Timestamp of the last successful heartbeat
 	DsNames       []string          // List of datastore names this instance handles (e.g., ["Redis", "MongoDB1"])
@@ -66,14 +67,8 @@ type ServiceDiscovery interface {
 	// GetAllServices returns all available service instances for the given datastore name
 	GetAllServices(dsName string) ([]string, error)
 
-	// UpdateServices updates the local service cache
-	UpdateServices(services []ServiceInfo) error
-
-	// RemoveService removes a service from the local cache
-	RemoveService(service ServiceInfo)
-
-	// UpdateHeartbeat updates the heartbeat timestamp for a service
-	UpdateHeartbeat(service ServiceInfo)
+	// Watch watches for changes in service registrations for the given datastore name
+	Watch(ctx context.Context, dsName string) (<-chan ServiceChangeEvent, error)
 
 	// Close closes the discovery client
 	Close() error

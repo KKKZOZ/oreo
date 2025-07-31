@@ -83,12 +83,8 @@ func (d *EtcdServiceDiscovery) GetService(dsName string) (string, error) {
 	d.mutex.RLock()
 	addresses, exists := d.dsNameIndex[dsName]
 	if !exists || len(addresses) == 0 {
-		// Try to find services that handle "ALL"
-		addresses, exists = d.dsNameIndex["ALL"]
-		if !exists || len(addresses) == 0 {
-			d.mutex.RUnlock()
-			return "", fmt.Errorf("no available service for dsName: %s", dsName)
-		}
+		d.mutex.RUnlock()
+		return "", fmt.Errorf("no available service for dsName: %s", dsName)
 	}
 
 	// Get or create round-robin counter
@@ -107,11 +103,8 @@ func (d *EtcdServiceDiscovery) GetService(dsName string) (string, error) {
 		// Re-get addresses
 		addresses, exists = d.dsNameIndex[dsName]
 		if !exists || len(addresses) == 0 {
-			addresses, exists = d.dsNameIndex["ALL"]
-			if !exists || len(addresses) == 0 {
-				d.mutex.RUnlock()
-				return "", fmt.Errorf("no available service for dsName: %s", dsName)
-			}
+			d.mutex.RUnlock()
+			return "", fmt.Errorf("no available service for dsName: %s", dsName)
 		}
 	}
 
@@ -130,11 +123,7 @@ func (d *EtcdServiceDiscovery) GetAllServices(dsName string) ([]string, error) {
 
 	addresses, exists := d.dsNameIndex[dsName]
 	if !exists || len(addresses) == 0 {
-		// Try to find services that handle "ALL"
-		addresses, exists = d.dsNameIndex["ALL"]
-		if !exists || len(addresses) == 0 {
-			return nil, fmt.Errorf("no available service for dsName: %s", dsName)
-		}
+		return nil, fmt.Errorf("no available service for dsName: %s", dsName)
 	}
 
 	// Return a copy to avoid concurrent modification
@@ -143,37 +132,85 @@ func (d *EtcdServiceDiscovery) GetAllServices(dsName string) ([]string, error) {
 	return result, nil
 }
 
-// UpdateServices updates local service cache (loaded from etcd)
-func (d *EtcdServiceDiscovery) UpdateServices(services []ServiceInfo) error {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+// Watch watches for changes in service registrations for the given datastore name
+func (d *EtcdServiceDiscovery) Watch(
+	ctx context.Context,
+	dsName string,
+) (<-chan ServiceChangeEvent, error) {
+	ch := make(chan ServiceChangeEvent, 100)
 
-	// Clear existing data
-	d.services = make(map[string]ServiceInfo)
-	d.dsNameIndex = make(map[string][]string)
+	// Start a goroutine to watch for changes
+	go func() {
+		defer close(ch)
 
-	// Update service information
-	for _, service := range services {
-		d.services[service.Address] = service
+		// Watch for changes in the etcd key prefix
+		watchCh := d.client.Watch(ctx, d.keyPrefix, clientv3.WithPrefix())
 
-		// Update dsName index
-		for _, dsName := range service.DsNames {
-			d.dsNameIndex[dsName] = append(d.dsNameIndex[dsName], service.Address)
+		for watchResp := range watchCh {
+			for _, event := range watchResp.Events {
+				address := d.extractAddressFromKey(string(event.Kv.Key))
+
+				switch event.Type {
+				case clientv3.EventTypePut:
+					// Service added or updated
+					var service ServiceInfo
+					if err := json.Unmarshal(event.Kv.Value, &service); err != nil {
+						continue
+					}
+
+					// Check if this service handles the requested dsName
+					handlesDsName := false
+					for _, serviceDsName := range service.DsNames {
+						if serviceDsName == dsName {
+							handlesDsName = true
+							break
+						}
+					}
+
+					if handlesDsName {
+						select {
+						case ch <- ServiceChangeEvent{
+							Type:    ServiceAdded,
+							Service: service,
+						}:
+						case <-ctx.Done():
+							return
+						}
+					}
+
+				case clientv3.EventTypeDelete:
+					// Service removed
+					d.mutex.RLock()
+					service, exists := d.services[address]
+					d.mutex.RUnlock()
+
+					if exists {
+						// Check if this service handles the requested dsName
+						handlesDsName := false
+						for _, serviceDsName := range service.DsNames {
+							if serviceDsName == dsName {
+								handlesDsName = true
+								break
+							}
+						}
+
+						if handlesDsName {
+							select {
+							case ch <- ServiceChangeEvent{
+								Type:    ServiceRemoved,
+								Service: service,
+							}:
+							case <-ctx.Done():
+								return
+							}
+						}
+					}
+				}
+			}
 		}
-	}
+	}()
 
-	return nil
-}
-
-// UpdateHeartbeat updates the heartbeat time of a service
-func (d *EtcdServiceDiscovery) UpdateHeartbeat(address string, dsName string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
-
-	if service, exists := d.services[address]; exists {
-		service.LastHeartbeat = time.Now()
-		d.services[address] = service
-	}
+	return ch, nil
 }
 
 // Close closes the service discovery
@@ -196,16 +233,30 @@ func (d *EtcdServiceDiscovery) loadServices() error {
 		return fmt.Errorf("failed to get services from etcd: %w", err)
 	}
 
-	var services []ServiceInfo
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	// Clear existing data
+	d.services = make(map[string]ServiceInfo)
+	d.dsNameIndex = make(map[string][]string)
+
+	// Load services from etcd
 	for _, kv := range resp.Kvs {
 		var serviceInfo ServiceInfo
 		if err := json.Unmarshal(kv.Value, &serviceInfo); err != nil {
 			continue // Skip services that cannot be parsed
 		}
-		services = append(services, serviceInfo)
+
+		// Update service cache
+		d.services[serviceInfo.Address] = serviceInfo
+
+		// Update dsName index
+		for _, dsName := range serviceInfo.DsNames {
+			d.dsNameIndex[dsName] = append(d.dsNameIndex[dsName], serviceInfo.Address)
+		}
 	}
 
-	return d.UpdateServices(services)
+	return nil
 }
 
 // startWatch starts etcd watching
