@@ -14,11 +14,14 @@ import (
 
 // EtcdServiceRegistry etcd-based service registration implementation
 type EtcdServiceRegistry struct {
-	client       *clientv3.Client
-	config       RegistryConfig
-	keyPrefix    string // Key prefix for service registration in etcd
-	leaseID      clientv3.LeaseID
-	leaseGranted bool
+	client           *clientv3.Client
+	config           RegistryConfig
+	keyPrefix        string // Key prefix for service registration in etcd
+	leaseID          clientv3.LeaseID
+	leaseGranted     bool
+	keepAliveRunning bool
+	ctx              context.Context
+	cancel           context.CancelFunc
 }
 
 // NewEtcdServiceRegistry creates a new etcd service registry
@@ -95,7 +98,13 @@ func (e *EtcdServiceRegistry) Register(
 	}
 
 	// Start lease renewal
-	go e.keepAlive()
+	if !e.keepAliveRunning {
+		e.keepAliveRunning = true
+		go func() {
+			e.keepAlive()
+			e.keepAliveRunning = false
+		}()
+	}
 
 	return nil
 }
@@ -243,6 +252,11 @@ func (e *EtcdServiceRegistry) Watch(
 
 // Close closes the etcd client
 func (e *EtcdServiceRegistry) Close() error {
+	// Cancel keepAlive context to stop the goroutine
+	if e.cancel != nil {
+		e.cancel()
+	}
+	
 	if e.leaseGranted {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -257,7 +271,11 @@ func (e *EtcdServiceRegistry) keepAlive() {
 		return
 	}
 
-	ch, kaerr := e.client.KeepAlive(context.Background(), e.leaseID)
+	if e.ctx == nil || e.cancel == nil {
+		e.ctx, e.cancel = context.WithCancel(context.Background())
+	}
+
+	ch, kaerr := e.client.KeepAlive(e.ctx, e.leaseID)
 	if kaerr != nil {
 		return
 	}

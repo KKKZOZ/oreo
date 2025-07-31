@@ -331,12 +331,11 @@ func (d *EtcdServiceDiscovery) addServiceToIndexLocked(address string, dsNames [
 		addresses := d.dsNameIndex[dsName]
 		for _, addr := range addresses {
 			if addr == address {
-				goto nextDsName // Already exists, skip
+				continue // Already exists, skip
 			}
 		}
 		// Does not exist, add
 		d.dsNameIndex[dsName] = append(d.dsNameIndex[dsName], address)
-	nextDsName:
 	}
 }
 
