@@ -43,18 +43,6 @@ type ServiceRegistry interface {
 	// Deregister removes a service instance from the registry
 	Deregister(ctx context.Context, address string) error
 
-	// Heartbeat sends a heartbeat to maintain the service registration
-	Heartbeat(ctx context.Context, address string) error
-
-	// GetServices retrieves all registered service instances for given datastore name
-	GetServices(ctx context.Context, dsName string) ([]ServiceInfo, error)
-
-	// GetAllServices retrieves all registered service instances
-	GetAllServices(ctx context.Context) ([]ServiceInfo, error)
-
-	// Watch watches for changes in service registrations
-	Watch(ctx context.Context, dsName string) (<-chan ServiceChangeEvent, error)
-
 	// Close closes the registry and cleans up resources
 	Close() error
 }
@@ -63,12 +51,6 @@ type ServiceRegistry interface {
 type ServiceDiscovery interface {
 	// GetService returns a service instance address for the given datastore name
 	GetService(dsName string) (string, error)
-
-	// GetAllServices returns all available service instances for the given datastore name
-	GetAllServices(dsName string) ([]string, error)
-
-	// Watch watches for changes in service registrations for the given datastore name
-	Watch(ctx context.Context, dsName string) (<-chan ServiceChangeEvent, error)
 
 	// Close closes the discovery client
 	Close() error
