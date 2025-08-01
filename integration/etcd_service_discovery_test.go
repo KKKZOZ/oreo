@@ -94,13 +94,6 @@ func TestEtcdServiceDiscovery(t *testing.T) {
 	}
 	t.Log("Etcd heartbeat sent successfully")
 
-	// Get service list (through registry)
-	services, err := registry.GetServices(ctx, "Redis")
-	if err != nil {
-		t.Fatalf("Failed to get services: %v", err)
-	}
-	t.Logf("Etcd Redis service list: %v", services)
-
 	// Wait a moment to ensure service registration is complete
 	time.Sleep(2 * time.Second)
 
@@ -126,35 +119,35 @@ func TestEtcdServiceDiscovery(t *testing.T) {
 	}
 	t.Logf("Got Redis service from etcd: %s", address)
 
-	// Get all services
-	allServices, err := serviceDiscovery.GetAllServices("Redis")
-	if err != nil {
-		t.Fatalf("Failed to get services: %v", err)
-	}
-	t.Logf("Got all Redis services from etcd: %v", allServices)
-
-	// Test Watch functionality
-	t.Log("Testing Watch functionality")
-	watchCh, err := serviceDiscovery.Watch(ctx, "Redis")
-	if err != nil {
-		t.Fatalf("Failed to start watching: %v", err)
-	}
-
-	// Register another service to trigger watch event
-	go func() {
-		time.Sleep(1 * time.Second)
-		err := registry.Register(ctx, "localhost:8003", []string{"Redis"}, nil)
+	// Test multiple calls to GetService (round-robin)
+	t.Log("Testing round-robin load balancing")
+	for i := 0; i < 3; i++ {
+		addr, err := serviceDiscovery.GetService("Redis")
 		if err != nil {
-			t.Logf("Failed to register second service: %v", err)
+			t.Fatalf("Failed to get service from etcd (call %d): %v", i+1, err)
 		}
-	}()
+		t.Logf("Round-robin call %d: %s", i+1, addr)
+	}
 
-	// Wait for watch event
-	select {
-	case event := <-watchCh:
-		t.Logf("Received watch event: %+v", event)
-	case <-time.After(10 * time.Second):
-		t.Log("No watch event received within timeout")
+	// Register another service to test load balancing
+	err = registry.Register(ctx, "localhost:8003", []string{"Redis"}, nil)
+	if err != nil {
+		t.Logf("Failed to register second service: %v", err)
+	} else {
+		t.Log("Second Redis service registered")
+		// Wait for discovery to pick up the new service
+		time.Sleep(2 * time.Second)
+		
+		// Test load balancing with multiple services
+		addresses := make(map[string]int)
+		for i := 0; i < 10; i++ {
+			addr, err := serviceDiscovery.GetService("Redis")
+			if err != nil {
+				t.Fatalf("Failed to get service: %v", err)
+			}
+			addresses[addr]++
+		}
+		t.Logf("Load balancing results: %v", addresses)
 	}
 
 	// Finally deregister services
@@ -198,26 +191,28 @@ func TestEtcdServiceRegistryBasic(t *testing.T) {
 		t.Fatalf("Failed to register service: %v", err)
 	}
 
-	// Test service retrieval
-	services, err := registry.GetServices(ctx, "TestService")
+	// Create a discovery client to verify registration
+	discovery, err := discovery.NewEtcdServiceDiscovery(
+		testEtcdEndpoints,
+		"/oreo/test",
+		config,
+	)
 	if err != nil {
-		t.Fatalf("Failed to get services: %v", err)
+		t.Fatalf("Failed to create EtcdServiceDiscovery: %v", err)
+	}
+	defer func() { _ = discovery.Close() }()
+
+	// Wait for service to be available
+	time.Sleep(2 * time.Second)
+
+	// Test service retrieval
+	addr, err := discovery.GetService("TestService")
+	if err != nil {
+		t.Fatalf("Failed to get service: %v", err)
 	}
 
-	if len(services) == 0 {
-		t.Fatal("No services found")
-	}
-
-	found := false
-	for _, service := range services {
-		if service.Address == serviceAddress {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Fatalf("Registered service not found in service list")
+	if addr != serviceAddress {
+		t.Fatalf("Expected service address %s, got %s", serviceAddress, addr)
 	}
 
 	// Test heartbeat
@@ -233,15 +228,10 @@ func TestEtcdServiceRegistryBasic(t *testing.T) {
 	}
 
 	// Verify service is removed
-	time.Sleep(1 * time.Second)
-	services, err = registry.GetServices(ctx, "TestService")
-	if err != nil {
-		t.Fatalf("Failed to get services after deregistration: %v", err)
+	time.Sleep(2 * time.Second)
+	_, err = discovery.GetService("TestService")
+	if err == nil {
+		t.Fatal("Service still found after deregistration")
 	}
-
-	for _, service := range services {
-		if service.Address == serviceAddress {
-			t.Fatal("Service still found after deregistration")
-		}
-	}
+	t.Log("Service successfully removed after deregistration")
 }
