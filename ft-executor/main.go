@@ -30,6 +30,7 @@ import (
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
 	"github.com/kkkzoz/oreo/pkg/datastore/tikv"
+	"github.com/kkkzoz/oreo/pkg/discovery"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/serializer"
 	"github.com/kkkzoz/oreo/pkg/timesource"
@@ -50,77 +51,61 @@ var Banner = `
 |____/ \__\__,_|\__\___|_|\___||___/___/
 `
 
-type Server struct {
-	port            int
-	advertiseAddr   string // Address to advertise to the registry
-	registryAddr    string // Address of the registry service
-	handledDsNames  []string
-	reader          network.Reader
-	committer       network.Committer
-	heartbeatCtx    context.Context
-	heartbeatCancel context.CancelFunc
-	wg              sync.WaitGroup   // To wait for heartbeat goroutine
-	fasthttpServer  *fasthttp.Server // Keep track for shutdown
+// ServiceRegistry defines the interface for service registration.
+type ServiceRegistry interface {
+	Register(name, addr string) error
+	Deregister(name, addr string) error
+	Close()
 }
 
-// Registry communication payloads
-type RegistryRequest struct {
-	Address string   `json:"address"`
-	DsNames []string `json:"dsNames,omitempty"` // Used for registration
+// HttpRegistry wraps the existing HTTP-based registry logic
+type HttpRegistry struct {
+	registryAddr   string
+	advertiseAddr  string
+	handledDsNames []string
 }
 
-// NewServer modified to accept registry info and dsNames
-func NewServer(
-	port int,
-	advertiseAddr, registryAddr string,
-	handledDsNames []string,
-	connMap map[string]txn.Connector,
-	factory txn.DataItemFactory,
-	timeSource timesource.TimeSourcer,
-) *Server {
-	reader := *network.NewReader(connMap, factory, serializer.NewJSON2Serializer(), network.NewCacher())
-	ctx, cancel := context.WithCancel(context.Background())
-	return &Server{
-		port:            port,
-		advertiseAddr:   advertiseAddr,
-		registryAddr:    registryAddr,
-		handledDsNames:  handledDsNames,
-		reader:          reader,
-		committer:       *network.NewCommitter(connMap, reader, serializer.NewJSON2Serializer(), factory, timeSource),
-		heartbeatCtx:    ctx,
-		heartbeatCancel: cancel,
+func NewHttpRegistry(registryAddr, advertiseAddr string, handledDsNames []string) *HttpRegistry {
+	fmt.Printf("[HTTP] Connecting to registry at %s\n", registryAddr)
+	return &HttpRegistry{
+		registryAddr:   registryAddr,
+		advertiseAddr:  advertiseAddr,
+		handledDsNames: handledDsNames,
 	}
 }
 
-// --- Registry Interaction ---
+func (h *HttpRegistry) Register(name, addr string) error {
+	fmt.Printf("[HTTP] Registering service '%s' with address %s\n", name, addr)
+	return h.registerWithRegistry()
+}
 
-const (
-	registryTimeout   = 1 * time.Second
-	heartbeatInterval = 1 * time.Second
-)
+func (h *HttpRegistry) Deregister(name, addr string) error {
+	fmt.Printf("[HTTP] Deregistering service '%s' from %s\n", name, addr)
+	return h.deregisterFromRegistry()
+}
 
-func (s *Server) registerWithRegistry() error {
-	if s.registryAddr == "" {
+func (h *HttpRegistry) registerWithRegistry() error {
+	if h.registryAddr == "" {
 		Log.Warnw("Registry address not set, skipping registration")
 		return nil // Or return an error if registration is mandatory
 	}
-	if s.advertiseAddr == "" {
+	if h.advertiseAddr == "" {
 		return fmt.Errorf("advertise address not set, cannot register")
 	}
 
 	Log.Infow(
 		"Attempting to register with registry",
 		"registry",
-		s.registryAddr,
+		h.registryAddr,
 		"advertise",
-		s.advertiseAddr,
+		h.advertiseAddr,
 		"dsNames",
-		s.handledDsNames,
+		h.handledDsNames,
 	)
 
 	reqBody := RegistryRequest{
-		Address: s.advertiseAddr,
-		DsNames: s.handledDsNames,
+		Address: h.advertiseAddr,
+		DsNames: h.handledDsNames,
 	}
 	jsonData, err := json.Marshal(reqBody) // Use standard JSON for registry comms
 	if err != nil {
@@ -133,7 +118,7 @@ func (s *Server) registerWithRegistry() error {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		s.registryAddr+"/register",
+		h.registryAddr+"/register",
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
@@ -143,7 +128,7 @@ func (s *Server) registerWithRegistry() error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send register request to %s: %w", s.registryAddr, err)
+		return fmt.Errorf("failed to send register request to %s: %w", h.registryAddr, err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -151,17 +136,17 @@ func (s *Server) registerWithRegistry() error {
 		_ = resp.Body.Close()                 // Explicitly ignore close error for error path
 		return fmt.Errorf(
 			"registry at %s returned non-OK status for register: %s Body: %s",
-			s.registryAddr,
+			h.registryAddr,
 			resp.Status,
 			string(bodyBytes),
 		)
 	}
-	Log.Infow("Successfully registered with registry", "registry", s.registryAddr)
+	Log.Infow("Successfully registered with registry", "registry", h.registryAddr)
 	return nil
 }
 
-func (s *Server) deregisterFromRegistry() error {
-	if s.registryAddr == "" || s.advertiseAddr == "" {
+func (h *HttpRegistry) deregisterFromRegistry() error {
+	if h.registryAddr == "" || h.advertiseAddr == "" {
 		Log.Warnw("Registry or advertise address not set, skipping deregistration")
 		return nil
 	}
@@ -169,12 +154,12 @@ func (s *Server) deregisterFromRegistry() error {
 	Log.Infow(
 		"Attempting to deregister from registry",
 		"registry",
-		s.registryAddr,
+		h.registryAddr,
 		"advertise",
-		s.advertiseAddr,
+		h.advertiseAddr,
 	)
 
-	reqBody := RegistryRequest{Address: s.advertiseAddr}
+	reqBody := RegistryRequest{Address: h.advertiseAddr}
 	jsonData, err := json.Marshal(reqBody) // Use standard JSON
 	if err != nil {
 		Log.Errorw("Failed to marshal deregister request", "error", err)
@@ -187,7 +172,7 @@ func (s *Server) deregisterFromRegistry() error {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		s.registryAddr+"/deregister",
+		h.registryAddr+"/deregister",
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
@@ -199,7 +184,7 @@ func (s *Server) deregisterFromRegistry() error {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		// Network errors during shutdown are warnings
-		Log.Warnw("Failed to send deregister request", "registry", s.registryAddr, "error", err)
+		Log.Warnw("Failed to send deregister request", "registry", h.registryAddr, "error", err)
 		return err
 	}
 
@@ -209,7 +194,7 @@ func (s *Server) deregisterFromRegistry() error {
 		Log.Warnw(
 			"Registry returned non-OK status for deregister",
 			"registry",
-			s.registryAddr,
+			h.registryAddr,
 			"status",
 			resp.Status,
 			"body",
@@ -217,8 +202,202 @@ func (s *Server) deregisterFromRegistry() error {
 		)
 		return fmt.Errorf("registry returned non-OK status for deregister: %s", resp.Status)
 	}
-	Log.Infow("Successfully deregistered from registry", "registry", s.registryAddr)
+	Log.Infow("Successfully deregistered from registry", "registry", h.registryAddr)
 	return nil
+}
+
+func (h *HttpRegistry) Close() {
+	fmt.Println("[HTTP] Registry connection closed.")
+}
+
+// EtcdRegistry wraps the etcd-based registry
+// Modified EtcdRegistry struct to include database connection information
+type EtcdRegistry struct {
+	registry       *discovery.EtcdServiceRegistry
+	advertiseAddr  string
+	handledDsNames []string
+	dbConnections  map[string]string
+}
+
+func NewEtcdRegistry(
+	endpoints []string,
+	advertiseAddr string,
+	handledDsNames []string,
+	dbConnections map[string]string,
+) *EtcdRegistry {
+	fmt.Printf("[Etcd] Connecting to %v\n", endpoints)
+
+	config := discovery.DefaultRegistryConfig()
+	registry, err := discovery.NewEtcdServiceRegistry(endpoints, "/oreo/services", config)
+	if err != nil {
+		Log.Fatalw("Failed to create etcd registry", "error", err)
+		return nil
+	}
+
+	return &EtcdRegistry{
+		registry:       registry,
+		advertiseAddr:  advertiseAddr,
+		handledDsNames: handledDsNames,
+		dbConnections:  dbConnections,
+	}
+}
+
+func (e *EtcdRegistry) Register(name, addr string) error {
+	fmt.Printf("[Etcd] Registering service '%s' with address %s\n", name, addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Register the real address for each database service
+	for _, dsName := range e.handledDsNames {
+		var serviceAddr string
+		if dbAddr, exists := e.dbConnections[dsName]; exists {
+			serviceAddr = dbAddr
+		} else {
+			serviceAddr = e.advertiseAddr
+		}
+
+		metadata := map[string]string{
+			"service_name": fmt.Sprintf("oreo-executor-%s", dsName),
+			"start_time":   time.Now().Format(time.RFC3339),
+			"db_type":      dsName,
+		}
+
+		// Register each database service separately
+		err := e.registry.Register(ctx, serviceAddr, []string{dsName}, metadata)
+		if err != nil {
+			fmt.Printf("[Etcd] Failed to register %s service: %v\n", dsName, err)
+			return err
+		}
+		fmt.Printf(
+			"[Etcd] Successfully registered %s service with address %s\n",
+			dsName,
+			serviceAddr,
+		)
+	}
+
+	return nil
+}
+
+func (e *EtcdRegistry) Deregister(name, addr string) error {
+	fmt.Printf("[Etcd] Deregistering service '%s' from %s\n", name, addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return e.registry.Deregister(ctx, e.advertiseAddr)
+}
+
+func (e *EtcdRegistry) Close() {
+	fmt.Println("[Etcd] Registry connection closed.")
+	if e.registry != nil {
+		if err := e.registry.Close(); err != nil {
+			fmt.Printf("[Etcd] Failed to close registry: %v\n", err)
+		}
+	}
+}
+
+type Server struct {
+	port            int
+	advertiseAddr   string // Address to advertise to the registry
+	registryAddr    string // Address of the registry service
+	handledDsNames  []string
+	reader          network.Reader
+	committer       network.Committer
+	heartbeatCtx    context.Context
+	heartbeatCancel context.CancelFunc
+	wg              sync.WaitGroup   // To wait for heartbeat goroutine
+	fasthttpServer  *fasthttp.Server // Keep track for shutdown
+
+	// Service registry interface
+	registry ServiceRegistry
+}
+
+// Registry communication payloads
+type RegistryRequest struct {
+	Address string   `json:"address"`
+	DsNames []string `json:"dsNames,omitempty"` // Used for registration
+}
+
+// NewServer modified to accept registry type
+func NewServer(
+	port int,
+	advertiseAddr, registryAddr string,
+	handledDsNames []string,
+	connMap map[string]txn.Connector,
+	factory txn.DataItemFactory,
+	timeSource timesource.TimeSourcer,
+	registryType string,
+) *Server {
+	reader := *network.NewReader(connMap, factory, serializer.NewJSON2Serializer(), network.NewCacher())
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Extract database connection addresses from connMap
+	dbConnections := make(map[string]string)
+	for dsName, connector := range connMap {
+		// Get real address based on connector type
+		switch conn := connector.(type) {
+		case interface{ GetAddress() string }:
+			dbConnections[dsName] = conn.GetAddress()
+		default:
+			dbConnections[dsName] = advertiseAddr // Fallback to executor address
+		}
+	}
+
+	// Initialize the appropriate registry based on type
+	var registry ServiceRegistry
+	switch registryType {
+	case "etcd":
+		endpoints := []string{registryAddr}
+		if strings.Contains(registryAddr, ",") {
+			endpoints = strings.Split(registryAddr, ",")
+		}
+		etcdReg := NewEtcdRegistry(endpoints, advertiseAddr, handledDsNames, dbConnections)
+		registry = etcdReg
+	case "http":
+		fallthrough
+	default:
+		httpReg := NewHttpRegistry(registryAddr, advertiseAddr, handledDsNames)
+		registry = httpReg
+	}
+
+	return &Server{
+		port:            port,
+		advertiseAddr:   advertiseAddr,
+		registryAddr:    registryAddr,
+		handledDsNames:  handledDsNames,
+		reader:          reader,
+		committer:       *network.NewCommitter(connMap, reader, serializer.NewJSON2Serializer(), factory, timeSource),
+		heartbeatCtx:    ctx,
+		heartbeatCancel: cancel,
+		registry:        registry,
+	}
+}
+
+// --- Registry Interaction ---
+
+const (
+	registryTimeout   = 1 * time.Second
+	heartbeatInterval = 1 * time.Second
+)
+
+// Modified registry methods to use the interface
+func (s *Server) registerWithRegistry() error {
+	if s.registry == nil {
+		Log.Warnw("Registry not configured, skipping registration")
+		return nil
+	}
+
+	serviceName := fmt.Sprintf("oreo-executor-%s", strings.Join(s.handledDsNames, "-"))
+	return s.registry.Register(serviceName, s.advertiseAddr)
+}
+
+func (s *Server) deregisterFromRegistry() error {
+	if s.registry == nil {
+		Log.Warnw("Registry not configured, skipping deregistration")
+		return nil
+	}
+
+	serviceName := fmt.Sprintf("oreo-executor-%s", strings.Join(s.handledDsNames, "-"))
+	return s.registry.Deregister(serviceName, s.advertiseAddr)
 }
 
 func (s *Server) startHeartbeat() {
@@ -768,6 +947,12 @@ var (
 		"",
 		"HTTP address of the registry service (e.g., http://localhost:9000)",
 	)
+	// New flag for registry type
+	registryType = flag.String(
+		"registry",
+		"http",
+		"Type of registry to use: 'http' or 'etcd'",
+	)
 )
 
 var Log *zap.SugaredLogger
@@ -815,6 +1000,11 @@ func main() {
 		*registryAddrFlag = benConfig.RegistryAddr
 	}
 
+	// Validate registry type
+	if *registryType != "http" && *registryType != "etcd" {
+		Log.Fatalf("Invalid registry type '%s'. Please use 'http' or 'etcd'.", *registryType)
+	}
+
 	// Setup profiling and tracing if enabled
 	if *pprofFlag {
 		startCPUProfile()
@@ -850,21 +1040,22 @@ func main() {
 	}
 	Log.Infow("Executor configured to handle datastores", "dsNames", handledDsNames)
 
-	// Validate registry address format
-	if *registryAddrFlag != "" && !strings.HasPrefix(*registryAddrFlag, "http://") &&
+	// Validate registry address format - only for HTTP registry
+	if *registryType == "http" && *registryAddrFlag != "" &&
+		!strings.HasPrefix(*registryAddrFlag, "http://") &&
 		!strings.HasPrefix(*registryAddrFlag, "https://") {
 		Log.Warnw(
-			"Registry address might be missing scheme (http:// or https://), assuming http://",
+			"HTTP registry address missing scheme, assuming http://",
 			"registry-addr",
 			*registryAddrFlag,
 		)
-		*registryAddrFlag = "http://" + *registryAddrFlag // Default to http if scheme missing
+		*registryAddrFlag = "http://" + *registryAddrFlag
 	}
 
 	// Create the time source (Oracle)
 	oracle := timesource.NewGlobalTimeSource(benConfig.TimeOracleUrl)
 
-	// Create the main Server instance
+	// Create the main Server instance with registry type
 	server := NewServer(
 		*port,
 		*advertiseAddrFlag,
@@ -873,6 +1064,7 @@ func main() {
 		connMap,
 		&redis.RedisItemFactory{},
 		oracle,
+		*registryType, // Pass the registry type
 	)
 
 	// Run the server (this includes registration, heartbeat, fasthttp server, and blocks until shutdown)
