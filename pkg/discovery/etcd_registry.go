@@ -2,13 +2,13 @@ package discovery
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -70,11 +70,8 @@ func (e *EtcdServiceRegistry) Register(
 		e.leaseGranted = true
 	}
 
-	// Generate unique ID for the service instance
-	serviceID, err := generateUUID()
-	if err != nil {
-		return fmt.Errorf("failed to generate service ID: %w", err)
-	}
+	// Generate unique ID for the service instance using google/uuid
+	serviceID := uuid.NewString()
 
 	// Construct service information
 	serviceInfo := ServiceInfo{
@@ -126,44 +123,6 @@ func (e *EtcdServiceRegistry) Deregister(ctx context.Context, address string) er
 	return nil
 }
 
-// Heartbeat sends heartbeat (implemented through lease renewal)
-func (e *EtcdServiceRegistry) Heartbeat(ctx context.Context, address string) error {
-	if !e.leaseGranted {
-		return fmt.Errorf("lease not granted, cannot send heartbeat")
-	}
-
-	// etcd heartbeat is automatically handled through lease keepalive
-	// Here we can choose to update LastHeartbeat time
-	key := e.getServiceKey(address)
-	resp, err := e.client.Get(ctx, key)
-	if err != nil {
-		return fmt.Errorf("failed to get service info for heartbeat: %w", err)
-	}
-
-	if len(resp.Kvs) == 0 {
-		return fmt.Errorf("service not found in etcd")
-	}
-
-	var serviceInfo ServiceInfo
-	if err := json.Unmarshal(resp.Kvs[0].Value, &serviceInfo); err != nil {
-		return fmt.Errorf("failed to unmarshal service info: %w", err)
-	}
-
-	// Update heartbeat time
-	serviceInfo.LastHeartbeat = time.Now()
-	serviceData, err := json.Marshal(serviceInfo)
-	if err != nil {
-		return fmt.Errorf("failed to marshal updated service info: %w", err)
-	}
-
-	_, err = e.client.Put(ctx, key, string(serviceData), clientv3.WithLease(e.leaseID))
-	if err != nil {
-		return fmt.Errorf("failed to update heartbeat in etcd: %w", err)
-	}
-
-	return nil
-}
-
 // Close closes the etcd client
 func (e *EtcdServiceRegistry) Close() error {
 	// Cancel keepAlive context to stop the goroutine
@@ -206,14 +165,4 @@ func (e *EtcdServiceRegistry) getServiceKey(address string) string {
 	safeAddr := strings.ReplaceAll(address, ":", "_")
 	safeAddr = strings.ReplaceAll(safeAddr, ".", "-")
 	return path.Join(e.keyPrefix, safeAddr)
-}
-
-// generateUUID generates a simple UUID-like string
-func generateUUID() (string, error) {
-	b := make([]byte, 16)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }

@@ -22,13 +22,13 @@ func TestMain(m *testing.M) {
 		ExposedPorts: []string{"2379/tcp"},
 		Env: map[string]string{
 			"ETCD_NAME":                        "etcd0",
-			"ETCD_ADVERTISE_CLIENT_URLS":        "http://0.0.0.0:2379",
-			"ETCD_LISTEN_CLIENT_URLS":           "http://0.0.0.0:2379",
-			"ETCD_INITIAL_ADVERTISE_PEER_URLS":  "http://0.0.0.0:2380",
-			"ETCD_LISTEN_PEER_URLS":             "http://0.0.0.0:2380",
-			"ETCD_INITIAL_CLUSTER_TOKEN":        "etcd-cluster-1",
-			"ETCD_INITIAL_CLUSTER":              "etcd0=http://0.0.0.0:2380",
-			"ETCD_INITIAL_CLUSTER_STATE":        "new",
+			"ETCD_ADVERTISE_CLIENT_URLS":       "http://0.0.0.0:2379",
+			"ETCD_LISTEN_CLIENT_URLS":          "http://0.0.0.0:2379",
+			"ETCD_INITIAL_ADVERTISE_PEER_URLS": "http://0.0.0.0:2380",
+			"ETCD_LISTEN_PEER_URLS":            "http://0.0.0.0:2380",
+			"ETCD_INITIAL_CLUSTER_TOKEN":       "etcd-cluster-1",
+			"ETCD_INITIAL_CLUSTER":             "etcd0=http://0.0.0.0:2380",
+			"ETCD_INITIAL_CLUSTER_STATE":       "new",
 			"ALLOW_NONE_AUTHENTICATION":        "yes",
 		},
 		WaitingFor: wait.ForListeningPort("2379/tcp"),
@@ -87,12 +87,6 @@ func TestEtcdServiceDiscovery(t *testing.T) {
 	}
 	t.Log("Service registered to etcd successfully")
 
-	// Send heartbeat
-	err = registry.Heartbeat(ctx, "localhost:8002")
-	if err != nil {
-		t.Fatalf("Heartbeat failed: %v", err)
-	}
-	t.Log("Etcd heartbeat sent successfully")
 
 	// Wait a moment to ensure service registration is complete
 	time.Sleep(2 * time.Second)
@@ -137,7 +131,7 @@ func TestEtcdServiceDiscovery(t *testing.T) {
 		t.Log("Second Redis service registered")
 		// Wait for discovery to pick up the new service
 		time.Sleep(2 * time.Second)
-		
+
 		// Test load balancing with multiple services
 		addresses := make(map[string]int)
 		for i := 0; i < 10; i++ {
@@ -213,12 +207,6 @@ func TestEtcdServiceRegistryBasic(t *testing.T) {
 
 	if addr != serviceAddress {
 		t.Fatalf("Expected service address %s, got %s", serviceAddress, addr)
-	}
-
-	// Test heartbeat
-	err = registry.Heartbeat(ctx, serviceAddress)
-	if err != nil {
-		t.Fatalf("Failed to send heartbeat: %v", err)
 	}
 
 	// Test service deregistration
