@@ -52,7 +52,6 @@ type Client struct {
 	shutdownCancel   context.CancelFunc
 	wg               sync.WaitGroup
 
-	clientMutex sync.Mutex
 	curIndexMap map[string]*atomic.Uint64
 	httpClient  *fasthttp.Client
 
