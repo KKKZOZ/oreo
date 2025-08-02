@@ -1062,7 +1062,9 @@ type HTTPServiceDiscoveryWrapper struct {
 	client *Client
 }
 
-func NewHTTPServiceDiscoveryWrapper(config *HTTPDiscoveryConfig) (*HTTPServiceDiscoveryWrapper, error) {
+func NewHTTPServiceDiscoveryWrapper(
+	config *HTTPDiscoveryConfig,
+) (*HTTPServiceDiscoveryWrapper, error) {
 	client, err := NewClient(config.RegistryPort)
 	if err != nil {
 		return nil, err
@@ -1083,7 +1085,9 @@ type EtcdServiceDiscoveryWrapper struct {
 	etcdDiscovery *discovery.EtcdServiceDiscovery
 }
 
-func NewEtcdServiceDiscoveryWrapper(config *EtcdDiscoveryConfig) (*EtcdServiceDiscoveryWrapper, error) {
+func NewEtcdServiceDiscoveryWrapper(
+	config *EtcdDiscoveryConfig,
+) (*EtcdServiceDiscoveryWrapper, error) {
 	registryConfig := &discovery.RegistryConfig{
 		InstanceTTL:       6 * time.Second,
 		HeartbeatInterval: 2 * time.Second,
