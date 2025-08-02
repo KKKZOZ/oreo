@@ -1,0 +1,28 @@
+# etcd-test configuration
+time_oracle_url: "http://localhost:8012/timestamp/common"
+server_port: ":3001"
+
+# Redis configuration
+redis_addr: "localhost:6379"
+redis_password: "kkkzoz"
+
+# MongoDB configuration 
+mongodb_addr: "mongodb://localhost:27017"
+mongodb_username: "admin"
+mongodb_password: "password"
+mongodb_db_name: "test_db"
+mongodb_collection_name: "test_data"
+
+service_discovery:
+  type: "etcd"  # "http" or "etcd"
+  
+  http:
+    registry_port: ":9000"
+  
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    username: ""
+    password: ""
+    dial_timeout: "5s"
+    key_prefix: "/oreo/services"

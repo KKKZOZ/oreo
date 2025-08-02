@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/discovery"
 	"github.com/kkkzoz/oreo/pkg/logger" // Use provided logger for client ops
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/valyala/fasthttp"
@@ -40,21 +41,22 @@ type RegistryRequest struct {
 
 // Client embeds both the registry server functionality and the client
 // logic for discovering and communicating with executor instances.
+// Refactored Client that supports multiple service discovery methods
 type Client struct {
-	// Registry Server Part
-	registryMutex    sync.RWMutex            // Protects access to instances and dsNameIndex
-	instances        map[string]InstanceInfo // Key: Instance Address (e.g., "1.2.3.4:8000"), Value: InstanceInfo
-	dsNameIndex      map[string][]string     // Key: DsName (e.g., "Redis"), Value: List of active instance addresses handling it
-	instanceTTL      time.Duration           // Time after last heartbeat before an instance is considered stale
-	registryListener *http.Server            // The HTTP server instance for the registry endpoints
-	shutdownCtx      context.Context         // Context to signal shutdown for background tasks
-	shutdownCancel   context.CancelFunc      // Function to trigger the shutdown context
-	wg               sync.WaitGroup          // Waits for background goroutines (listener, cleanup) to finish
+	registryMutex    sync.RWMutex
+	instances        map[string]InstanceInfo
+	dsNameIndex      map[string][]string
+	instanceTTL      time.Duration
+	registryListener *http.Server
+	shutdownCtx      context.Context
+	shutdownCancel   context.CancelFunc
+	wg               sync.WaitGroup
 
-	// Client Consumer Part
-	clientMutex sync.Mutex                // Protects access to curIndexMap initialization
-	curIndexMap map[string]*atomic.Uint64 // Key: DsName, Value: Atomic counter for round-robin index
-	httpClient  *fasthttp.Client          // Reusable fasthttp client for executor communication
+	clientMutex sync.Mutex
+	curIndexMap map[string]*atomic.Uint64
+	httpClient  *fasthttp.Client
+
+	serviceDiscovery discovery.ServiceDiscovery
 }
 
 // Constants
@@ -67,6 +69,44 @@ const (
 	// Default timeout for requests to executors if not configured otherwise
 	defaultRequestTimeout = 30000 * time.Millisecond
 )
+
+// Add a unified client creation function
+func NewClientWithConfig(config *ServiceDiscoveryConfig) (*Client, error) {
+	switch config.Type {
+	case HTTPDiscovery:
+		return NewClientWithDiscovery(config)
+	case EtcdDiscovery:
+		return NewClientWithDiscovery(config)
+	default:
+		httpConfig := &ServiceDiscoveryConfig{
+			Type: HTTPDiscovery,
+			HTTP: &HTTPDiscoveryConfig{
+				RegistryPort: ":9000",
+			},
+		}
+		return NewClientWithDiscovery(httpConfig)
+	}
+}
+
+func NewClientWithDiscovery(config *ServiceDiscoveryConfig) (*Client, error) {
+	// Use ServiceDiscoveryManager uniformly
+	sdm, err := NewServiceDiscoveryManager(config)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &Client{
+		instances:        make(map[string]InstanceInfo),
+		dsNameIndex:      make(map[string][]string),
+		instanceTTL:      defaultInstanceTTL,
+		curIndexMap:      make(map[string]*atomic.Uint64),
+		httpClient:       &fasthttp.Client{},
+		serviceDiscovery: sdm,
+	}
+
+	client.shutdownCtx, client.shutdownCancel = context.WithCancel(context.Background())
+	return client, nil
+}
 
 // NewRegistryClient initializes the combined client, starts the registry HTTP server,
 // and launches the background cleanup routine.
@@ -90,20 +130,14 @@ func NewClient(registryListenAddr string, instanceTTL ...time.Duration) (*Client
 	ctx, cancel := context.WithCancel(context.Background())
 
 	rc := &Client{
-		instances:      make(map[string]InstanceInfo),
-		dsNameIndex:    make(map[string][]string),
-		instanceTTL:    ttl,
-		curIndexMap:    make(map[string]*atomic.Uint64),
-		shutdownCtx:    ctx,
-		shutdownCancel: cancel,
-		httpClient:     &fasthttp.Client{ // Initialize the fasthttp client
-			// Set reasonable default timeouts for reading/writing - DoTimeout overrides these per call
-			// ReadTimeout:  defaultRequestTimeout,
-			// WriteTimeout: defaultRequestTimeout,
-			// MaxIdleConnDuration: 1 * time.Minute, // Keep idle connections open
-			// MaxConnsPerHost:     100,             // Limit connections per executor host
-			// Consider other options like Name for identification in logs if needed
-		},
+		instances:        make(map[string]InstanceInfo),
+		dsNameIndex:      make(map[string][]string),
+		instanceTTL:      ttl,
+		curIndexMap:      make(map[string]*atomic.Uint64),
+		shutdownCtx:      ctx,
+		shutdownCancel:   cancel,
+		httpClient:       &fasthttp.Client{},
+		serviceDiscovery: nil,
 	}
 
 	// Setup Registry HTTP Server
@@ -476,47 +510,49 @@ func (rc *Client) cleanupStaleInstances() {
 	}
 }
 
-// --- Client/Consumer Methods (Modified) ---
-
-// GetServerAddr selects an active executor address for the given dsName using round-robin.
-// (Unchanged - Round Robin Logic is separate from HTTP execution)
+// Add complete fallback logic in the GetServerAddr method
 func (rc *Client) GetServerAddr(dsName string) (string, error) {
-	rc.registryMutex.RLock() // Use read lock to access the dsNameIndex
-
-	addrList, ok := rc.dsNameIndex[dsName]
-	if !ok || len(addrList) == 0 {
-		addrList, ok = rc.dsNameIndex[ALL]
-		if !ok || len(addrList) == 0 {
-			rc.registryMutex.RUnlock()
-			logger.Log.Errorw("No active executor instance found for dsName", "dsName", dsName)
-			return "", fmt.Errorf(
-				"no active executor instance available for dsName %s (or ALL)",
-				dsName,
-			)
-		}
-		dsName = ALL // Use ALL key for counter
+	if rc == nil {
+		return "", fmt.Errorf("client is nil")
 	}
 
-	numInstances := len(addrList)
-	addresses := make([]string, numInstances)
-	copy(addresses, addrList)
-	rc.registryMutex.RUnlock()
-
-	rc.clientMutex.Lock()
-	counter, exists := rc.curIndexMap[dsName]
-	if !exists {
-		var newAtomicCounter atomic.Uint64
-		rc.curIndexMap[dsName] = &newAtomicCounter
-		counter = &newAtomicCounter
+	if rc.serviceDiscovery != nil {
+		return rc.serviceDiscovery.GetService(dsName)
 	}
-	rc.clientMutex.Unlock()
 
-	idx := counter.Add(1) - 1
-	instanceIndex := int(idx % uint64(numInstances))
+	rc.registryMutex.RLock()
+	defer rc.registryMutex.RUnlock()
 
-	selectedAddr := addresses[instanceIndex]
+	instanceAddrs, exists := rc.dsNameIndex[dsName]
+	if !exists || len(instanceAddrs) == 0 {
+		return "", fmt.Errorf("no instances found for datastore: %s", dsName)
+	}
 
-	return selectedAddr, nil
+	if _, exists := rc.curIndexMap[dsName]; !exists {
+		rc.curIndexMap[dsName] = &atomic.Uint64{}
+	}
+
+	curIndex := rc.curIndexMap[dsName]
+	index := curIndex.Add(1) % uint64(len(instanceAddrs))
+	return instanceAddrs[index], nil
+}
+
+func (rc *Client) getServerAddrHTTP(dsName string) (string, error) {
+	rc.registryMutex.RLock()
+	defer rc.registryMutex.RUnlock()
+
+	instanceAddrs, exists := rc.dsNameIndex[dsName]
+	if !exists || len(instanceAddrs) == 0 {
+		return "", fmt.Errorf("no instances found for datastore: %s", dsName)
+	}
+
+	if _, exists := rc.curIndexMap[dsName]; !exists {
+		rc.curIndexMap[dsName] = &atomic.Uint64{}
+	}
+
+	curIndex := rc.curIndexMap[dsName]
+	index := curIndex.Add(1) % uint64(len(instanceAddrs))
+	return instanceAddrs[index], nil
 }
 
 // Helper to get timeout value (can be extended to read from config)
@@ -932,7 +968,6 @@ func (rc *Client) Abort(dsName string, keyList []string, groupKeyList string) er
 }
 
 // GetExecutorAddrList retrieves a list of currently known executor addresses.
-// (Unchanged)
 func (rc *Client) GetExecutorAddrList() []string {
 	rc.registryMutex.RLock()
 	defer rc.registryMutex.RUnlock()
@@ -952,4 +987,132 @@ func (rc *Client) GetExecutorAddrList() []string {
 	}
 
 	return addressList
+}
+
+// Service discovery type enumeration
+type ServiceDiscoveryType string
+
+const (
+	HTTPDiscovery ServiceDiscoveryType = "http"
+	EtcdDiscovery ServiceDiscoveryType = "etcd"
+)
+
+// Service discovery interface
+type ServiceDiscoveryInterface interface {
+	GetService(dsName string) (string, error)
+	Close() error
+}
+
+// Service discovery configuration
+type ServiceDiscoveryConfig struct {
+	Type ServiceDiscoveryType
+	HTTP *HTTPDiscoveryConfig
+	Etcd *EtcdDiscoveryConfig
+}
+
+type HTTPDiscoveryConfig struct {
+	RegistryPort string
+}
+
+type EtcdDiscoveryConfig struct {
+	Endpoints   []string
+	Username    string
+	Password    string
+	DialTimeout string
+	KeyPrefix   string
+}
+
+// Service discovery manager
+type ServiceDiscoveryManager struct {
+	discovery ServiceDiscoveryInterface
+}
+
+func NewServiceDiscoveryManager(config *ServiceDiscoveryConfig) (*ServiceDiscoveryManager, error) {
+	var discovery ServiceDiscoveryInterface
+	var err error
+
+	switch config.Type {
+	case HTTPDiscovery:
+		discovery, err = NewHTTPServiceDiscoveryWrapper(config.HTTP)
+	case EtcdDiscovery:
+		discovery, err = NewEtcdServiceDiscoveryWrapper(config.Etcd)
+	default:
+		return nil, fmt.Errorf("unsupported service discovery type: %s", config.Type)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &ServiceDiscoveryManager{
+		discovery: discovery,
+	}, nil
+}
+
+func (sdm *ServiceDiscoveryManager) GetService(dsName string) (string, error) {
+	return sdm.discovery.GetService(dsName)
+}
+
+func (sdm *ServiceDiscoveryManager) Close() error {
+	return sdm.discovery.Close()
+}
+
+// HTTP service discovery adapter
+type HTTPServiceDiscoveryWrapper struct {
+	client *Client
+}
+
+func NewHTTPServiceDiscoveryWrapper(config *HTTPDiscoveryConfig) (*HTTPServiceDiscoveryWrapper, error) {
+	client, err := NewClient(config.RegistryPort)
+	if err != nil {
+		return nil, err
+	}
+	return &HTTPServiceDiscoveryWrapper{client: client}, nil
+}
+
+func (hsd *HTTPServiceDiscoveryWrapper) GetService(dsName string) (string, error) {
+	return hsd.client.getServerAddrHTTP(dsName)
+}
+
+func (hsd *HTTPServiceDiscoveryWrapper) Close() error {
+	return hsd.client.Shutdown(context.Background())
+}
+
+// etcd service discovery adapter
+type EtcdServiceDiscoveryWrapper struct {
+	etcdDiscovery *discovery.EtcdServiceDiscovery
+}
+
+func NewEtcdServiceDiscoveryWrapper(config *EtcdDiscoveryConfig) (*EtcdServiceDiscoveryWrapper, error) {
+	registryConfig := &discovery.RegistryConfig{
+		InstanceTTL:       6 * time.Second,
+		HeartbeatInterval: 2 * time.Second,
+		CleanupInterval:   3 * time.Second,
+		RequestTimeout:    1 * time.Second,
+	}
+
+	etcdDiscovery, err := discovery.NewEtcdServiceDiscovery(
+		config.Endpoints,
+		config.KeyPrefix,
+		registryConfig,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &EtcdServiceDiscoveryWrapper{
+		etcdDiscovery: etcdDiscovery,
+	}, nil
+}
+
+func (esw *EtcdServiceDiscoveryWrapper) GetService(dsName string) (string, error) {
+	address, err := esw.etcdDiscovery.GetService(dsName)
+	if err != nil {
+		return "", err
+	}
+	return address, nil
+}
+
+func (esw *EtcdServiceDiscoveryWrapper) Close() error {
+	return esw.etcdDiscovery.Close()
 }
