@@ -144,6 +144,9 @@ func (s *Server) RunAndBlock() {
 			err,
 		)
 	}
+	logger.Infow("Registered with registry",
+		"address", s.advertiseAddr,
+		"handledDsNames", s.handledDsNames)
 
 	// 2. Setup fasthttp router
 	router := func(ctx *fasthttp.RequestCtx) {
@@ -619,15 +622,16 @@ func main() {
 
 	// Establish database connections based on workload
 	connMap := getConnMap(*workloadType, *db_combination)
-	if len(connMap) == 0 {
-		logger.Fatalw(
-			"No database connections established for workload",
-			"workload",
-			*workloadType,
-			"db_combination",
-			*db_combination,
-		)
-	}
+
+	// if len(connMap) == 0 {
+	// 	logger.Fatalw(
+	// 		"No database connections established for workload",
+	// 		"workload",
+	// 		*workloadType,
+	// 		"db_combination",
+	// 		*db_combination,
+	// 	)
+	// }
 
 	// Determine which datastore names this executor handles
 	handledDsNames := make([]string, 0, len(connMap))

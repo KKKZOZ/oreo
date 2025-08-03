@@ -7,54 +7,241 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
+
+	"github.com/kkkzoz/oreo/pkg/logger"
 )
 
-// HttpRegistry wraps the existing HTTP-based registry logic
+// HttpRegistry implements the discovery.Registry interface.
+var _ ServiceRegistry = (*HttpRegistry)(nil)
+
+// TODO: `address` is unused in the Register and Deregister methods.
 type HttpRegistry struct {
-	registryAddr    string
-	advertiseAddr   string
-	handledDsNames  []string
+	registryAddr   string
+	advertiseAddr  string
+	handledDsNames []string
+	config         *RegistryConfig
+
+	client *http.Client
+
+	mu              sync.Mutex // Protects all fields below this line
+	isRegistered    bool
 	heartbeatCtx    context.Context
 	heartbeatCancel context.CancelFunc
 	heartbeatTicker *time.Ticker
-	config          *RegistryConfig
 }
 
-// NewHttpRegistry creates a new HTTP registry instance
-func NewHttpRegistry(registryAddr, advertiseAddr string, handledDsNames []string) *HttpRegistry {
-	fmt.Printf("[HTTP] Connecting to registry at %s\n", registryAddr)
+// NewHttpRegistry creates a new HTTP registry instance.
+func NewHttpRegistry(
+	registryAddr, advertiseAddr string,
+	handledDsNames []string,
+) *HttpRegistry {
+	logger.Infow("Creating new HTTP registry",
+		"registryAddr", registryAddr,
+		"advertiseAddr", advertiseAddr,
+	)
 	ctx, cancel := context.WithCancel(context.Background())
+	config := DefaultRegistryConfig()
+
 	return &HttpRegistry{
-		registryAddr:    registryAddr,
-		advertiseAddr:   advertiseAddr,
-		handledDsNames:  handledDsNames,
+		registryAddr:   registryAddr,
+		advertiseAddr:  advertiseAddr,
+		handledDsNames: handledDsNames,
+		config:         config,
+		client: &http.Client{
+			Timeout: config.RequestTimeout,
+		},
 		heartbeatCtx:    ctx,
 		heartbeatCancel: cancel,
-		config:          DefaultRegistryConfig(),
 	}
 }
 
-// Register implements ServiceRegistry interface
+// Register registers the service with the central registry.
+// It will start a background loop to maintain the registration (via heartbeats or retries).
+// Per request, the API signature is kept the same; the `address`, `dsNames`, and `metadata`
+// parameters are unused in this implementation.
 func (h *HttpRegistry) Register(
 	ctx context.Context,
 	address string,
 	dsNames []string,
 	metadata map[string]string,
 ) error {
-	fmt.Printf("[HTTP] Registering service with address %s\n", address)
+	logger.Infow("Registering service...",
+		"advertiseAddr", h.advertiseAddr,
+		// Note: The parameters are ignored, using values from the constructor instead.
+		"ignored_address_param", address,
+		"ignored_dsNames_param", dsNames,
+	)
 
-	if h.registryAddr == "" {
-		fmt.Println("Registry address not set, skipping registration")
+	// Always start the background management loop. This allows retrying if the
+	// discovery service is not yet available.
+	h.startManagementLoop()
+
+	// Make a single, initial attempt to register immediately.
+	// The background loop will handle retries if this fails.
+	err := h.performRegistration(ctx)
+	if err != nil {
+		logger.Warnw(
+			"Initial registration attempt failed, will retry in background",
+			"error",
+			err,
+		)
+		return err // Return error to inform the caller, but the retry process is now running.
+	}
+
+	// If the first attempt is successful, update the state immediately.
+	h.mu.Lock()
+	h.isRegistered = true
+	h.mu.Unlock()
+	logger.Infow("Initial registration successful")
+
+	return nil
+}
+
+// Deregister deregisters the service from the central registry.
+// Per request, the API signature is kept the same; the `address` parameter is unused.
+func (h *HttpRegistry) Deregister(ctx context.Context, address string) error {
+	logger.Infow("Deregistering service", "address", h.advertiseAddr)
+	// Stop the background loop first to prevent further heartbeats or registration attempts.
+	h.stopManagementLoop()
+
+	if h.registryAddr == "" || h.advertiseAddr == "" {
+		logger.Warnw("Registry or advertise address not set, skipping deregistration")
 		return nil
 	}
-	if h.advertiseAddr == "" {
-		return fmt.Errorf("advertise address not set, cannot register")
+
+	// Set state to unregistered.
+	h.mu.Lock()
+	h.isRegistered = false
+	h.mu.Unlock()
+
+	reqBody := RegistryRequest{Address: h.advertiseAddr}
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal deregister request: %w", err)
 	}
 
-	fmt.Printf("Attempting to register with registry: %s, advertise: %s, dsNames: %v\n",
-		h.registryAddr, h.advertiseAddr, h.handledDsNames)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		h.registryAddr+"/deregister",
+		bytes.NewBuffer(jsonData),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create deregister request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
 
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send deregister request to %s: %w", h.registryAddr, err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		err := fmt.Errorf(
+			"deregistration failed with status %s, Body: %s",
+			resp.Status,
+			string(bodyBytes),
+		)
+		logger.Warnw("Deregistration failed", "error", err)
+		return err
+	}
+
+	_, _ = io.Copy(io.Discard, resp.Body)
+	logger.Infow("Successfully deregistered from registry", "registry", h.registryAddr)
+	return nil
+}
+
+// Close stops the background management loop.
+func (h *HttpRegistry) Close() error {
+	logger.Infow("Closing registry connection")
+	h.stopManagementLoop()
+	return nil
+}
+
+// startManagementLoop starts the background loop for registration and heartbeats.
+func (h *HttpRegistry) startManagementLoop() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.heartbeatTicker != nil {
+		logger.Debugw("Management loop already running, skipping start")
+		return
+	}
+
+	logger.Infow("Starting background management loop", "interval", h.config.HeartbeatInterval)
+	h.heartbeatTicker = time.NewTicker(h.config.HeartbeatInterval)
+	go h.manageConnectionLoop()
+}
+
+// stopManagementLoop stops the background loop.
+func (h *HttpRegistry) stopManagementLoop() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.heartbeatTicker != nil {
+		h.heartbeatTicker.Stop()
+		h.heartbeatTicker = nil
+		logger.Infow("Management loop stopped")
+	}
+	if h.heartbeatCancel != nil {
+		h.heartbeatCancel()
+	}
+}
+
+// manageConnectionLoop is the core loop that handles the service's registration state.
+// It will periodically try to register if not already registered, or send a heartbeat if it is.
+func (h *HttpRegistry) manageConnectionLoop() {
+	for {
+		select {
+		case <-h.heartbeatTicker.C:
+			h.mu.Lock()
+			isRegistered := h.isRegistered
+			h.mu.Unlock()
+
+			if !isRegistered {
+				logger.Infow("Service is not registered. Attempting to register...")
+				ctx, cancel := context.WithTimeout(h.heartbeatCtx, h.config.RequestTimeout)
+				err := h.performRegistration(ctx)
+				cancel() // Release context resources
+
+				if err == nil {
+					logger.Infow("Background registration successful.")
+					h.mu.Lock()
+					h.isRegistered = true
+					h.mu.Unlock()
+				} else {
+					logger.Warnw("Background registration attempt failed, will retry.", "error", err)
+				}
+			} else {
+				logger.Debugw("Service is registered. Sending heartbeat...")
+				ctx, cancel := context.WithTimeout(h.heartbeatCtx, h.config.RequestTimeout)
+				err := h.performHeartbeat(ctx)
+				cancel() // Release context resources
+
+				if err != nil {
+					logger.Warnw("Heartbeat failed. Marking as unregistered to trigger re-registration.", "error", err)
+					h.mu.Lock()
+					h.isRegistered = false
+					h.mu.Unlock()
+				} else {
+					logger.Debugw("Heartbeat successful.")
+				}
+			}
+		case <-h.heartbeatCtx.Done():
+			logger.Infow("Management loop stopping due to context cancellation.")
+			return
+		}
+	}
+}
+
+// performRegistration sends a single registration request.
+func (h *HttpRegistry) performRegistration(ctx context.Context) error {
 	reqBody := RegistryRequest{
 		Address: h.advertiseAddr,
 		DsNames: h.handledDsNames,
@@ -75,176 +262,56 @@ func (h *HttpRegistry) Register(
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send register request to %s: %w", h.registryAddr, err)
 	}
 	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			fmt.Printf("Warning: failed to close response body: %v\n", closeErr)
-		}
+		_ = resp.Body.Close()
 	}()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf(
-			"registry at %s returned non-OK status for register: %s Body: %s",
-			h.registryAddr,
-			resp.Status,
-			string(bodyBytes),
-		)
+		return fmt.Errorf("registry returned non-OK status for register: %s, Body: %s",
+			resp.Status, string(bodyBytes))
 	}
-	fmt.Printf("Successfully registered with registry: %s\n", h.registryAddr)
-
-	// Start heartbeat after successful registration
-	h.startHeartbeat()
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
 }
 
-// Deregister implements ServiceRegistry interface
-func (h *HttpRegistry) Deregister(ctx context.Context, address string) error {
-	fmt.Printf("[HTTP] Deregistering service from %s\n", address)
-
-	// Stop heartbeat first
-	h.stopHeartbeat()
-
-	if h.registryAddr == "" || h.advertiseAddr == "" {
-		fmt.Println("Registry or advertise address not set, skipping deregistration")
-		return nil
-	}
-
-	fmt.Printf("Attempting to deregister from registry: %s, advertise: %s\n",
-		h.registryAddr, h.advertiseAddr)
-
+// performHeartbeat sends a single heartbeat request to the registry.
+func (h *HttpRegistry) performHeartbeat(ctx context.Context) error {
 	reqBody := RegistryRequest{Address: h.advertiseAddr}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		fmt.Printf("Failed to marshal deregister request: %v\n", err)
-		return err
+		return fmt.Errorf("failed to marshal heartbeat request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		h.registryAddr+"/deregister",
+		h.registryAddr+"/heartbeat",
 		bytes.NewBuffer(jsonData),
 	)
 	if err != nil {
-		fmt.Printf("Failed to create deregister request: %v\n", err)
-		return err
+		return fmt.Errorf("failed to create heartbeat request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
-		fmt.Printf("Failed to send deregister request to %s: %v\n", h.registryAddr, err)
-		return err
+		return fmt.Errorf("failed to send heartbeat request: %w", err)
 	}
 	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			fmt.Printf("Warning: failed to close response body: %v\n", closeErr)
-		}
+		_ = resp.Body.Close()
 	}()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		fmt.Printf("Registry returned non-OK status for deregister: %s Body: %s\n",
+		return fmt.Errorf("registry returned non-OK status for heartbeat: %s, Body: %s",
 			resp.Status, string(bodyBytes))
 	}
-	fmt.Printf("Successfully deregistered from registry: %s\n", h.registryAddr)
+
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
-}
-
-// Close implements ServiceRegistry interface
-func (h *HttpRegistry) Close() error {
-	fmt.Println("[HTTP] Registry connection closed.")
-	h.stopHeartbeat()
-	return nil
-}
-
-// startHeartbeat starts the heartbeat mechanism
-func (h *HttpRegistry) startHeartbeat() {
-	if h.registryAddr == "" || h.advertiseAddr == "" {
-		fmt.Println("Registry or advertise address not set, skipping heartbeat")
-		return
-	}
-
-	fmt.Printf(
-		"Starting heartbeat for %s with interval %v\n",
-		h.advertiseAddr,
-		h.config.HeartbeatInterval,
-	)
-	h.heartbeatTicker = time.NewTicker(h.config.HeartbeatInterval)
-
-	go func() {
-		reqBody := RegistryRequest{Address: h.advertiseAddr}
-		jsonData, err := json.Marshal(reqBody)
-		if err != nil {
-			fmt.Printf("CRITICAL: Failed to marshal heartbeat request: %v\n", err)
-			return
-		}
-
-		for {
-			select {
-			case <-h.heartbeatTicker.C:
-				ctx, cancel := context.WithTimeout(h.heartbeatCtx, h.config.RequestTimeout)
-				req, err := http.NewRequestWithContext(
-					ctx,
-					http.MethodPost,
-					h.registryAddr+"/heartbeat",
-					bytes.NewBuffer(jsonData),
-				)
-				if err != nil {
-					fmt.Printf("Failed to create heartbeat request: %v\n", err)
-					cancel()
-					continue
-				}
-				req.Header.Set("Content-Type", "application/json")
-
-				resp, err := http.DefaultClient.Do(req)
-				if err != nil {
-					// Network errors are expected sometimes, just continue
-					cancel()
-					continue
-				}
-
-				if resp.StatusCode != http.StatusOK {
-					bodyBytes, _ := io.ReadAll(resp.Body)
-					fmt.Printf("Registry returned non-OK for heartbeat: %s Body: %s\n",
-						resp.Status, string(bodyBytes))
-					// Try to re-register
-					if regErr := h.reregister(); regErr != nil {
-						fmt.Printf("Failed to re-register after failed heartbeat: %v\n", regErr)
-					}
-				} else {
-					_, _ = io.Copy(io.Discard, resp.Body)
-				}
-				_ = resp.Body.Close()
-				cancel()
-
-			case <-h.heartbeatCtx.Done():
-				fmt.Println("Heartbeat stopping due to context cancellation")
-				return
-			}
-		}
-	}()
-}
-
-// stopHeartbeat stops the heartbeat mechanism
-func (h *HttpRegistry) stopHeartbeat() {
-	if h.heartbeatTicker != nil {
-		h.heartbeatTicker.Stop()
-		h.heartbeatTicker = nil
-	}
-	if h.heartbeatCancel != nil {
-		h.heartbeatCancel()
-	}
-	fmt.Println("Heartbeat stopped")
-}
-
-// reregister attempts to re-register with the registry
-func (h *HttpRegistry) reregister() error {
-	ctx, cancel := context.WithTimeout(context.Background(), h.config.RequestTimeout)
-	defer cancel()
-	return h.Register(ctx, h.advertiseAddr, h.handledDsNames, nil)
 }
