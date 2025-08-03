@@ -87,7 +87,6 @@ func TestEtcdServiceDiscovery(t *testing.T) {
 	}
 	t.Log("Service registered to etcd successfully")
 
-
 	// Wait a moment to ensure service registration is complete
 	time.Sleep(2 * time.Second)
 
