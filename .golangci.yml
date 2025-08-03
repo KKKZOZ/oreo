@@ -15,7 +15,6 @@ formatters:
   # Enable specific formatter.
   enable:
     - gci
-    - gofmt
     - gofumpt
     - goimports
     - golines
