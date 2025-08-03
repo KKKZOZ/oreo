@@ -576,7 +576,6 @@ var benConfig = benconfig.BenchmarkConfig{}
 
 func main() {
 	parseFlags()
-
 	// Load benchmark configuration from YAML
 	err := loadConfig(*benConfigPath)
 	if err != nil {
@@ -587,6 +586,19 @@ func main() {
 			"error",
 			err,
 		)
+	}
+
+	if *registryAddrFlag == "" {
+		logger.Info(
+			"Registry address (--registry-addr) not specified, will load from benchmark config",
+		)
+
+		if benConfig.RegistryAddr == "" {
+			logger.Fatal(
+				"Registry address not specified in benchmark config, please provide --registry-addr or set it in the config",
+			)
+		}
+		*registryAddrFlag = benConfig.RegistryAddr
 	}
 
 	// Setup profiling and tracing if enabled
@@ -676,19 +688,6 @@ func parseFlags() {
 
 	if *advertiseAddrFlag == "" {
 		logger.Fatal("Advertise address (--advertise-addr) not specified")
-	}
-
-	if *registryAddrFlag == "" {
-		logger.Info(
-			"Registry address (--registry-addr) not specified, will load from benchmark config",
-		)
-
-		if benConfig.RegistryAddr == "" {
-			logger.Fatal(
-				"Registry address not specified in benchmark config, please provide --registry-addr or set it in the config",
-			)
-		}
-		*registryAddrFlag = benConfig.RegistryAddr
 	}
 
 	// Validate registry type
