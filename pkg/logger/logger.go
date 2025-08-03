@@ -15,7 +15,7 @@ func init() {
 	// Retrieve log level from environment variable
 	logLevel := os.Getenv("LOG")
 
-	level := zap.FatalLevel // default level
+	level := zap.WarnLevel // default level
 	switch logLevel {
 	case "DEBUG":
 		level = zap.DebugLevel
@@ -30,11 +30,12 @@ func init() {
 
 	// Configure the encoding and format of the logs
 	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	conf.EncoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
+	conf.EncoderConfig.EncodeTime = zapcore.RFC3339TimeEncoder
 	conf.EncoderConfig.MessageKey = "msg"
 	// conf.OutputPaths = []string{"stdout"}
 
-	logger, _ := conf.Build()
+	logger, _ := conf.Build(zap.AddCallerSkip(1), zap.AddStacktrace(zapcore.ErrorLevel))
+	// logger, _ := conf.Build()
 	Log = logger.Sugar()
 }
 
@@ -54,12 +55,24 @@ func Warnw(msg string, keysAndValues ...interface{}) {
 	Log.Warnw(msg, keysAndValues...)
 }
 
+func Warn(args ...interface{}) {
+	Log.Warn(args...)
+}
+
 func Errorw(msg string, keysAndValues ...interface{}) {
 	Log.Errorw(msg, keysAndValues...)
 }
 
+func Errorf(format string, args ...interface{}) {
+	Log.Errorf(format, args...)
+}
+
 func Fatalw(msg string, keysAndValues ...interface{}) {
 	Log.Fatalw(msg, keysAndValues...)
+}
+
+func Fatalf(format string, args ...interface{}) {
+	Log.Fatalf(format, args...)
 }
 
 // Fatal constructs a message with the provided arguments and calls os.Exit.
