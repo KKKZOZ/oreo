@@ -9,4 +9,5 @@ go run . -p 8001 --advertise-addr localhost:8001 --registry-addr http://localhos
 
 go run . -p 8001 --advertise-addr localhost:8001 -registry http -w social -bc config.yaml
 
+go run . -p 8001 --advertise-addr localhost:8001 -registry etcd -w social -bc config.yaml
 ```

@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -15,7 +12,6 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -52,16 +48,13 @@ var Banner = `
 `
 
 type Server struct {
-	port            int
-	advertiseAddr   string // Address to advertise to the registry
-	registryAddr    string // Address of the registry service
-	handledDsNames  []string
-	reader          network.Reader
-	committer       network.Committer
-	heartbeatCtx    context.Context
-	heartbeatCancel context.CancelFunc
-	wg              sync.WaitGroup   // To wait for heartbeat goroutine
-	fasthttpServer  *fasthttp.Server // Keep track for shutdown
+	port           int
+	advertiseAddr  string // Address to advertise to the registry
+	registryAddr   string // Address of the registry service
+	handledDsNames []string
+	reader         network.Reader
+	committer      network.Committer
+	fasthttpServer *fasthttp.Server // Keep track for shutdown
 
 	// Service registry interface
 	registry discovery.ServiceRegistry
@@ -78,7 +71,6 @@ func NewServer(
 	registryType string,
 ) *Server {
 	reader := *network.NewReader(connMap, factory, serializer.NewJSON2Serializer(), network.NewCacher())
-	ctx, cancel := context.WithCancel(context.Background())
 
 	// Extract database connection addresses from connMap
 	dbConnections := make(map[string]string)
@@ -113,23 +105,20 @@ func NewServer(
 	}
 
 	return &Server{
-		port:            port,
-		advertiseAddr:   advertiseAddr,
-		registryAddr:    registryAddr,
-		handledDsNames:  handledDsNames,
-		reader:          reader,
-		committer:       *network.NewCommitter(connMap, reader, serializer.NewJSON2Serializer(), factory, timeSource),
-		heartbeatCtx:    ctx,
-		heartbeatCancel: cancel,
-		registry:        registry,
+		port:           port,
+		advertiseAddr:  advertiseAddr,
+		registryAddr:   registryAddr,
+		handledDsNames: handledDsNames,
+		reader:         reader,
+		committer:      *network.NewCommitter(connMap, reader, serializer.NewJSON2Serializer(), factory, timeSource),
+		registry:       registry,
 	}
 }
 
 // --- Registry Interaction ---
 
 const (
-	registryTimeout   = 1 * time.Second
-	heartbeatInterval = 1 * time.Second
+	defaultRegistryTimeout = 5 * time.Second
 )
 
 // Modified registry methods to use the interface
@@ -137,7 +126,7 @@ func (s *Server) registerWithRegistry() error {
 	if s.registry == nil {
 		return fmt.Errorf("registry not initialized")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRegistryTimeout)
 	defer cancel()
 	return s.registry.Register(ctx, s.advertiseAddr, s.handledDsNames, nil)
 }
@@ -146,115 +135,9 @@ func (s *Server) deregisterFromRegistry() error {
 	if s.registry == nil {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRegistryTimeout)
 	defer cancel()
 	return s.registry.Deregister(ctx, s.advertiseAddr)
-}
-
-func (s *Server) startHeartbeat() {
-	if s.registryAddr == "" || s.advertiseAddr == "" {
-		Log.Warnw("Registry or advertise address not set, skipping heartbeat")
-		return
-	}
-
-	s.wg.Add(1) // Increment wait group counter
-	go func() {
-		defer s.wg.Done() // Decrement counter when goroutine exits
-		ticker := time.NewTicker(heartbeatInterval)
-		defer ticker.Stop()
-
-		Log.Infow(
-			"Starting heartbeat ticker",
-			"interval",
-			heartbeatInterval,
-			"registry",
-			s.registryAddr,
-			"advertise",
-			s.advertiseAddr,
-		)
-
-		reqBody := discovery.RegistryRequest{Address: s.advertiseAddr}
-		jsonData, err := json.Marshal(reqBody) // Use standard JSON
-		// Handle initial marshalling error - likely fatal if it persists
-		if err != nil {
-			Log.Errorw(
-				"CRITICAL: Failed to marshal heartbeat request on startup, heartbeat disabled",
-				"error",
-				err,
-			)
-			return
-		}
-
-		for {
-			select {
-			case <-ticker.C:
-				// Create a new context for each request attempt
-				reqCtx, reqCancel := context.WithTimeout(s.heartbeatCtx, registryTimeout)
-
-				// Create request using standard net/http
-				req, err := http.NewRequestWithContext(
-					reqCtx,
-					http.MethodPost,
-					s.registryAddr+"/heartbeat",
-					bytes.NewBuffer(jsonData),
-				)
-				if err != nil {
-					Log.Errorw("Failed to create heartbeat request (will retry)", "error", err)
-					reqCancel() // Must cancel context if request creation fails
-					continue    // Skip this tick
-				}
-				req.Header.Set("Content-Type", "application/json")
-
-				// Send request
-				resp, err := http.DefaultClient.Do(req)
-				if err != nil {
-					// Network errors are expected sometimes, just log warning
-
-					// Disable this for now to avoid flooding logs
-					// Log.Warnw("Failed to send heartbeat (will retry)", "error", err)
-					// Ensure context is cancelled even on error
-					reqCancel()
-					continue
-				}
-
-				// Process response
-				if resp.StatusCode != http.StatusOK {
-					// If registry doesn't know us (e.g., registry restarted), try re-registering
-					bodyBytes, _ := io.ReadAll(resp.Body) // Read body for logging
-					Log.Warnw(
-						"Registry returned non-OK for heartbeat, attempting re-registration",
-						"status",
-						resp.Status,
-						"body",
-						string(bodyBytes),
-					)
-					// Close body *before* potential re-register call
-					_ = resp.Body.Close()
-					if regErr := s.registerWithRegistry(); regErr != nil {
-						Log.Errorw("Failed to re-register after failed heartbeat", "error", regErr)
-					}
-				} else {
-					// Success, ensure body is read and closed to reuse connection
-					_, _ = io.Copy(io.Discard, resp.Body)
-					_ = resp.Body.Close()
-				}
-
-				// Cancel context after request is done (success or handled error)
-				reqCancel()
-
-			case <-s.heartbeatCtx.Done():
-				Log.Infow("Heartbeat ticker stopping due to context cancellation.")
-				return // Exit goroutine
-			}
-		}
-	}()
-}
-
-func (s *Server) stopHeartbeat() {
-	Log.Info("Stopping heartbeat...")
-	s.heartbeatCancel() // Signal the heartbeat goroutine to stop via context cancellation
-	s.wg.Wait()         // Wait for the heartbeat goroutine to finish (calls Done())
-	Log.Info("Heartbeat stopped.")
 }
 
 // --- Server Execution and Handlers ---
@@ -263,16 +146,13 @@ func (s *Server) RunAndBlock() {
 	// 1. Register first
 	if err := s.registerWithRegistry(); err != nil {
 		Log.Warnw(
-			"Failed to register with registry on startup, continuing without registration/heartbeat",
+			"Failed to register with registry on startup, continuing without registration",
 			"error",
 			err,
 		)
 	}
 
-	// Executor starts before registry
-	s.startHeartbeat()
-
-	// 3. Setup fasthttp router
+	// 2. Setup fasthttp router
 	router := func(ctx *fasthttp.RequestCtx) {
 		switch string(ctx.Path()) {
 		case "/ping":
@@ -295,7 +175,7 @@ func (s *Server) RunAndBlock() {
 	address := fmt.Sprintf(":%d", s.port)
 	s.fasthttpServer = &fasthttp.Server{Handler: router}
 
-	// Channel to signal fasthttp server startup errors
+	// 3.Channel to signal fasthttp server startup errors
 	serverErrChan := make(chan error, 1)
 
 	Log.Infow("Executor server starting", "address", address, "advertise", s.advertiseAddr)
@@ -320,22 +200,14 @@ func (s *Server) RunAndBlock() {
 		} else {
 			Log.Info("Executor fasthttp server stopped gracefully (unexpectedly).")
 		}
-		// Proceed to stop heartbeat if it was running
-		if s.registryAddr != "" && s.advertiseAddr != "" {
-			s.stopHeartbeat()
-		}
+		// Registry will handle its own cleanup
 
 	case sig := <-sigs:
 		// Received OS signal for shutdown
 		Log.Infow("Shutdown signal received.", "signal", sig)
 
 		// --- Graceful Shutdown Sequence ---
-		// a. Stop Heartbeat
-		if s.registryAddr != "" && s.advertiseAddr != "" {
-			s.stopHeartbeat()
-		}
-
-		// b. Deregister from Registry
+		// a. Deregister from Registry (this will also stop heartbeat)
 		if err := s.deregisterFromRegistry(); err != nil {
 			Log.Warnw("Deregistration failed during shutdown", "error", err)
 			// Continue shutdown anyway
