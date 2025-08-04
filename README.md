@@ -18,6 +18,7 @@
     - [How It Works](#how-it-works)
   - [Oreo Structure](#oreo-structure)
   - [Project Structure](#project-structure)
+  - [For Contributors](#for-contributors)
   - [License](#license)
 
 ## Introduction
@@ -67,6 +68,28 @@ Oreo's innovative approach is based on two fundamental design principles:
 - `./timeoracle`: Code for the Timeoracle
 
 Documentation can be found [here](https://pkg.go.dev/github.com/kkkzoz/oreo).
+
+## For Contributors
+
+We use `pre-commit` hooks to ensure code quality and consistency. We highly recommend installing it to check your commits before pushing.
+
+**Setup**
+
+1. Install pre-commit:
+You can install it using `pip` or other package managers.
+
+```bash
+pip install pre-commit
+```
+
+2. Set up the Git hooks:
+From the root of the repository, run the following command to install the git hooks:
+
+```bash
+pre-commit install
+```
+
+Now, `pre-commit` will run automatically each time you make a commit. If any checks fail, the commit will be aborted. Please fix the reported issues, `git add` the changed files, and commit again.
 
 ## License
 

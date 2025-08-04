@@ -33,10 +33,21 @@ design-note.md
 
 oreo-executor-image.tar.gz
 
+
+# Ignore any path with the name 'executor'.
+# This targets both files and directories anywhere in the repository.
 executor
+# Make an exception for directories named 'executor'.
+!executor/
+
 ft-executor
+!ft-executor/
+
 timeoracle
+!timeoracle/
+
 ft-timeoracle
+!ft-timeoracle/
 
 tc-test
 !tc-test/

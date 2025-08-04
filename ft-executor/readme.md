@@ -2,10 +2,14 @@
 
 Simple implementation of fault tolerant executor
 
+TODO: deprecate `-w` parameter, put `-db` parameter into config file.
+
 ## How to run
 
 ```shell
-go run . -p 8001 --advertise-addr localhost:8001 --registry-addr http://localhost:9000 -w social -bc config.yaml
+# HTTP registry
+go run . -p 8001 --advertise-addr localhost:8001 -registry http -w social -bc config-example.yaml
 
-go run . -p 8001 --advertise-addr localhost:8001 -w social -bc config.yaml
+# Etcd registry
+go run . -p 8001 --advertise-addr localhost:8001 -registry etcd -w social -bc config-example.yaml
 ```

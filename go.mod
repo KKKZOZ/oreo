@@ -101,7 +101,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.2 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.2 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
@@ -111,7 +110,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.7.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/net v0.40.0 // indirect
@@ -145,7 +143,8 @@ require (
 	github.com/testcontainers/testcontainers-go v0.37.0
 	github.com/tikv/client-go/v2 v2.0.7
 	github.com/valyala/fasthttp v1.54.0
+	go.etcd.io/etcd/client/v3 v3.5.2
 	go.mongodb.org/mongo-driver v1.13.1
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	golang.org/x/sync v0.14.0
 )

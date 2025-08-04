@@ -1,0 +1,7 @@
+# Using HTTP registry
+registry_addr: "http://localhost:9000"
+
+# Using Etcd registry
+# registry_addr: "http://localhost:2379"
+
+time_oracle_url: "http://localhost:8012/timestamp/common"
