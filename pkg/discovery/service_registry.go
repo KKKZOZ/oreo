@@ -81,3 +81,28 @@ type RegistryRequest struct {
 	Address string   `json:"address"`           // Address of the executor instance
 	DsNames []string `json:"dsNames,omitempty"` // Datastore names (primarily for /register)
 }
+
+// Service discovery type enumeration
+type ServiceDiscoveryType string
+
+const (
+	HTTPDiscovery ServiceDiscoveryType = "http"
+	EtcdDiscovery ServiceDiscoveryType = "etcd"
+)
+
+// Service discovery configuration
+type ServiceDiscoveryConfig struct {
+	Type ServiceDiscoveryType
+	HTTP *HTTPDiscoveryConfig
+	Etcd *EtcdDiscoveryConfig
+}
+
+type HTTPDiscoveryConfig struct {
+	RegistryPort      string
+	RegistryServerURL string
+}
+
+type EtcdDiscoveryConfig struct {
+	Endpoints []string
+	KeyPrefix string
+}
