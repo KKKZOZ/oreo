@@ -10,8 +10,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
+	"github.com/kkkzoz/oreo/pkg/discovery"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/timesource"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -22,8 +22,9 @@ type Config struct {
 	ServiceDiscovery struct {
 		Type string `yaml:"type"` // "http" or "etcd"
 		HTTP struct {
-			RegistryAddr string `yaml:"registry_addr"`
-			RegistryPort string `yaml:"registry_port"`
+			RegistryAddr      string `yaml:"registry_addr"`
+			RegistryPort      string `yaml:"registry_port"`
+			RegistryServerURL string `yaml:"registry_server_url"`
 		} `yaml:"http"`
 		Etcd struct {
 			Endpoints   []string `yaml:"endpoints"`
@@ -35,8 +36,6 @@ type Config struct {
 	} `yaml:"service_discovery"`
 	RedisAddr     string `yaml:"redis_addr"`
 	RedisPassword string `yaml:"redis_password"`
-	MongoDBAddr   string `yaml:"mongodb_addr"`
-	MongoDBDBName string `yaml:"mongodb_db_name"`
 	TimeOracleURL string `yaml:"time_oracle_url"`
 	ServerPort    string `yaml:"server_port"`
 }
@@ -51,7 +50,6 @@ var (
 	client    *network.Client
 	oracle    timesource.TimeSourcer
 	redisConn *redis.RedisConnection
-	mongoConn *mongo.MongoConnection
 	config    Config
 )
 
@@ -75,16 +73,33 @@ func initConnections() error {
 	log.Printf("Initializing service discovery with type: %s", config.ServiceDiscovery.Type)
 
 	// Create service discovery configuration
-	var discoveryConfig *network.ServiceDiscoveryConfig
+	var discoveryConfig *discovery.ServiceDiscoveryConfig
 
 	switch config.ServiceDiscovery.Type {
 	case "http":
 		log.Println("Using HTTP service discovery")
-		discoveryConfig = &network.ServiceDiscoveryConfig{
-			Type: network.HTTPDiscovery,
-			HTTP: &network.HTTPDiscoveryConfig{
-				RegistryPort: config.ServiceDiscovery.HTTP.RegistryPort,
-			},
+		if config.ServiceDiscovery.HTTP.RegistryServerURL == "" {
+			// Act as registry server
+			log.Printf(
+				"Starting as HTTP registry server on port %s",
+				config.ServiceDiscovery.HTTP.RegistryPort,
+			)
+			discoveryConfig = &discovery.ServiceDiscoveryConfig{
+				Type: discovery.HTTPDiscovery,
+				HTTP: &discovery.HTTPDiscoveryConfig{
+					RegistryPort: config.ServiceDiscovery.HTTP.RegistryPort,
+					// No RegistryServerURL means we ARE the registry server
+				},
+			}
+		} else {
+			// Connect to external registry server
+			log.Printf("Connecting to external HTTP registry server: %s", config.ServiceDiscovery.HTTP.RegistryServerURL)
+			discoveryConfig = &discovery.ServiceDiscoveryConfig{
+				Type: discovery.HTTPDiscovery,
+				HTTP: &discovery.HTTPDiscoveryConfig{
+					RegistryServerURL: config.ServiceDiscovery.HTTP.RegistryServerURL,
+				},
+			}
 		}
 	case "etcd":
 		log.Printf(
@@ -92,14 +107,11 @@ func initConnections() error {
 			config.ServiceDiscovery.Etcd.Endpoints,
 		)
 		log.Printf("Etcd key prefix: %s", config.ServiceDiscovery.Etcd.KeyPrefix)
-		discoveryConfig = &network.ServiceDiscoveryConfig{
-			Type: network.EtcdDiscovery,
-			Etcd: &network.EtcdDiscoveryConfig{
-				Endpoints:   config.ServiceDiscovery.Etcd.Endpoints,
-				Username:    config.ServiceDiscovery.Etcd.Username,
-				Password:    config.ServiceDiscovery.Etcd.Password,
-				DialTimeout: config.ServiceDiscovery.Etcd.DialTimeout,
-				KeyPrefix:   config.ServiceDiscovery.Etcd.KeyPrefix,
+		discoveryConfig = &discovery.ServiceDiscoveryConfig{
+			Type: discovery.EtcdDiscovery,
+			Etcd: &discovery.EtcdDiscoveryConfig{
+				Endpoints: config.ServiceDiscovery.Etcd.Endpoints,
+				KeyPrefix: config.ServiceDiscovery.Etcd.KeyPrefix,
 			},
 		}
 	default:
@@ -108,19 +120,17 @@ func initConnections() error {
 			config.ServiceDiscovery.Type,
 		)
 		// Fallback to HTTP service discovery
-		discoveryConfig = &network.ServiceDiscoveryConfig{
-			Type: network.HTTPDiscovery,
-			HTTP: &network.HTTPDiscoveryConfig{
+		discoveryConfig = &discovery.ServiceDiscoveryConfig{
+			Type: discovery.HTTPDiscovery,
+			HTTP: &discovery.HTTPDiscoveryConfig{
 				RegistryPort: ":9000",
 			},
 		}
 	}
 
-	// Create network client - unified use of NewClientWithDiscovery
+	// Create network client
 	log.Println("Creating network client with service discovery...")
-
-	// Unified use of service discovery manager with internal encapsulation
-	client, err = network.NewClientWithDiscovery(discoveryConfig)
+	client, err = network.NewClient(discoveryConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create network client: %v", err)
 	}
@@ -132,48 +142,17 @@ func initConnections() error {
 	// Initialize time source
 	oracle = timesource.NewGlobalTimeSource(config.TimeOracleURL)
 
-	// Initialize Redis connection - unified service discovery approach
-	log.Println("Using service discovery for Redis connection...")
-	redisAddr, err := client.GetServerAddr("Redis")
-	if err != nil {
-		log.Printf(
-			"Warning: Failed to get Redis service from %s: %v",
-			config.ServiceDiscovery.Type,
-			err,
-		)
-		log.Println("Falling back to static Redis configuration")
-		// Fallback to static configuration
-		if len(config.RedisAddr) > 0 {
-			redisConn = redis.NewRedisConnection(&redis.ConnectionOptions{
-				Address:  config.RedisAddr,
-				Password: config.RedisPassword,
-			})
-			log.Println("Redis connector initialized with static config")
-		}
+	// Initialize Redis connection
+	log.Printf("Initializing Redis connection to %s", config.RedisAddr)
+	redisConn = redis.NewRedisConnection(&redis.ConnectionOptions{
+		Address:  config.RedisAddr,
+		Password: config.RedisPassword,
+	})
+	if err := redisConn.Connect(); err != nil {
+		log.Printf("Warning: Failed to connect to Redis: %v", err)
+		redisConn = nil
 	} else {
-		log.Printf("Found Redis service at: %s", redisAddr)
-		redisConn = redis.NewRedisConnection(&redis.ConnectionOptions{
-			Address:  redisAddr,
-			Password: config.RedisPassword,
-		})
-		log.Printf("Redis connector initialized via %s service discovery: %s", config.ServiceDiscovery.Type, redisAddr)
-	}
-
-	if redisConn == nil {
-		log.Println("Warning: Redis not configured")
-	}
-
-	// Initialize MongoDB connection
-	if len(config.MongoDBAddr) > 0 {
-		mongoConn = mongo.NewMongoConnection(&mongo.ConnectionOptions{
-			Address:        config.MongoDBAddr,
-			DBName:         config.MongoDBDBName,
-			CollectionName: "test_collection",
-		})
-		log.Println("MongoDB connector initialized")
-	} else {
-		log.Println("Warning: MongoDB not configured")
-		mongoConn = nil
+		log.Println("Redis connection established successfully")
 	}
 
 	log.Println("Database connectors initialization completed")
@@ -312,57 +291,6 @@ func main() {
 		}
 
 		return c.JSON(testData)
-	})
-
-	// MongoDB test endpoint
-	api.Post("/mongo-test", func(c *fiber.Ctx) error {
-		if mongoConn == nil {
-			return c.Status(fiber.StatusInternalServerError).
-				SendString("MongoDB connection not initialized")
-		}
-
-		var testData TestData
-		if err := c.BodyParser(&testData); err != nil {
-			return c.Status(400).JSON(fiber.Map{
-				"error": "Invalid request body",
-			})
-		}
-
-		testData.Timestamp = time.Now()
-
-		// Create distributed transaction
-		txn := txn.NewTransactionWithRemote(client, oracle)
-
-		// Add datastores
-		datastores := createDatastoresForTransaction()
-		txn.AddDatastores(datastores...)
-
-		if err := txn.Start(); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to start transaction: %v", err),
-			})
-		}
-
-		// Write to MongoDB
-		key := fmt.Sprintf("test:mongo:%s", testData.ID)
-		dataJSON, _ := json.Marshal(testData)
-		if err := txn.Write("MongoDB1", key, string(dataJSON)); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to write to MongoDB: %v", err),
-			})
-		}
-
-		// Commit transaction
-		if err := txn.Commit(); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to commit transaction: %v", err),
-			})
-		}
-
-		return c.JSON(fiber.Map{
-			"message": "Data written to MongoDB successfully",
-			"data":    testData,
-		})
 	})
 
 	// In main function's API routes section
