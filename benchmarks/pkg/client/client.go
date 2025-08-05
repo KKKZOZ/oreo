@@ -13,6 +13,7 @@ import (
 	"benchmark/pkg/measurement"
 	"benchmark/pkg/workload"
 	"benchmark/ycsb"
+
 	"github.com/kkkzoz/oreo/pkg/config"
 )
 
@@ -201,7 +202,7 @@ func (c *Client) RunBenchmark() {
 func (c *Client) getCacheState() {
 	fmt.Println("----------------------------------")
 
-	executorUrlList := benconfig.GlobalClient.GetExecutorAddrList()
+	executorUrlList := benconfig.ExecutorAddressMap["ALL"]
 
 	client := &http.Client{
 		Timeout: 1 * time.Second,
