@@ -10,10 +10,10 @@ When starting the executor, use the `-register` flag to specify the service disc
 
 ```bash
 # Use HTTP-based service discovery
-./ft-executor -register http
+./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register http
 
 # Use etcd-based service discovery
-./ft-executor -register etcd
+./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register etcd
 ```
 
 ### 2. Configuration File
@@ -179,7 +179,20 @@ service_discovery:
 ## Startup Steps
 
 1. Start the time oracle service
-2. Start the executor: `./ft-executor -register etcd`
+
+```powershell
+./ft-timeoracle -role primary -p 8012 -type hybrid -max-skew 50ms
+```
+2. Start the executor
+
+```bash
+# Use HTTP-based service discovery
+./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register http
+
+# Use etcd-based service discovery
+./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register etcd
+```
+
 3. Start the service-register service: `go run main.go`
 4. Use the API endpoints to test
 
