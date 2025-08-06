@@ -13,11 +13,11 @@ import (
 	"github.com/kkkzoz/oreo/pkg/logger"
 )
 
-// HttpRegistry implements the discovery.Registry interface.
-var _ ServiceRegistry = (*HttpRegistry)(nil)
+// HTTPServiceRegistry implements the discovery.ServiceRegistry interface.
+var _ ServiceRegistry = (*HTTPServiceRegistry)(nil)
 
 // TODO: `address` is unused in the Register and Deregister methods.
-type HttpRegistry struct {
+type HTTPServiceRegistry struct {
 	registryAddr   string
 	advertiseAddr  string
 	handledDsNames []string
@@ -32,11 +32,11 @@ type HttpRegistry struct {
 	heartbeatTicker *time.Ticker
 }
 
-// NewHttpRegistry creates a new HTTP registry instance.
-func NewHttpRegistry(
+// NewHTTPServiceRegistry creates a new HTTP registry instance.
+func NewHTTPServiceRegistry(
 	registryAddr, advertiseAddr string,
 	handledDsNames []string,
-) *HttpRegistry {
+) *HTTPServiceRegistry {
 	logger.Infow("Creating new HTTP registry",
 		"registryAddr", registryAddr,
 		"advertiseAddr", advertiseAddr,
@@ -44,7 +44,7 @@ func NewHttpRegistry(
 	ctx, cancel := context.WithCancel(context.Background())
 	config := DefaultRegistryConfig()
 
-	return &HttpRegistry{
+	return &HTTPServiceRegistry{
 		registryAddr:   registryAddr,
 		advertiseAddr:  advertiseAddr,
 		handledDsNames: handledDsNames,
@@ -61,7 +61,7 @@ func NewHttpRegistry(
 // It will start a background loop to maintain the registration (via heartbeats or retries).
 // Per request, the API signature is kept the same; the `address`, `dsNames`, and `metadata`
 // parameters are unused in this implementation.
-func (h *HttpRegistry) Register(
+func (h *HTTPServiceRegistry) Register(
 	ctx context.Context,
 	address string,
 	dsNames []string,
@@ -101,7 +101,7 @@ func (h *HttpRegistry) Register(
 
 // Deregister deregisters the service from the central registry.
 // Per request, the API signature is kept the same; the `address` parameter is unused.
-func (h *HttpRegistry) Deregister(ctx context.Context, address string) error {
+func (h *HTTPServiceRegistry) Deregister(ctx context.Context, address string) error {
 	logger.Infow("Deregistering service", "address", h.advertiseAddr)
 	// Stop the background loop first to prevent further heartbeats or registration attempts.
 	h.stopManagementLoop()
@@ -158,14 +158,14 @@ func (h *HttpRegistry) Deregister(ctx context.Context, address string) error {
 }
 
 // Close stops the background management loop.
-func (h *HttpRegistry) Close() error {
+func (h *HTTPServiceRegistry) Close() error {
 	logger.Infow("Closing registry connection")
 	h.stopManagementLoop()
 	return nil
 }
 
 // startManagementLoop starts the background loop for registration and heartbeats.
-func (h *HttpRegistry) startManagementLoop() {
+func (h *HTTPServiceRegistry) startManagementLoop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -180,7 +180,7 @@ func (h *HttpRegistry) startManagementLoop() {
 }
 
 // stopManagementLoop stops the background loop.
-func (h *HttpRegistry) stopManagementLoop() {
+func (h *HTTPServiceRegistry) stopManagementLoop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -196,7 +196,7 @@ func (h *HttpRegistry) stopManagementLoop() {
 
 // manageConnectionLoop is the core loop that handles the service's registration state.
 // It will periodically try to register if not already registered, or send a heartbeat if it is.
-func (h *HttpRegistry) manageConnectionLoop() {
+func (h *HTTPServiceRegistry) manageConnectionLoop() {
 	for {
 		select {
 		case <-h.heartbeatTicker.C:
@@ -241,7 +241,7 @@ func (h *HttpRegistry) manageConnectionLoop() {
 }
 
 // performRegistration sends a single registration request.
-func (h *HttpRegistry) performRegistration(ctx context.Context) error {
+func (h *HTTPServiceRegistry) performRegistration(ctx context.Context) error {
 	reqBody := RegistryRequest{
 		Address: h.advertiseAddr,
 		DsNames: h.handledDsNames,
@@ -280,7 +280,7 @@ func (h *HttpRegistry) performRegistration(ctx context.Context) error {
 }
 
 // performHeartbeat sends a single heartbeat request to the registry.
-func (h *HttpRegistry) performHeartbeat(ctx context.Context) error {
+func (h *HTTPServiceRegistry) performHeartbeat(ctx context.Context) error {
 	reqBody := RegistryRequest{Address: h.advertiseAddr}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {

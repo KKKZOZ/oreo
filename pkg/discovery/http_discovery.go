@@ -14,6 +14,9 @@ import (
 	"github.com/kkkzoz/oreo/pkg/logger"
 )
 
+// HTTPServiceDiscovery implements the discovery.ServiceDiscovery interface.
+var _ ServiceDiscovery = (*HTTPServiceDiscovery)(nil)
+
 // HTTPServiceDiscovery implements ServiceDiscovery interface for HTTP-based service discovery
 type HTTPServiceDiscovery struct {
 	registryMutex    sync.RWMutex
@@ -118,17 +121,17 @@ func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
 		url := fmt.Sprintf("%s/services?dsName=%s", hsd.registryServerURL, dsName)
 
 		for i := 0; i < maxRetries; i++ {
-			logger.Log.Infof("Querying registry server (attempt %d/%d): %s", i+1, maxRetries, url)
+			logger.Infof("Querying registry server (attempt %d/%d): %s", i+1, maxRetries, url)
 			resp, err := http.Get(url)
 			if err != nil {
-				logger.Log.Errorf(
+				logger.Errorf(
 					"Failed to query registry server (attempt %d/%d): %v",
 					i+1,
 					maxRetries,
 					err,
 				)
 				if i < maxRetries-1 {
-					logger.Log.Infof("Retrying in %v...", retryDelay)
+					logger.Infof("Retrying in %v...", retryDelay)
 					time.Sleep(retryDelay)
 					continue
 				}
@@ -140,21 +143,21 @@ func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
 			}
 			defer func() {
 				if err := resp.Body.Close(); err != nil {
-					logger.Log.Warnf("Failed to close response body: %v", err)
+					logger.Warnf("Failed to close response body: %v", err)
 				}
 			}()
 
-			logger.Log.Infof("Registry server response status: %d", resp.StatusCode)
+			logger.Infof("Registry server response status: %d", resp.StatusCode)
 			switch resp.StatusCode {
 			case http.StatusNotFound:
-				logger.Log.Warnf(
+				logger.Warnf(
 					"No available instances for datastore: %s (attempt %d/%d)",
 					dsName,
 					i+1,
 					maxRetries,
 				)
 				if i < maxRetries-1 {
-					logger.Log.Infof("Retrying in %v...", retryDelay)
+					logger.Infof("Retrying in %v...", retryDelay)
 					time.Sleep(retryDelay)
 					continue
 				}
@@ -166,14 +169,14 @@ func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
 			case http.StatusOK:
 				// Continue to read response
 			default:
-				logger.Log.Errorf(
+				logger.Errorf(
 					"Registry server returned unexpected status: %s (attempt %d/%d)",
 					resp.Status,
 					i+1,
 					maxRetries,
 				)
 				if i < maxRetries-1 {
-					logger.Log.Infof("Retrying in %v...", retryDelay)
+					logger.Infof("Retrying in %v...", retryDelay)
 					time.Sleep(retryDelay)
 					continue
 				}
@@ -188,14 +191,14 @@ func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
 			body := make([]byte, 1024)
 			n, err := resp.Body.Read(body)
 			if err != nil && err.Error() != "EOF" {
-				logger.Log.Errorf(
+				logger.Errorf(
 					"Failed to read response (attempt %d/%d): %v",
 					i+1,
 					maxRetries,
 					err,
 				)
 				if i < maxRetries-1 {
-					logger.Log.Infof("Retrying in %v...", retryDelay)
+					logger.Infof("Retrying in %v...", retryDelay)
 					time.Sleep(retryDelay)
 					continue
 				}
@@ -208,13 +211,13 @@ func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
 
 			address := strings.TrimSpace(string(body[:n]))
 			if address == "" {
-				logger.Log.Warnf(
+				logger.Warnf(
 					"Empty response from registry server (attempt %d/%d)",
 					i+1,
 					maxRetries,
 				)
 				if i < maxRetries-1 {
-					logger.Log.Infof("Retrying in %v...", retryDelay)
+					logger.Infof("Retrying in %v...", retryDelay)
 					time.Sleep(retryDelay)
 					continue
 				}
@@ -224,7 +227,7 @@ func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
 				)
 			}
 
-			logger.Log.Infof("Successfully obtained service address: %s", address)
+			logger.Infof("Successfully obtained service address: %s", address)
 			return address, nil
 		}
 
@@ -255,35 +258,26 @@ func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
 
 // Close closes the HTTP service discovery and cleans up resources
 func (hsd *HTTPServiceDiscovery) Close() error {
-	ctx := context.Background()
-	logger.Log.Info("Shutting down HTTP service discovery...")
+	logger.Info("Shutting down HTTP service discovery...")
 
 	// Cancel the shutdown context to stop background goroutines
 	hsd.shutdownCancel()
 
-	// Shutdown the HTTP server
+	// Shutdown the HTTP server with a timeout
 	if hsd.registryListener != nil {
-		if err := hsd.registryListener.Shutdown(ctx); err != nil {
-			logger.Log.Errorf("Error shutting down registry server: %v", err)
-			return err
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := hsd.registryListener.Shutdown(shutdownCtx); err != nil {
+			logger.Errorf("Error shutting down registry server: %v", err)
+			// Don't return immediately, still wait for other goroutines
 		}
 	}
 
-	// Wait for all goroutines to finish
-	done := make(chan struct{})
-	go func() {
-		hsd.wg.Wait()
-		close(done)
-	}()
+	// Wait for all background goroutines to finish
+	hsd.wg.Wait()
 
-	select {
-	case <-done:
-		logger.Log.Info("HTTP service discovery shutdown complete")
-		return nil
-	case <-ctx.Done():
-		logger.Log.Warn("HTTP service discovery shutdown timed out")
-		return ctx.Err()
-	}
+	logger.Info("HTTP service discovery shutdown complete")
+	return nil
 }
 
 // HTTP handlers
@@ -323,7 +317,7 @@ func (hsd *HTTPServiceDiscovery) handleRegister(w http.ResponseWriter, r *http.R
 
 		// Only log for Redis services
 		if strings.ToLower(dsName) == "redis" && isNewInstance {
-			logger.Log.Infof("Redis service online: %s", req.Address)
+			logger.Infof("Redis service online: %s", req.Address)
 		}
 	}
 
@@ -398,7 +392,7 @@ func (hsd *HTTPServiceDiscovery) handleGetServices(w http.ResponseWriter, r *htt
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		if _, err := w.Write([]byte(address)); err != nil {
-			logger.Log.Warnf("Failed to write response: %v", err)
+			logger.Warnf("Failed to write response: %v", err)
 		}
 		return
 	}
@@ -467,10 +461,10 @@ func (hsd *HTTPServiceDiscovery) removeInstanceLocked(instanceAddr, reason strin
 	// Only log for Redis services
 	if isRedisService {
 		if reason == "stale" {
-			logger.Log.Warnf("Redis service timeout: %s (last heartbeat: %v)",
+			logger.Warnf("Redis service timeout: %s (last heartbeat: %v)",
 				instanceAddr, instance.LastHeartbeat.Format("15:04:05"))
 		} else {
-			logger.Log.Infof("Redis service offline: %s", instanceAddr)
+			logger.Infof("Redis service offline: %s", instanceAddr)
 		}
 	}
 }

@@ -1,3 +1,17 @@
+// Package discovery provides service registration and discovery functionality for oreo components.
+// It defines interfaces and types for registering service instances, discovering available services,
+// and managing service lifecycle through heartbeats and health checks.
+//
+// The package supports multiple discovery backends including HTTP-based registries and etcd.
+// Service instances can register themselves with metadata and datastore capabilities,
+// allowing clients to discover appropriate services based on their requirements.
+//
+// Key components:
+// - ServiceRegistry: Interface for service registration and lifecycle management
+// - ServiceDiscovery: Interface for client-side service discovery
+// - ServiceInfo: Represents a registered service instance with metadata
+// - RegistryConfig: Configuration for registry behavior including TTL and heartbeat intervals
+
 package discovery
 
 import (

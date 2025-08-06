@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"benchmark/pkg/benconfig" //nolint
+	"benchmark/pkg/benconfig" // nolint
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	jsoniter "github.com/json-iterator/go" // Keep for application logic if needed
@@ -92,9 +92,9 @@ func NewServer(
 		}
 		registry = etcdReg
 	case "http":
-		registry = discovery.NewHttpRegistry(registryAddr, advertiseAddr, handledDsNames)
+		registry = discovery.NewHTTPServiceRegistry(registryAddr, advertiseAddr, handledDsNames)
 	default:
-		registry = discovery.NewHttpRegistry(registryAddr, advertiseAddr, handledDsNames)
+		panic("unknown registry type")
 	}
 
 	return &Server{
