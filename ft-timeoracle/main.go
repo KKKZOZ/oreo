@@ -1,43 +1,38 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
-	// Assuming timesource is in the correct relative path or GOPATH
-	// Adjust the import path if necessary, e.g., "your_module/pkg/timesource"
+	"github.com/google/uuid"
 	"github.com/kkkzoz/oreo/pkg/timesource"
+	"go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 var (
-	port                   int
-	oracleType             string
-	role                   string
-	primaryAddr            string
-	maxSkewStr             string
-	healthCheckIntervalStr string
-	healthCheckTimeoutStr  string
-	failureThreshold       int
-	Log                    *zap.SugaredLogger
+	port         int
+	oracleType   string
+	etcdEndpoints string
+	electionName string
+	maxSkewStr   string
+	Log          *zap.SugaredLogger
 
-	// Channel to signal when the backup should become active
-	becomeActive chan struct{} = make(chan struct{})
-	// Flag to indicate if the server is currently active (serving timestamps)
-	isActive bool = false
-	// Mutex to protect access to isActive flag
+	isActive    bool = false
 	activeMutex sync.RWMutex
 
-	// Store the oracle instance globally for handlers
 	globalOracle timesource.TimeSourcer
 )
 
-// handleTimestamp serves timestamps only if the instance is active.
 func handleTimestamp(w http.ResponseWriter, r *http.Request) {
 	activeMutex.RLock()
 	currentIsActive := isActive
@@ -45,15 +40,12 @@ func handleTimestamp(w http.ResponseWriter, r *http.Request) {
 
 	if !currentIsActive {
 		Log.Warnw("Received timestamp request while inactive", "remoteAddr", r.RemoteAddr)
-		http.Error(w, "Service not active (backup node?)", http.StatusServiceUnavailable) // 503
+		http.Error(w, "Service not active", http.StatusServiceUnavailable)
 		return
 	}
 
 	startTime := time.Now()
-	// Use the globally initialized oracle
-	timestamp, err := globalOracle.GetTime(
-		"pattern",
-	) // "pattern" might need adjustment based on your timesource usage
+	timestamp, err := globalOracle.GetTime("pattern")
 	if err != nil {
 		Log.Errorw("Failed to get time from oracle", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -78,7 +70,6 @@ func handleTimestamp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleHealth reports status based on the isActive flag. Crucial for HAProxy.
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	activeMutex.RLock()
 	currentIsActive := isActive
@@ -86,106 +77,33 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	if currentIsActive {
 		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK) // 200 OK - Ready
+		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	} else {
 		w.Header().Set("Content-Type", "text/plain")
-		// 503 Service Unavailable tells HAProxy this node is not ready
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte("Service not active (backup node?)"))
+		_, _ = w.Write([]byte("Service not active"))
 	}
 }
 
 func main() {
-	// --- Flag Definitions ---
 	flag.IntVar(&port, "p", 8010, "HTTP server port number")
-	flag.StringVar(
-		&oracleType,
-		"type",
-		"hybrid",
-		"Time Oracle Implementation Type (hybrid, simple, counter)",
-	)
-	flag.StringVar(&role, "role", "primary", "Node role: primary or backup")
-	flag.StringVar(
-		&primaryAddr,
-		"primary-addr",
-		"",
-		"HTTP address of the primary node (e.g., http://192.168.1.100:8010) (required for backup role)",
-	)
+	flag.StringVar(&oracleType, "type", "hybrid", "Time Oracle Implementation Type (hybrid, simple, counter)")
+	flag.StringVar(&etcdEndpoints, "etcd-endpoints", "localhost:2379", "Comma-separated etcd endpoints")
+	flag.StringVar(&electionName, "election-name", "/timeoracle-leader", "etcd election name")
 	flag.StringVar(&maxSkewStr, "max-skew", "50ms", "Maximum clock skew delta (e.g., 50ms, 100ms)")
-	flag.StringVar(
-		&healthCheckIntervalStr,
-		"health-check-interval",
-		"2s",
-		"Interval for backup health checks (e.g., 1s, 2s)",
-	)
-	flag.StringVar(
-		&healthCheckTimeoutStr,
-		"health-check-timeout",
-		"1s",
-		"Timeout for health check request (e.g., 500ms, 1s)",
-	)
-	flag.IntVar(
-		&failureThreshold,
-		"failure-threshold",
-		3,
-		"Consecutive failures to declare primary down",
-	)
 	flag.Parse()
 
-	// --- Logger Setup ---
 	newLogger()
-	Log.Infow("Starting Time Oracle Node", "version", "1.0", "pid", os.Getpid()) // Example version
+	Log.Infow("Starting Time Oracle Node", "version", "1.0", "pid", os.Getpid())
 
-	// --- Parse Durations ---
-	maxSkew, err := time.ParseDuration(maxSkewStr)
+	_, err := time.ParseDuration(maxSkewStr)
 	if err != nil {
 		Log.Fatalw("Invalid max-skew duration", "value", maxSkewStr, "error", err)
 	}
-	healthCheckInterval, err := time.ParseDuration(healthCheckIntervalStr)
-	if err != nil {
-		Log.Fatalw(
-			"Invalid health-check-interval duration",
-			"value",
-			healthCheckIntervalStr,
-			"error",
-			err,
-		)
-	}
-	healthCheckTimeout, err := time.ParseDuration(healthCheckTimeoutStr)
-	if err != nil {
-		Log.Fatalw(
-			"Invalid health-check-timeout duration",
-			"value",
-			healthCheckTimeoutStr,
-			"error",
-			err,
-		)
-	}
-	Log.Infow(
-		"Configuration",
-		"port",
-		port,
-		"oracleType",
-		oracleType,
-		"role",
-		role,
-		"primaryAddr",
-		primaryAddr,
-		"maxSkew",
-		maxSkew,
-		"healthCheckInterval",
-		healthCheckInterval,
-		"healthCheckTimeout",
-		healthCheckTimeout,
-		"failureThreshold",
-		failureThreshold,
-	)
 
-	// --- Initialize Oracle ---
 	switch oracleType {
 	case "hybrid":
-		// TODO: Make HybridTimeSource params configurable if needed
 		globalOracle = timesource.NewHybridTimeSource(10, 6)
 		Log.Info("Using Hybrid TimeSource")
 	case "simple":
@@ -198,67 +116,77 @@ func main() {
 		Log.Fatalw("Invalid oracle type specified", "type", oracleType)
 	}
 
-	// --- Role-Specific Logic ---
-	mux := http.NewServeMux() // Use a mux for clarity
+	mux := http.NewServeMux()
 	mux.HandleFunc("/health", handleHealth)
+	mux.HandleFunc("/timestamp/", handleTimestamp)
 
-	switch role {
-	case "primary":
-		Log.Info("Starting as PRIMARY node.")
-		setActive(true)                                // Primary starts active
-		mux.HandleFunc("/timestamp/", handleTimestamp) // Register timestamp handler immediately
-	case "backup":
-		Log.Info("Starting as BACKUP node.")
-		if primaryAddr == "" {
-			Log.Fatal("Backup role requires --primary-addr flag to be set")
-		}
-		setActive(false) // Backup starts inactive
-
-		// Start monitoring in the background
-		go monitorPrimary(
-			primaryAddr,
-			maxSkew,
-			healthCheckInterval,
-			healthCheckTimeout,
-			failureThreshold,
-		)
-
-		// Register timestamp handler, but it will return 503 until isActive is true
-		mux.HandleFunc("/timestamp/", handleTimestamp)
-
-		// Backup: Wait until signaled to become active
-		Log.Info("Waiting for signal to become active...")
-		<-becomeActive // Block here
-		Log.Info("Received signal. Promoting to ACTIVE.")
-		setActive(true)
-		Log.Info("Backup node is now ACTIVE and serving timestamps.")
-
-	default:
-		Log.Fatalw("Invalid role specified. Use 'primary' or 'backup'.", "role", role)
+	etcdClient, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{etcdEndpoints},
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		Log.Fatalw("Failed to connect to etcd", "error", err)
 	}
+	defer etcdClient.Close()
 
-	// --- Start HTTP Server ---
+	nodeID := uuid.New().String()
+	leaseManager, err := NewLeaseManager(etcdClient, electionName, log.New(os.Stdout, "", log.LstdFlags))
+	if err != nil {
+		Log.Fatalw("Failed to create lease manager", "error", err)
+	}
+	defer leaseManager.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := leaseManager.Campaign(ctx, nodeID); err != nil {
+			Log.Errorw("Failed during leader election campaign", "error", err)
+			return
+		}
+		setActive(true)
+	}()
+
+	leaseManager.WatchLeader(ctx, func(leader string) {
+		Log.Infow("Leader changed", "newLeader", leader)
+		if leader != nodeID {
+			setActive(false)
+		}
+	})
+
 	serverAddress := fmt.Sprintf(":%d", port)
-	Log.Infof("HTTP server listening on %s", serverAddress)
-
-	// Create the server explicitly to set timeouts potentially
 	httpServer := &http.Server{
 		Addr:    serverAddress,
 		Handler: mux,
-		// Add ReadTimeout, WriteTimeout etc. for production robustness
-		// ReadTimeout:  5 * time.Second,
-		// WriteTimeout: 10 * time.Second,
-		// IdleTimeout:  120 * time.Second,
 	}
 
-	err = httpServer.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
-		Log.Fatalw("HTTP server failed", "error", err)
+	go func() {
+		Log.Infof("HTTP server listening on %s", serverAddress)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			Log.Fatalw("HTTP server failed", "error", err)
+		}
+	}()
+
+	// Graceful shutdown
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM)
+	<-stopChan
+
+	Log.Infow("Shutting down server...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		Log.Warnw("Server shutdown failed", "error", err)
 	}
-	Log.Info("HTTP server shut down.")
+
+	if err := leaseManager.Resign(context.Background()); err != nil {
+		Log.Warnw("Failed to resign leadership", "error", err)
+	}
+
+	Log.Info("Server gracefully stopped")
 }
 
-// setActive safely updates the isActive flag.
 func setActive(active bool) {
 	activeMutex.Lock()
 	defer activeMutex.Unlock()
@@ -266,90 +194,10 @@ func setActive(active bool) {
 	Log.Infow("Node active state changed", "isActive", active)
 }
 
-// monitorPrimary runs on the backup node to check the primary's health.
-func monitorPrimary(pAddr string, maxSkew, interval, timeout time.Duration, threshold int) {
-	Log.Infow(
-		"Starting primary monitoring routine",
-		"primary",
-		pAddr,
-		"checkInterval",
-		interval,
-		"checkTimeout",
-		timeout,
-		"failureThreshold",
-		threshold,
-	)
-	client := http.Client{
-		Timeout: timeout,
-	}
-	// Ensure the primary address includes the scheme (http://)
-	healthURL := pAddr + "/health" // Assume primary exposes /health endpoint
-	Log.Infof("Monitoring primary health at: %s", healthURL)
-
-	consecutiveFailures := 0
-	waitDuration := 2 * maxSkew
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		resp, err := client.Get(healthURL)
-		if err != nil {
-			consecutiveFailures++
-			Log.Warnw(
-				"Health check failed (network/timeout)",
-				"target",
-				healthURL,
-				"error",
-				err,
-				"failures",
-				consecutiveFailures,
-				"threshold",
-				threshold,
-			)
-		} else {
-			// Best practice: always read and close body
-			// _, _ = io.Copy(io.Discard, resp.Body) // Read body fully
-			_ = resp.Body.Close() // Close body
-
-			if resp.StatusCode == http.StatusOK {
-				if consecutiveFailures > 0 {
-					Log.Info("Health check succeeded after previous failures. Resetting failure count.")
-				}
-				consecutiveFailures = 0 // Reset on success
-			} else {
-				consecutiveFailures++
-				Log.Warnw("Health check failed (non-200 status)", "target", healthURL, "status", resp.StatusCode, "failures", consecutiveFailures, "threshold", threshold)
-			}
-		}
-
-		if consecutiveFailures >= threshold {
-			Log.Warnw("Primary health check failure threshold reached.", "threshold", threshold)
-			Log.Infof(
-				"Primary node declared DOWN. Waiting for safety period: %v (2 * maxSkew)",
-				waitDuration,
-			)
-
-			// --- THE CRITICAL WAIT ---
-			time.Sleep(waitDuration)
-			// --- END CRITICAL WAIT ---
-
-			Log.Info("Safety wait period finished. Attempting to take over.")
-			close(becomeActive) // Signal main goroutine to become active
-			Log.Info("Monitoring routine finished. Signaled main goroutine.")
-			return // Stop monitoring
-		}
-		// Potentially add a quit channel here if graceful shutdown is needed
-	}
-}
-
-// newLogger initializes the Zap sugared logger.
 func newLogger() {
-	conf := zap.NewDevelopmentConfig() // Provides human-readable output
-
-	// Allow log level override via environment variable
+	conf := zap.NewDevelopmentConfig()
 	logLevelEnv := os.Getenv("LOG_LEVEL")
-	level := zapcore.InfoLevel // Default level
+	level := zapcore.InfoLevel
 	switch logLevelEnv {
 	case "DEBUG":
 		level = zapcore.DebugLevel
@@ -367,18 +215,12 @@ func newLogger() {
 		}
 	}
 	conf.Level = zap.NewAtomicLevelAt(level)
-
-	// Customize encoder settings
-	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder // Colorized level
-	conf.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder        // Standard time format
-	conf.EncoderConfig.MessageKey = "message"                         // Rename 'msg' key
-	conf.EncoderConfig.TimeKey = "timestamp"                          // Rename 'ts' key
+	conf.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	conf.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	conf.EncoderConfig.MessageKey = "message"
+	conf.EncoderConfig.TimeKey = "timestamp"
 	conf.EncoderConfig.CallerKey = "caller"
-
-	// Build the logger
-	logger, err := conf.Build(
-		zap.AddCallerSkip(1),
-	) // AddCallerSkip helps show correct caller file/line
+	logger, err := conf.Build(zap.AddCallerSkip(1))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 		os.Exit(1)
