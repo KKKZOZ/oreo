@@ -40,33 +40,42 @@ type ConnectionOptions struct {
 	CollectionName string
 }
 
-// NewMongoConnection creates a new MongoDB connection using the provided configuration options.
-// If the config parameter is nil, default values will be used.
-//
-// The MongoDB connection is established using the specified address, username, password, and database name.
-// The address format should be in the form "mongodb://host:port".
-//
-// The se parameter is used for data serialization and deserialization.
-// If se is nil, a default JSON serializer will be used.
-//
-// Returns a pointer to the created MongoConnection.
+var defaultOptions = ConnectionOptions{
+	Address:        "mongodb://localhost:27017",
+	Username:       "",
+	Password:       "",
+	DBName:         "oreo",
+	CollectionName: "records",
+}
+
+// NewMongoConnection creates a new MongoDB connection.
 func NewMongoConnection(config *ConnectionOptions) *MongoConnection {
-	if config == nil {
-		config = &ConnectionOptions{
-			Address:        "mongodb://localhost:27017",
-			Username:       "",
-			Password:       "",
-			DBName:         "oreo",
-			CollectionName: "records",
+	// Start with a copy of the default configuration.
+	finalConfig := defaultOptions
+
+	// If the user provided a configuration, layer their values on top.
+	// This avoids mutating the original 'config' object.
+	if config != nil {
+		if config.Address != "" {
+			finalConfig.Address = config.Address
 		}
-	}
-	if config.Address == "" {
-		config.Address = "mongodb://localhost:27017"
+		if config.Username != "" {
+			finalConfig.Username = config.Username
+		}
+		if config.Password != "" {
+			finalConfig.Password = config.Password
+		}
+		if config.DBName != "" {
+			finalConfig.DBName = config.DBName
+		}
+		if config.CollectionName != "" {
+			finalConfig.CollectionName = config.CollectionName
+		}
 	}
 
 	conn := &MongoConnection{
-		Address:      config.Address,
-		config:       *config,
+		Address:      finalConfig.Address,
+		config:       finalConfig,
 		hasConnected: false,
 	}
 
@@ -74,7 +83,6 @@ func NewMongoConnection(config *ConnectionOptions) *MongoConnection {
 }
 
 // Connect establishes a connection to the MongoDB server.
-// It returns an error if the connection cannot be established.
 func (m *MongoConnection) Connect() error {
 	if m.hasConnected {
 		return nil
@@ -108,8 +116,7 @@ func (m *MongoConnection) Connect() error {
 	return nil
 }
 
-// Close closes the MongoDB connection.
-// It's important to defer this function after creating a new connection.
+// Close disconnects from the MongoDB server.
 func (m *MongoConnection) Close() error {
 	if !m.hasConnected {
 		return nil
@@ -117,8 +124,8 @@ func (m *MongoConnection) Close() error {
 	return m.client.Disconnect(context.Background())
 }
 
-// GetItem retrieves a txn.DataItem from the MongoDB database based on the specified key.
-// If the key is not found, it returns an empty txn.DataItem and an error.
+// GetItem retrieves a structured transaction item from MongoDB.
+// It returns a txn.DataItem, which represents a full document with transaction metadata.
 func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 	if !m.hasConnected {
 		return &MongoItem{}, errors.Errorf("not connected to MongoDB")
@@ -142,8 +149,7 @@ func (m *MongoConnection) GetItem(key string) (txn.DataItem, error) {
 	return &item, nil
 }
 
-// PutItem puts an item into the MongoDB database with the specified key and value.
-// The function returns an error if there was a problem executing the MongoDB commands.
+// PutItem inserts or updates an item in MongoDB.
 func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
@@ -167,14 +173,11 @@ func (m *MongoConnection) PutItem(key string, value txn.DataItem) (string, error
 	if err != nil {
 		return "", err
 	}
-	return "", nil
+	return value.Version(), nil
 }
 
-// ConditionalUpdate updates the value of a Mongo item if the version matches the provided value.
-// It takes a key string and a txn.DataItem value as parameters.
-// If the item's version does not match, it returns a version mismatch error.
-// Note: if the previous version of the item is not found, it will return a key not found error.
-// Otherwise, it updates the item with the provided values and returns the updated item.
+// ConditionalUpdate atomically updates an item if the version matches.
+// If doCreat is true, it will create the item if it does not exist.
 func (m *MongoConnection) ConditionalUpdate(
 	key string,
 	value txn.DataItem,
@@ -231,10 +234,7 @@ func (m *MongoConnection) ConditionalUpdate(
 	return newVer, nil
 }
 
-// ConditionalCommit updates the txnState and version of a Mongo item if the version matches the provided value.
-// It takes a key string and a version string as parameters.
-// If the item's version does not match, it returns a version mismatch error.
-// Otherwise, it updates the item with the provided values and returns the updated item.
+// ConditionalCommit atomically commits a transaction if the version matches.
 func (m *MongoConnection) ConditionalCommit(
 	key string,
 	version string,
@@ -279,6 +279,7 @@ func (m *MongoConnection) ConditionalCommit(
 	return newVer, nil
 }
 
+// AtomicCreate creates a key-value pair if the key does not already exist.
 func (m *MongoConnection) AtomicCreate(key string, value any) (string, error) {
 	if !m.hasConnected {
 		return "", errors.Errorf("not connected to MongoDB")
@@ -348,10 +349,8 @@ func (m *MongoConnection) atomicCreateMongoItem(key string, value txn.DataItem) 
 	return "", errors.New(txn.VersionMismatch)
 }
 
-// Get retrieves the value associated with the given key from the MongoDB database.
-// If the key is not found, it returns an empty string and an error indicating the key was not found.
-// If an error occurs during the retrieval, it returns an empty string and the error.
-// Otherwise, it returns the retrieved value and nil error.
+// Get retrieves a simple string value from a key-value pair document.
+// This is a general-purpose getter, distinct from GetItem, which retrieves a structured txn.DataItem.
 func (m *MongoConnection) Get(key string) (string, error) {
 	if !m.hasConnected {
 		return "", fmt.Errorf("not connected to MongoDB")
@@ -375,9 +374,7 @@ func (m *MongoConnection) Get(key string) (string, error) {
 	return result.Value, nil
 }
 
-// Put stores the given value with the specified key in the MongoDB database.
-// It will overwrite the value if the key already exists.
-// It returns an error if the operation fails.
+// Put sets the value for a given key.
 func (m *MongoConnection) Put(key string, value any) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")
@@ -408,8 +405,7 @@ func (m *MongoConnection) Put(key string, value any) error {
 	return nil
 }
 
-// Delete removes the specified key from the MongoDB database.
-// It allows for the deletion of a key that does not exist.
+// Delete removes a key-value pair.
 func (m *MongoConnection) Delete(key string) error {
 	if !m.hasConnected {
 		return fmt.Errorf("not connected to MongoDB")

@@ -27,19 +27,39 @@ type ConnectionOptions struct {
 	Password string
 }
 
+var defaultOptions = ConnectionOptions{
+	Hosts:    []string{"localhost"},
+	Keyspace: "oreo",
+}
+
+// NewCassandraConnection creates a new Cassandra connection.
 func NewCassandraConnection(config *ConnectionOptions) *CassandraConnection {
-	if config == nil {
-		config = &ConnectionOptions{
-			Hosts:    []string{"localhost"},
-			Keyspace: "oreo",
+	// Start with a copy of the default configuration.
+	finalConfig := defaultOptions
+
+	// If the user provided a configuration, layer their values on top.
+	if config != nil {
+		if len(config.Hosts) > 0 {
+			finalConfig.Hosts = config.Hosts
+		}
+		if config.Keyspace != "" {
+			finalConfig.Keyspace = config.Keyspace
+		}
+		if config.Username != "" {
+			finalConfig.Username = config.Username
+		}
+		if config.Password != "" {
+			finalConfig.Password = config.Password
 		}
 	}
+
 	return &CassandraConnection{
-		config:       *config,
+		config:       finalConfig,
 		hasConnected: false,
 	}
 }
 
+// Connect establishes a connection to the Cassandra cluster.
 func (c *CassandraConnection) Connect() error {
 	if c.hasConnected {
 		return nil
@@ -79,6 +99,8 @@ func (c *CassandraConnection) Connect() error {
 	return nil
 }
 
+// GetItem retrieves a structured transaction item from Cassandra.
+// It returns a txn.DataItem, which represents a full row with transaction metadata.
 func (c *CassandraConnection) GetItem(key string) (txn.DataItem, error) {
 	if !c.hasConnected {
 		return &CassandraItem{}, fmt.Errorf("not connected to Cassandra")
@@ -104,6 +126,7 @@ func (c *CassandraConnection) GetItem(key string) (txn.DataItem, error) {
 	return &item, nil
 }
 
+// PutItem inserts or updates a transaction item in Cassandra.
 func (c *CassandraConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	if !c.hasConnected {
 		return "", fmt.Errorf("not connected to Cassandra")
@@ -129,6 +152,8 @@ func (c *CassandraConnection) PutItem(key string, value txn.DataItem) (string, e
 	return "", nil
 }
 
+// ConditionalUpdate atomically updates an item if the version matches using a lightweight transaction.
+// If doCreate is true, it will create the item if it does not exist.
 func (c *CassandraConnection) ConditionalUpdate(
 	key string,
 	value txn.DataItem,
@@ -189,6 +214,7 @@ func (c *CassandraConnection) ConditionalUpdate(
 	return newVer, nil
 }
 
+// ConditionalCommit atomically commits a transaction if the version matches.
 func (c *CassandraConnection) ConditionalCommit(
 	key string,
 	version string,
@@ -217,6 +243,7 @@ func (c *CassandraConnection) ConditionalCommit(
 	return version, nil
 }
 
+// AtomicCreate creates a key-value pair in the 'kv' table if the key does not already exist.
 func (c *CassandraConnection) AtomicCreate(name string, value any) (string, error) {
 	if !c.hasConnected {
 		return "", fmt.Errorf("not connected to Cassandra")
@@ -246,6 +273,8 @@ func (c *CassandraConnection) AtomicCreate(name string, value any) (string, erro
 	return "", nil
 }
 
+// Get retrieves a simple string value from the 'kv' table.
+// This is a general-purpose getter, distinct from GetItem, which retrieves a structured txn.DataItem.
 func (c *CassandraConnection) Get(name string) (string, error) {
 	if !c.hasConnected {
 		return "", fmt.Errorf("not connected to Cassandra")
@@ -265,6 +294,7 @@ func (c *CassandraConnection) Get(name string) (string, error) {
 	return value, nil
 }
 
+// Put sets the value for a given key in the 'kv' table.
 func (c *CassandraConnection) Put(name string, value interface{}) error {
 	if !c.hasConnected {
 		return fmt.Errorf("not connected to Cassandra")
@@ -284,6 +314,7 @@ func (c *CassandraConnection) Put(name string, value interface{}) error {
 	return nil
 }
 
+// Delete removes a key-value pair from the 'kv' table.
 func (c *CassandraConnection) Delete(name string) error {
 	if !c.hasConnected {
 		return fmt.Errorf("not connected to Cassandra")

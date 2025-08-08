@@ -90,102 +90,90 @@ else
 end
 `
 
-// NewRedisConnection creates a new Redis connection using the provided configuration options.
-// If the config parameter is nil, default values will be used.
-//
-// The Redis connection is established using the specified address and password.
-// The address format should be in the form "host:port".
-//
-// The se parameter is used for data serialization and deserialization.
-// If se is nil, a default JSON serializer will be used.
-//
-// Returns a pointer to the created RedisConnection.
+var defaultOptions = ConnectionOptions{
+	Address:  "localhost:6379",
+	Password: "",
+	se:       serializer.NewJSONSerializer(),
+	PoolSize: 60,
+}
+
+// NewRedisConnection creates a new Redis connection.
 func NewRedisConnection(config *ConnectionOptions) *RedisConnection {
-	if config == nil {
-		config = &ConnectionOptions{
-			Address: "localhost:6379",
+	// Start with a copy of the default configuration.
+	finalConfig := defaultOptions
+
+	// If the user provided a configuration, layer their values on top.
+	// This avoids mutating the original 'config' object.
+	if config != nil {
+		if config.Address != "" {
+			finalConfig.Address = config.Address
 		}
-	}
-	if config.Address == "" {
-		config.Address = "localhost:6379"
-	}
-
-	if config.se == nil {
-		config.se = serializer.NewJSONSerializer()
-	}
-
-	if config.PoolSize == 0 {
-		config.PoolSize = 60
+		if config.Password != "" {
+			finalConfig.Password = config.Password
+		}
+		if config.se != nil {
+			finalConfig.se = config.se
+		}
+		// Note: This logic assumes 0 is not a valid user-set value for PoolSize.
+		if config.PoolSize != 0 {
+			finalConfig.PoolSize = config.PoolSize
+		}
 	}
 
 	return &RedisConnection{
 		rdb: redis.NewClient(&redis.Options{
-			Addr:        config.Address,
-			Password:    config.Password,
-			PoolSize:    config.PoolSize,
+			Addr:        finalConfig.Address,
+			Password:    finalConfig.Password,
+			PoolSize:    finalConfig.PoolSize,
 			PoolTimeout: 10 * time.Second,
 		}),
-		Address: config.Address,
-		se:      config.se,
+		Address: finalConfig.Address,
+		se:      finalConfig.se,
 	}
 }
 
-// Connect establishes a connection to the Redis server.
-// It returns an error if the connection cannot be established.
+// Connect establishes a connection to the Redis server and loads Lua scripts.
 func (r *RedisConnection) Connect() error {
 	if r.connected {
 		return nil
 	}
-
 	r.connected = true
 
 	logger.Log.Debugw("Start Connect", "address", r.Address)
 	defer logger.Log.Debugw("End   Connect", "address", r.Address)
 
+	// Define all scripts and their destinations in one place.
+	scriptsToLoad := []struct {
+		scriptContent string
+		destSHA       *string
+	}{
+		{scriptContent: AtomicCreateScript, destSHA: &r.atomicCreateSHA},
+		{scriptContent: AtomicCreateItemScript, destSHA: &r.atomicCreateItemSHA},
+		{scriptContent: ConditionalUpdateScript, destSHA: &r.conditionalUpdateSHA},
+		{scriptContent: ConditionalCommitScript, destSHA: &r.conditionalCommitSHA},
+	}
+
 	var eg errgroup.Group
 	ctx := context.Background()
 
-	eg.Go(func() error {
-		sha, err := r.rdb.ScriptLoad(ctx, AtomicCreateScript).Result()
-		if err != nil {
-			return err
-		}
-		r.atomicCreateSHA = sha
-		return nil
-	})
-
-	eg.Go(func() error {
-		sha, err := r.rdb.ScriptLoad(ctx, AtomicCreateItemScript).Result()
-		if err != nil {
-			return err
-		}
-		r.atomicCreateItemSHA = sha
-		return nil
-	})
-
-	eg.Go(func() error {
-		sha, err := r.rdb.ScriptLoad(ctx, ConditionalUpdateScript).Result()
-		if err != nil {
-			return err
-		}
-		r.conditionalUpdateSHA = sha
-		return nil
-	})
-
-	eg.Go(func() error {
-		sha, err := r.rdb.ScriptLoad(ctx, ConditionalCommitScript).Result()
-		if err != nil {
-			return err
-		}
-		r.conditionalCommitSHA = sha
-		return nil
-	})
+	// Iterate and load each script concurrently.
+	for _, s := range scriptsToLoad {
+		script := s // Capture loop variable for the closure.
+		eg.Go(func() error {
+			sha, err := r.rdb.ScriptLoad(ctx, script.scriptContent).Result()
+			if err != nil {
+				return err
+			}
+			*script.destSHA = sha // Store the result in the destination field.
+			return nil
+		})
+	}
 
 	return eg.Wait()
 }
 
-// GetItem retrieves a txn.DataItem from the Redis database based on the specified key.
-// If the key is not found, it returns an empty txn.DataItem and an error.
+// GetItem retrieves a structured transaction item stored as a Redis Hash.
+// It returns a txn.DataItem, which encapsulates all transaction-related metadata.
 func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
@@ -203,9 +191,7 @@ func (r *RedisConnection) GetItem(key string) (txn.DataItem, error) {
 	return &value, nil
 }
 
-// PutItem puts an item into the Redis database with the specified key and value.
-// It sets various fields of the txn.DataItem struct as hash fields in the Redis hash.
-// The function returns an error if there was a problem executing the Redis commands.
+// PutItem inserts or updates an item in Redis.
 func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
@@ -228,13 +214,11 @@ func (r *RedisConnection) PutItem(key string, value txn.DataItem) (string, error
 	if err != nil {
 		return "", err
 	}
-	return "", nil
+	return value.Version(), nil
 }
 
-// ConditionalUpdate updates the value of a Redis item if the version matches the provided value.
-// It takes a key string and a txn.DataItem value as parameters.
-// If the item's version does not match, it returns a version mismatch error.
-// Otherwise, it updates the item with the provided values and returns the updated item.
+// ConditionalUpdate atomically updates an item if the version matches.
+// If doCreate is true, it will create the item if it does not exist.
 func (r *RedisConnection) ConditionalUpdate(
 	key string,
 	value txn.DataItem,
@@ -300,10 +284,7 @@ func (r *RedisConnection) ConditionalUpdate(
 	return newVer, nil
 }
 
-// ConditionalCommit updates the txnState and version of a Redis item if the version matches the provided value.
-// It takes a key string and a version string as parameters.
-// If the item's version does not match, it returns a version mismatch error.
-// Otherwise, it updates the item with the provided values and returns the updated item.
+// ConditionalCommit atomically commits a transaction if the version matches.
 func (r *RedisConnection) ConditionalCommit(
 	key string,
 	version string,
@@ -330,6 +311,7 @@ func (r *RedisConnection) ConditionalCommit(
 	return newVer, nil
 }
 
+// AtomicCreate creates a key-value pair if the key does not already exist.
 func (r *RedisConnection) AtomicCreate(name string, value any) (string, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
@@ -351,10 +333,8 @@ func (r *RedisConnection) AtomicCreate(name string, value any) (string, error) {
 	return "", nil
 }
 
-// Get retrieves the value associated with the given key from the Redis database.
-// If the key is not found, it returns an empty string and an error indicating the key was not found.
-// If an error occurs during the retrieval, it returns an empty string and the error.
-// Otherwise, it returns the retrieved value and nil error.
+// Get retrieves a simple string value for a given key.
+// This is a general-purpose getter, distinct from GetItem, which retrieves a structured txn.DataItem.
 func (r *RedisConnection) Get(name string) (string, error) {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
@@ -370,9 +350,7 @@ func (r *RedisConnection) Get(name string) (string, error) {
 	return str, nil
 }
 
-// Put stores the given value with the specified name in the Redis database.
-// It will overwrite the value if the key already exists.
-// It returns an error if the operation fails.
+// Put sets the value for a given key.
 func (r *RedisConnection) Put(name string, value any) error {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
@@ -381,12 +359,16 @@ func (r *RedisConnection) Put(name string, value any) error {
 	return r.rdb.Set(context.Background(), name, value, 0).Err()
 }
 
-// Delete removes the specified key from Redis.
-// It allows for the deletion of a key that does not exist.
+// Delete removes a key-value pair.
 func (r *RedisConnection) Delete(name string) error {
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
 	return r.rdb.Del(context.Background(), name).Err()
+}
+
+// Close disconnects from the Redis server.
+func (r *RedisConnection) Close() error {
+	return r.rdb.Close()
 }
