@@ -484,7 +484,6 @@ func createServiceDiscovery(
 	case discovery.HTTPDiscovery:
 		return discovery.NewHTTPServiceDiscovery(
 			config.HTTP.RegistryPort,
-			config.HTTP.RegistryServerURL,
 		)
 	case discovery.EtcdDiscovery:
 		registryConfig := discovery.DefaultRegistryConfig()

@@ -112,8 +112,7 @@ type ServiceDiscoveryConfig struct {
 }
 
 type HTTPDiscoveryConfig struct {
-	RegistryPort      string
-	RegistryServerURL string
+	RegistryPort string
 }
 
 type EtcdDiscoveryConfig struct {

@@ -22,9 +22,8 @@ type Config struct {
 	ServiceDiscovery struct {
 		Type string `yaml:"type"` // "http" or "etcd"
 		HTTP struct {
-			RegistryAddr      string `yaml:"registry_addr"`
-			RegistryPort      string `yaml:"registry_port"`
-			RegistryServerURL string `yaml:"registry_server_url"`
+			RegistryAddr string `yaml:"registry_addr"`
+			RegistryPort string `yaml:"registry_port"`
 		} `yaml:"http"`
 		Etcd struct {
 			Endpoints   []string `yaml:"endpoints"`
@@ -78,28 +77,15 @@ func initConnections() error {
 	switch config.ServiceDiscovery.Type {
 	case "http":
 		log.Println("Using HTTP service discovery")
-		if config.ServiceDiscovery.HTTP.RegistryServerURL == "" {
-			// Act as registry server
-			log.Printf(
-				"Starting as HTTP registry server on port %s",
-				config.ServiceDiscovery.HTTP.RegistryPort,
-			)
-			discoveryConfig = &discovery.ServiceDiscoveryConfig{
-				Type: discovery.HTTPDiscovery,
-				HTTP: &discovery.HTTPDiscoveryConfig{
-					RegistryPort: config.ServiceDiscovery.HTTP.RegistryPort,
-					// No RegistryServerURL means we ARE the registry server
-				},
-			}
-		} else {
-			// Connect to external registry server
-			log.Printf("Connecting to external HTTP registry server: %s", config.ServiceDiscovery.HTTP.RegistryServerURL)
-			discoveryConfig = &discovery.ServiceDiscoveryConfig{
-				Type: discovery.HTTPDiscovery,
-				HTTP: &discovery.HTTPDiscoveryConfig{
-					RegistryServerURL: config.ServiceDiscovery.HTTP.RegistryServerURL,
-				},
-			}
+		log.Printf(
+			"Starting as HTTP registry server on port %s",
+			config.ServiceDiscovery.HTTP.RegistryPort,
+		)
+		discoveryConfig = &discovery.ServiceDiscoveryConfig{
+			Type: discovery.HTTPDiscovery,
+			HTTP: &discovery.HTTPDiscoveryConfig{
+				RegistryPort: config.ServiceDiscovery.HTTP.RegistryPort,
+			},
 		}
 	case "etcd":
 		log.Printf(
@@ -170,6 +156,152 @@ func createDatastoresForTransaction() []txn.Datastorer {
 	return datastores
 }
 
+// HTTP Handlers
+
+// healthHandler handles health check requests
+func healthHandler(c *fiber.Ctx) error {
+	return c.SendString("OK")
+}
+
+// redisTestWriteHandler handles Redis write test requests
+func redisTestWriteHandler(c *fiber.Ctx) error {
+	if redisConn == nil {
+		return c.Status(fiber.StatusInternalServerError).
+			SendString("Redis connection not initialized")
+	}
+
+	var testData TestData
+	if err := c.BodyParser(&testData); err != nil {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	oracle := timesource.NewGlobalTimeSource("http://localhost:8012")
+	// Create distributed transaction
+	txn := txn.NewTransactionWithRemote(client, oracle)
+
+	// Add datastores
+	datastores := createDatastoresForTransaction()
+	txn.AddDatastores(datastores...)
+
+	if err := txn.Start(); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to start transaction: %v", err),
+		})
+	}
+
+	// Write to Redis
+	key := fmt.Sprintf("test:data:%s", testData.ID)
+	dataJSON, _ := json.Marshal(testData)
+	if err := txn.Write("Redis", key, string(dataJSON)); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to write to Redis: %v", err),
+		})
+	}
+
+	// Commit transaction
+	if err := txn.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to commit transaction: %v", err),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Data written to Redis successfully",
+		"data":    testData,
+	})
+}
+
+// redisTestReadHandler handles Redis read test requests
+func redisTestReadHandler(c *fiber.Ctx) error {
+	if redisConn == nil {
+		return c.Status(fiber.StatusInternalServerError).
+			SendString("Redis connection not initialized")
+	}
+
+	id := c.Params("id")
+	if id == "" {
+		return c.Status(400).JSON(fiber.Map{
+			"error": "ID is required",
+		})
+	}
+
+	// Create read-only transaction
+	txn := txn.NewTransactionWithRemote(client, oracle)
+
+	// Add datastores
+	datastores := createDatastoresForTransaction()
+	txn.AddDatastores(datastores...)
+
+	if err := txn.Start(); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to start transaction: %v", err),
+		})
+	}
+
+	// Read from Redis
+	key := fmt.Sprintf("test:data:%s", id)
+	var dataJSON string
+	if err := txn.Read("Redis", key, &dataJSON); err != nil {
+		return c.Status(404).JSON(fiber.Map{
+			"error": "Data not found",
+		})
+	}
+
+	// Commit transaction
+	if err := txn.Commit(); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to commit transaction: %v", err),
+		})
+	}
+
+	var testData TestData
+	if err := json.Unmarshal([]byte(dataJSON), &testData); err != nil {
+		return c.Status(500).JSON(fiber.Map{
+			"error": fmt.Sprintf("Failed to parse data: %v", err),
+		})
+	}
+
+	return c.JSON(testData)
+}
+
+// serviceDiscoveryStatusHandler handles service discovery status requests
+func serviceDiscoveryStatusHandler(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{
+		"type":   config.ServiceDiscovery.Type,
+		"status": "active",
+		"config": map[string]interface{}{
+			"type":           config.ServiceDiscovery.Type,
+			"etcd_endpoints": config.ServiceDiscovery.Etcd.Endpoints,
+			"http_registry":  config.ServiceDiscovery.HTTP.RegistryPort,
+		},
+	})
+}
+
+// redisServiceHandler handles Redis service address requests
+func redisServiceHandler(c *fiber.Ctx) error {
+	if client == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Service discovery client not initialized",
+		})
+	}
+
+	redisAddr, err := client.GetServerAddr("Redis")
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error":    fmt.Sprintf("Redis service not found: %v", err),
+			"fallback": config.RedisAddr,
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"service":        "Redis",
+		"address":        redisAddr,
+		"discovery_type": config.ServiceDiscovery.Type,
+	})
+}
+
 func main() {
 	if err := loadConfig(); err != nil {
 		log.Fatalf("Error loading config: %v", err)
@@ -184,149 +316,14 @@ func main() {
 	app.Use(logger.New())
 	app.Use(cors.New())
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.SendString("OK")
-	})
+	// Routes
+	app.Get("/health", healthHandler)
 
 	api := app.Group("/api/v1")
-
-	// Redis test endpoint
-	api.Post("/redis-test", func(c *fiber.Ctx) error {
-		if redisConn == nil {
-			return c.Status(fiber.StatusInternalServerError).
-				SendString("Redis connection not initialized")
-		}
-
-		var testData TestData
-		if err := c.BodyParser(&testData); err != nil {
-			return c.Status(400).JSON(fiber.Map{
-				"error": "Invalid request body",
-			})
-		}
-
-		oracle := timesource.NewGlobalTimeSource("http://localhost:8012")
-		// Create distributed transaction
-		txn := txn.NewTransactionWithRemote(client, oracle)
-
-		// Add datastores
-		datastores := createDatastoresForTransaction()
-		txn.AddDatastores(datastores...)
-
-		if err := txn.Start(); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to start transaction: %v", err),
-			})
-		}
-
-		// Write to Redis
-		key := fmt.Sprintf("test:data:%s", testData.ID)
-		dataJSON, _ := json.Marshal(testData)
-		if err := txn.Write("Redis", key, string(dataJSON)); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to write to Redis: %v", err),
-			})
-		}
-
-		// Commit transaction
-		if err := txn.Commit(); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to commit transaction: %v", err),
-			})
-		}
-
-		return c.JSON(fiber.Map{
-			"message": "Data written to Redis successfully",
-			"data":    testData,
-		})
-	})
-
-	// Redis read endpoint
-	api.Get("/redis-test/:id", func(c *fiber.Ctx) error {
-		if redisConn == nil {
-			return c.Status(fiber.StatusInternalServerError).
-				SendString("Redis connection not initialized")
-		}
-
-		id := c.Params("id")
-		if id == "" {
-			return c.Status(400).JSON(fiber.Map{
-				"error": "ID is required",
-			})
-		}
-
-		// Create read-only transaction
-		txn := txn.NewTransactionWithRemote(client, oracle)
-
-		// Add datastores
-		datastores := createDatastoresForTransaction()
-		txn.AddDatastores(datastores...)
-
-		if err := txn.Start(); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to start transaction: %v", err),
-			})
-		}
-
-		// Read from Redis
-		key := fmt.Sprintf("test:data:%s", id)
-		var dataJSON string
-		if err := txn.Read("Redis", key, &dataJSON); err != nil {
-			return c.Status(404).JSON(fiber.Map{
-				"error": "Data not found",
-			})
-		}
-
-		// Commit transaction
-		if err := txn.Commit(); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to commit transaction: %v", err),
-			})
-		}
-
-		var testData TestData
-		if err := json.Unmarshal([]byte(dataJSON), &testData); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"error": fmt.Sprintf("Failed to parse data: %v", err),
-			})
-		}
-
-		return c.JSON(testData)
-	})
-
-	// In main function's API routes section
-	api.Get("/service-discovery/status", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"type":   config.ServiceDiscovery.Type,
-			"status": "active",
-			"config": map[string]interface{}{
-				"type":           config.ServiceDiscovery.Type,
-				"etcd_endpoints": config.ServiceDiscovery.Etcd.Endpoints,
-				"http_registry":  config.ServiceDiscovery.HTTP.RegistryAddr,
-			},
-		})
-	})
-
-	api.Get("/services/redis", func(c *fiber.Ctx) error {
-		if client == nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Service discovery client not initialized",
-			})
-		}
-
-		redisAddr, err := client.GetServerAddr("Redis")
-		if err != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error":    fmt.Sprintf("Redis service not found: %v", err),
-				"fallback": config.RedisAddr,
-			})
-		}
-
-		return c.JSON(fiber.Map{
-			"service":        "Redis",
-			"address":        redisAddr,
-			"discovery_type": config.ServiceDiscovery.Type,
-		})
-	})
+	api.Post("/redis-test", redisTestWriteHandler)
+	api.Get("/redis-test/:id", redisTestReadHandler)
+	api.Get("/service-discovery/status", serviceDiscoveryStatusHandler)
+	api.Get("/services/redis", redisServiceHandler)
 
 	log.Printf("Starting server on %s", config.ServerPort)
 	log.Fatal(app.Listen(config.ServerPort))

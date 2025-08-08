@@ -28,8 +28,7 @@ type HTTPServiceDiscovery struct {
 	shutdownCancel   context.CancelFunc
 	wg               sync.WaitGroup
 
-	curIndexMap       map[string]*atomic.Uint64
-	registryServerURL string // URL of the external registry server
+	curIndexMap map[string]*atomic.Uint64
 }
 
 // InstanceInfo holds info about a registered executor instance within the registry.
@@ -51,7 +50,6 @@ const (
 // NewHTTPServiceDiscovery creates a new HTTP-based service discovery instance
 func NewHTTPServiceDiscovery(
 	registryListenAddr string,
-	registryServerURL string,
 	instanceTTL ...time.Duration,
 ) (*HTTPServiceDiscovery, error) {
 	ttl := defaultInstanceTTL
@@ -62,13 +60,12 @@ func NewHTTPServiceDiscovery(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	hsd := &HTTPServiceDiscovery{
-		instances:         make(map[string]InstanceInfo),
-		dsNameIndex:       make(map[string][]string),
-		instanceTTL:       ttl,
-		shutdownCtx:       ctx,
-		shutdownCancel:    cancel,
-		curIndexMap:       make(map[string]*atomic.Uint64),
-		registryServerURL: registryServerURL,
+		instances:      make(map[string]InstanceInfo),
+		dsNameIndex:    make(map[string][]string),
+		instanceTTL:    ttl,
+		shutdownCtx:    ctx,
+		shutdownCancel: cancel,
+		curIndexMap:    make(map[string]*atomic.Uint64),
 	}
 
 	// Set up HTTP server for registry endpoints
@@ -113,129 +110,6 @@ func NewHTTPServiceDiscovery(
 
 // GetService returns a service instance address for the given datastore name
 func (hsd *HTTPServiceDiscovery) GetService(dsName string) (string, error) {
-	// If registryServerURL is set, query the external registry server
-	if hsd.registryServerURL != "" {
-		// Query external registry server with retry mechanism
-		maxRetries := 5
-		retryDelay := time.Second * 1
-		url := fmt.Sprintf("%s/services?dsName=%s", hsd.registryServerURL, dsName)
-
-		for i := 0; i < maxRetries; i++ {
-			logger.Infof("Querying registry server (attempt %d/%d): %s", i+1, maxRetries, url)
-			resp, err := http.Get(url)
-			if err != nil {
-				logger.Errorf(
-					"Failed to query registry server (attempt %d/%d): %v",
-					i+1,
-					maxRetries,
-					err,
-				)
-				if i < maxRetries-1 {
-					logger.Infof("Retrying in %v...", retryDelay)
-					time.Sleep(retryDelay)
-					continue
-				}
-				return "", fmt.Errorf(
-					"failed to query registry server after %d attempts: %v",
-					maxRetries,
-					err,
-				)
-			}
-			defer func() {
-				if err := resp.Body.Close(); err != nil {
-					logger.Warnf("Failed to close response body: %v", err)
-				}
-			}()
-
-			logger.Infof("Registry server response status: %d", resp.StatusCode)
-			switch resp.StatusCode {
-			case http.StatusNotFound:
-				logger.Warnf(
-					"No available instances for datastore: %s (attempt %d/%d)",
-					dsName,
-					i+1,
-					maxRetries,
-				)
-				if i < maxRetries-1 {
-					logger.Infof("Retrying in %v...", retryDelay)
-					time.Sleep(retryDelay)
-					continue
-				}
-				return "", fmt.Errorf(
-					"no available instances for datastore: %s after %d attempts",
-					dsName,
-					maxRetries,
-				)
-			case http.StatusOK:
-				// Continue to read response
-			default:
-				logger.Errorf(
-					"Registry server returned unexpected status: %s (attempt %d/%d)",
-					resp.Status,
-					i+1,
-					maxRetries,
-				)
-				if i < maxRetries-1 {
-					logger.Infof("Retrying in %v...", retryDelay)
-					time.Sleep(retryDelay)
-					continue
-				}
-				return "", fmt.Errorf(
-					"registry server returned status: %s after %d attempts",
-					resp.Status,
-					maxRetries,
-				)
-			}
-
-			// Read the response body more efficiently
-			body := make([]byte, 1024)
-			n, err := resp.Body.Read(body)
-			if err != nil && err.Error() != "EOF" {
-				logger.Errorf(
-					"Failed to read response (attempt %d/%d): %v",
-					i+1,
-					maxRetries,
-					err,
-				)
-				if i < maxRetries-1 {
-					logger.Infof("Retrying in %v...", retryDelay)
-					time.Sleep(retryDelay)
-					continue
-				}
-				return "", fmt.Errorf(
-					"failed to read response after %d attempts: %v",
-					maxRetries,
-					err,
-				)
-			}
-
-			address := strings.TrimSpace(string(body[:n]))
-			if address == "" {
-				logger.Warnf(
-					"Empty response from registry server (attempt %d/%d)",
-					i+1,
-					maxRetries,
-				)
-				if i < maxRetries-1 {
-					logger.Infof("Retrying in %v...", retryDelay)
-					time.Sleep(retryDelay)
-					continue
-				}
-				return "", fmt.Errorf(
-					"empty response from registry server after %d attempts",
-					maxRetries,
-				)
-			}
-
-			logger.Infof("Successfully obtained service address: %s", address)
-			return address, nil
-		}
-
-		// This should never be reached, but added for safety
-		return "", fmt.Errorf("unexpected error in service discovery retry loop")
-	}
-
-	// Otherwise, use local registry
 	hsd.registryMutex.RLock()
 	defer hsd.registryMutex.RUnlock()
 
