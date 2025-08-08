@@ -1,0 +1,41 @@
+# .github/workflows/connections-ci.yml
+name: Database Connection Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-connections:
+    # Standard runners include a Docker environment, which is required by testcontainers-go.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install Dependencies
+        run: go mod download
+
+      - name: Run Connector Integration Tests
+        # This command runs the specific connection tests that use testcontainers-go.
+        # The TEST_MODE is not set, so it will run all tests and report all failures.
+        run: |
+          go test -v ./pkg/datastore/redis/... -run Connection
+          go test -v ./pkg/datastore/mongo/... -run Connection
+          go test -v ./pkg/datastore/couchdb/... -run Connection

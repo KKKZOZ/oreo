@@ -16,6 +16,8 @@
 *.log
 *.csv
 
+.secrets
+
 # Coverage and testing
 cover.out
 cover.html
