@@ -51,8 +51,16 @@ func Info(args ...interface{}) {
 	Log.Info(args...)
 }
 
+func Infof(format string, args ...interface{}) {
+	Log.Infof(format, args...)
+}
+
 func Warnw(msg string, keysAndValues ...interface{}) {
 	Log.Warnw(msg, keysAndValues...)
+}
+
+func Warnf(format string, args ...interface{}) {
+	Log.Warnf(format, args...)
 }
 
 func Warn(args ...interface{}) {

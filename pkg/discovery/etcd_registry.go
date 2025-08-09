@@ -12,6 +12,9 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// EtcdServiceRegistry implements the discovery.ServiceRegistry interface.
+var _ ServiceRegistry = (*EtcdServiceRegistry)(nil)
+
 // EtcdServiceRegistry etcd-based service registration implementation
 type EtcdServiceRegistry struct {
 	client           *clientv3.Client

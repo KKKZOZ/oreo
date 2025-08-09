@@ -14,13 +14,14 @@ import (
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
+	"github.com/kkkzoz/oreo/pkg/discovery"
 	"github.com/kkkzoz/oreo/pkg/timesource"
 	trxn "github.com/kkkzoz/oreo/pkg/txn"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	ExecutorAddrMap = map[string][]string{ALL: {"localhost:8000"}}
+	ExecutorAddrMap = map[string][]string{"ALL": {"localhost:8000"}}
 	TimeOracleUrl   = "localhost:8800"
 )
 
@@ -44,7 +45,12 @@ func NewTransactionWithSetup() *trxn.Transaction {
 		Address:  "localhost:6380",
 		Password: "@ljy123456",
 	})
-	client, _ := NewClient("localhost:9000")
+	client, _ := NewClient(&discovery.ServiceDiscoveryConfig{
+		Type: discovery.HTTPDiscovery,
+		HTTP: &discovery.HTTPDiscoveryConfig{
+			RegistryPort: "localhost:9000",
+		},
+	})
 	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)
@@ -944,7 +950,12 @@ func TestRedisDatastore_ConcurrentWriteConflicts(t *testing.T) {
 	successId := 0
 
 	concurrentCount := 1000
-	client, _ := NewClient("localhost:9000")
+	client, _ := NewClient(&discovery.ServiceDiscoveryConfig{
+		Type: discovery.HTTPDiscovery,
+		HTTP: &discovery.HTTPDiscoveryConfig{
+			RegistryPort: "localhost:9000",
+		},
+	})
 	txn := trxn.NewTransactionWithRemote(client, timesource.NewHybridTimeSource(10, 6))
 	rds := redis.NewRedisDatastore("redis1", conn)
 	txn.AddDatastore(rds)

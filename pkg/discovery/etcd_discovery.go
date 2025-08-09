@@ -12,6 +12,9 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// EtcdServiceDiscovery implements the discovery.ServiceDiscovery interface.
+var _ ServiceDiscovery = (*EtcdServiceDiscovery)(nil)
+
 // EtcdServiceDiscovery etcd-based service discovery implementation
 type EtcdServiceDiscovery struct {
 	client    *clientv3.Client
