@@ -261,7 +261,7 @@ func (hsd *HTTPServiceDiscovery) handleGetServices(w http.ResponseWriter, r *htt
 		}
 		hsd.registryMutex.RUnlock()
 		if !found {
-			http.Error(w, "", http.StatusNotFound)
+			http.Error(w, "Service not found", http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain")

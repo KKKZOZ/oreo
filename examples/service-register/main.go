@@ -177,7 +177,6 @@ func redisTestWriteHandler(c *fiber.Ctx) error {
 		})
 	}
 
-	oracle := timesource.NewGlobalTimeSource("http://localhost:8012")
 	// Create distributed transaction
 	txn := txn.NewTransactionWithRemote(client, oracle)
 
