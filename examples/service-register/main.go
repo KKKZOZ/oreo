@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -20,7 +21,6 @@ import (
 
 type Config struct {
 	ServiceDiscovery struct {
-		Type string `yaml:"type"` // "http" or "etcd"
 		HTTP struct {
 			RegistryAddr string `yaml:"registry_addr"`
 			RegistryPort string `yaml:"registry_port"`
@@ -46,14 +46,19 @@ type TestData struct {
 }
 
 var (
-	client    *network.Client
-	oracle    timesource.TimeSourcer
-	redisConn *redis.RedisConnection
-	config    Config
+	client        *network.Client
+	oracle        timesource.TimeSourcer
+	redisConn     *redis.RedisConnection
+	config        Config
+	discoveryType = flag.String(
+		"discovery",
+		"HTTP",
+		"discover type (http or etcd)",
+	)
 )
 
 func loadConfig() error {
-	data, err := os.ReadFile("./config.yaml")
+	data, err := os.ReadFile("./client-config.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -69,12 +74,12 @@ func loadConfig() error {
 func initConnections() error {
 	var err error
 
-	log.Printf("Initializing service discovery with type: %s", config.ServiceDiscovery.Type)
+	log.Printf("Initializing service discovery with type: %s", *discoveryType)
 
 	// Create service discovery configuration
 	var discoveryConfig *discovery.ServiceDiscoveryConfig
 
-	switch config.ServiceDiscovery.Type {
+	switch *discoveryType {
 	case "http":
 		log.Println("Using HTTP service discovery")
 		log.Printf(
@@ -103,7 +108,7 @@ func initConnections() error {
 	default:
 		log.Printf(
 			"Unknown service discovery type '%s', falling back to HTTP",
-			config.ServiceDiscovery.Type,
+			*discoveryType,
 		)
 		// Fallback to HTTP service discovery
 		discoveryConfig = &discovery.ServiceDiscoveryConfig{
@@ -268,10 +273,10 @@ func redisTestReadHandler(c *fiber.Ctx) error {
 // serviceDiscoveryStatusHandler handles service discovery status requests
 func serviceDiscoveryStatusHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
-		"type":   config.ServiceDiscovery.Type,
+		"type":   *discoveryType,
 		"status": "active",
 		"config": map[string]interface{}{
-			"type":           config.ServiceDiscovery.Type,
+			"type":           *discoveryType,
 			"etcd_endpoints": config.ServiceDiscovery.Etcd.Endpoints,
 			"http_registry":  config.ServiceDiscovery.HTTP.RegistryPort,
 		},
@@ -297,11 +302,13 @@ func redisServiceHandler(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"service":        "Redis",
 		"address":        redisAddr,
-		"discovery_type": config.ServiceDiscovery.Type,
+		"discovery_type": *discoveryType,
 	})
 }
 
 func main() {
+	flag.Parse()
+
 	if err := loadConfig(); err != nil {
 		log.Fatalf("Error loading config: %v", err)
 	}

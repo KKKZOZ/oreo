@@ -201,6 +201,7 @@ func (c *Client) RunBenchmark() {
 func (c *Client) getCacheState() {
 	fmt.Println("----------------------------------")
 
+	// FIXME: executorUrlList := benconfig.GlobalClient.GetExecutorAddrList()
 	executorUrlList := benconfig.ExecutorAddressMap["ALL"]
 
 	client := &http.Client{
