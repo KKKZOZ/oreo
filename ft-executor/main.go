@@ -579,7 +579,12 @@ var benConfig = benconfig.BenchmarkConfig{}
 
 func main() {
 	parseFlags()
+	
+	// Log startup progress
+	logger.Infow("Starting Oreo Executor", "version", "1.0", "pid", os.Getpid())
+	
 	// Load benchmark configuration from YAML
+	logger.Info("Loading benchmark configuration...")
 	err := loadConfig(*benConfigPath)
 	if err != nil {
 		logger.Fatalw(
@@ -590,6 +595,7 @@ func main() {
 			err,
 		)
 	}
+	logger.Infow("Benchmark configuration loaded successfully", "config_path", *benConfigPath)
 
 	if *registryAddrFlag == "" {
 		logger.Info(
@@ -606,9 +612,11 @@ func main() {
 
 	// Setup profiling and tracing if enabled
 	if *pprofFlag {
+		logger.Info("Enabling CPU profiling...")
 		startCPUProfile()
 	}
 	if *traceFlag {
+		logger.Info("Enabling execution tracing...")
 		stopTrace := startTrace()
 		defer stopTrace() // Ensure trace stops on exit
 	}
@@ -621,6 +629,7 @@ func main() {
 	config.Debug.DebugMode = false // Ensure standard debug mode is off unless explicitly enabled
 
 	// Establish database connections based on workload
+	logger.Infow("Establishing database connections...", "workload", *workloadType, "db_combination", *db_combination)
 	connMap := getConnMap(*workloadType, *db_combination)
 
 	// if len(connMap) == 0 {
@@ -653,9 +662,16 @@ func main() {
 	}
 
 	// Create the time source (Oracle)
+	logger.Infow("Creating time source oracle", "oracle_url", benConfig.TimeOracleUrl)
 	oracle := timesource.NewGlobalTimeSource(benConfig.TimeOracleUrl)
 
 	// Create the main Server instance with registry type
+	logger.Infow("Creating executor server", 
+		"port", *port,
+		"advertise_addr", *advertiseAddrFlag,
+		"registry_addr", *registryAddrFlag,
+		"registry_type", *registryType,
+	)
 	server := NewServer(
 		*port,
 		*advertiseAddrFlag,
@@ -666,6 +682,10 @@ func main() {
 		oracle,
 		*registryType, // Pass the registry type
 	)
+
+	// Display banner before starting server
+	fmt.Print(Banner)
+	logger.Info("Oreo Executor initialized successfully")
 
 	// Run the server (this includes registration, heartbeat, fasthttp server, and blocks until shutdown)
 	server.RunAndBlock()
