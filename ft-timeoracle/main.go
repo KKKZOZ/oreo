@@ -241,6 +241,8 @@ func main() {
 	serverAddress := fmt.Sprintf(":%d", port)
 	Log.Infof("HTTP server listening on %s", serverAddress)
 
+	displayBanner(serverAddress, role)
+
 	// Create the server explicitly to set timeouts potentially
 	httpServer := &http.Server{
 		Addr:    serverAddress,
@@ -256,6 +258,24 @@ func main() {
 		Log.Fatalw("HTTP server failed", "error", err)
 	}
 	Log.Info("HTTP server shut down.")
+}
+
+func displayBanner(addr, role string) {
+	banner := `
+
+████████╗██╗███╗   ███╗███████╗ ██████╗ ██████╗  █████╗  ██████╗██╗     ███████╗
+╚══██╔══╝██║████╗ ████║██╔════╝██╔═══██╗██╔══██╗██╔══██╗██╔════╝██║     ██╔════╝
+   ██║   ██║██╔████╔██║█████╗  ██║   ██║██████╔╝███████║██║     ██║     █████╗  
+   ██║   ██║██║╚██╔╝██║██╔══╝  ██║   ██║██╔══██╗██╔══██║██║     ██║     ██╔══╝  
+   ██║   ██║██║ ╚═╝ ██║███████╗╚██████╔╝██║  ██║██║  ██║╚██████╗███████╗███████╗
+   ╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚══════╝
+`
+	fmt.Println(banner)
+	fmt.Println("==================================================================")
+	fmt.Printf("  Fault-Tolerant TimeOracle is RUNNING\n")
+	fmt.Printf("  Role: %s\n", role)
+	fmt.Printf("  Listening on: %s\n", addr)
+	fmt.Println("==================================================================")
 }
 
 // setActive safely updates the isActive flag.
