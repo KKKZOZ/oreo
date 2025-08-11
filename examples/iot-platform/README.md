@@ -2,6 +2,22 @@
 
 An IoT platform example based on the Oreo distributed transaction framework, demonstrating how to handle IoT device data in a multi-database environment.
 
+- [IoT Platform](#iot-platform)
+  - [Deployment Options](#deployment-options)
+    - [Docker Compose Deployment](#docker-compose-deployment)
+    - [Manual Deployment](#manual-deployment)
+      - [1. Start Database Services](#1-start-database-services)
+      - [2. Start Time Oracle Service](#2-start-time-oracle-service)
+      - [3. Start Executor Instances](#3-start-executor-instances)
+      - [4. Start IoT Platform Service](#4-start-iot-platform-service)
+  - [API Documentation](#api-documentation)
+    - [1. Device Registration API](#1-device-registration-api)
+    - [2. Sensor Data Reporting API](#2-sensor-data-reporting-api)
+    - [3. Get Device Information API](#3-get-device-information-api)
+    - [4. Get Latest Device Data API](#4-get-latest-device-data-api)
+    - [5. Batch Data Processing API](#5-batch-data-processing-api)
+    - [6. Health Check API](#6-health-check-api)
+
 ## Deployment Options
 
 ### Docker Compose Deployment
@@ -58,6 +74,7 @@ The service will start at `http://localhost:8081`.
 **Function**: Register a new IoT device to the system
 
 **Request Body Example**:
+
 ```json
 {
   "device_id": "sensor001",
@@ -69,6 +86,7 @@ The service will start at `http://localhost:8081`.
 ```
 
 **Database Operation Flow**:
+
 1. **Redis**: Write device status cache
    - Key: `device:status:{device_id}`
    - Value: Device status (e.g., "active")
@@ -93,6 +111,7 @@ The service will start at `http://localhost:8081`.
 **Function**: Report IoT device sensor data
 
 **Request Body Example**:
+
 ```json
 {
   "device_id": "sensor001",
@@ -104,6 +123,7 @@ The service will start at `http://localhost:8081`.
 ```
 
 **Database Operation Flow**:
+
 1. **Redis**: Update latest device data
    - Key: `device:latest:{device_id}:{sensor_type}`
    - Value: Latest sensor data JSON string
@@ -129,6 +149,7 @@ The service will start at `http://localhost:8081`.
 **Function**: Query detailed information and statistics of a specified device
 
 **Database Read Flow**:
+
 1. **Redis**: Read device status
    - Key: `device:status:{device_id}`
    - Purpose: Verify device existence and get current status
@@ -142,6 +163,7 @@ The service will start at `http://localhost:8081`.
    - Purpose: Get device historical statistics
 
 **Response Example**:
+
 ```json
 {
   "device": {
@@ -172,15 +194,18 @@ The service will start at `http://localhost:8081`.
 **Function**: Query the latest data of a specific sensor type for a specified device
 
 **Parameters**:
+
 - `deviceId`: Device ID
 - `sensor_type`: Sensor type (required)
 
 **Database Operation**:
+
 1. **Redis**: Read latest data
    - Key: `device:latest:{device_id}:{sensor_type}`
    - Purpose: Quick access to real-time data
 
 **Response Example**:
+
 ```json
 {
   "device_id": "sensor001",
@@ -201,6 +226,7 @@ The service will start at `http://localhost:8081`.
 **Function**: Process multiple sensor data in batch
 
 **Request Body Example**:
+
 ```json
 [
   {
@@ -221,6 +247,7 @@ The service will start at `http://localhost:8081`.
 ```
 
 **Database Operation Flow**:
+
 1. **Redis**: Batch update latest data
    - Update corresponding latest value cache for each sensor data
 
@@ -228,6 +255,7 @@ The service will start at `http://localhost:8081`.
    - Create historical records for each sensor data
 
 **Response Example**:
+
 ```json
 {
   "message": "Batch data processed successfully",
@@ -245,6 +273,7 @@ The service will start at `http://localhost:8081`.
 **Function**: Check service running status
 
 **Response Example**:
+
 ```json
 {
   "status": "healthy",
