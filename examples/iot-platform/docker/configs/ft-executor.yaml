@@ -7,19 +7,6 @@ executor_address_map:
   "Cassandra":
     - "http://ft-executor-2:8003"
 
-service_discovery:
-  enabled: false
-  etcd_endpoints:
-    - "etcd:2379"
-  service_prefix: "oreo/executors"
-  dial_timeout: "5s"
-  service_name: "ft-executor"
-  service_id: ""
-  advertise_addr: ""
-  metadata:
-    version: "1.0.0"
-    region: "default"
-
 fault_tolerance_request_interval_value: 1
 time_oracle_url: "http://ft-timeoracle-primary:8012/timestamp/common"
 zipfian_constant: 0.1

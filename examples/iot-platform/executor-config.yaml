@@ -12,3 +12,5 @@ mongodb_password: "password"
 
 # Cassandra configuration
 cassandra_addr: ["localhost:9042"]
+cassandra_username: "oreo_user"
+cassandra_password: "oreo_password"

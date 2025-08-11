@@ -163,7 +163,8 @@ services:
       "-w", "iot",
       "-bc", "/app/config/config.yaml",
       "-advertise-addr", "ft-executor-1:8002",
-      "-db", "Redis,MongoDB1"
+      "-db", "Redis,MongoDB1",
+      "-registry", "http"
     ]
     volumes:
       - ./docker/configs/ft-executor.yaml:/app/config/config.yaml:ro  
@@ -192,7 +193,8 @@ services:
       "--advertise-addr", "ft-executor-2:8003",
       "-w", "ycsb",
       "-bc", "/app/config/config.yaml",
-      "-db", "Cassandra"
+      "-db", "Cassandra",
+      "-registry", "http"
     ]
     volumes:
       - ./docker/configs/ft-executor.yaml:/app/config/config.yaml:ro 

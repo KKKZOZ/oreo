@@ -1,0 +1,5 @@
+registry_addr: "localhost:2379"
+time_oracle_url: "http://localhost:8012/timestamp/common"
+
+# Redis configuration
+redis_addr: "localhost:6379"

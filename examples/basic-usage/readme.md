@@ -3,6 +3,23 @@
 
 This example demonstrates how to use the Oreo distributed transaction system with Redis and MongoDB datastores. The example shows how to perform cross-database transactions using Oreo's distributed transaction protocol.
 
+- [Oreo Basic Usage Example](#oreo-basic-usage-example)
+  - [Overview](#overview)
+  - [Prerequisites](#prerequisites)
+  - [Architecture](#architecture)
+  - [Setup Instructions](#setup-instructions)
+    - [1. Start Database Services](#1-start-database-services)
+    - [2. Build Oreo Components](#2-build-oreo-components)
+    - [3. Start Oreo System Components](#3-start-oreo-system-components)
+    - [4. Run the Example Application](#4-run-the-example-application)
+  - [Expected Output](#expected-output)
+  - [Configuration](#configuration)
+  - [Code Explanation](#code-explanation)
+  - [Troubleshooting](#troubleshooting)
+    - [Common Issues](#common-issues)
+    - [Component Dependencies](#component-dependencies)
+  - [Next Steps](#next-steps)
+
 ## Overview
 
 This basic usage example includes:
@@ -96,9 +113,9 @@ docker run \
     haproxy:latest
 
 # 3. Start executor instances (in separate terminals)
-./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1"
+./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -registry http
 
-./ft-executor -p 8002 -w ycsb --advertise-addr "localhost:8002" -bc "./config.yaml" -db "Redis,MongoDB1"
+./ft-executor -p 8002 -w ycsb --advertise-addr "localhost:8002" -bc "./config.yaml" -db "Redis,MongoDB1" -registry http
 ```
 
 ### 4. Run the Example Application

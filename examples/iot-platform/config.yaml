@@ -18,13 +18,13 @@ redis_addr: "localhost:6379"
 redis_password: "kkkzoz"
 
 # MongoDB configuration
-mongodb_addr1: "mongodb://localhost:27017"
+mongodb_addr: "mongodb://localhost:27017"
 mongodb_username: "admin"
 mongodb_password: "password"
 
 # Cassandra configuration
 cassandra_hosts:
   - "localhost:9042"
-cassandra_keyspace: "iot_data"
-cassandra_username: "cassandra"
-cassandra_password: "cassandra"
+cassandra_keyspace: "oreo"
+cassandra_username: "oreo_user"
+cassandra_password: "oreo_password"

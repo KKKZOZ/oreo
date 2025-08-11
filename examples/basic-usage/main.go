@@ -6,13 +6,20 @@ import (
 
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
+	"github.com/kkkzoz/oreo/pkg/discovery"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/timesource"
 	"github.com/kkkzoz/oreo/pkg/txn"
 )
 
 func main() {
-	client, err := network.NewClient(":9000")
+	config := &discovery.ServiceDiscoveryConfig{
+		Type: discovery.HTTPDiscovery,
+		HTTP: &discovery.HTTPDiscoveryConfig{
+			RegistryPort: ":9000",
+		},
+	}
+	client, err := network.NewClient(config)
 	if err != nil {
 		panic(err)
 	}

@@ -1,0 +1,18 @@
+server_port: ":3001"
+time_oracle_url: "http://localhost:8012/timestamp/common"
+
+# Redis configuration
+redis_addr: "localhost:6379"
+redis_password: "kkkzoz"
+
+service_discovery:
+  http:
+    registry_port: ":9000"
+
+  etcd:
+    endpoints:
+      - "localhost:2379"
+    username: ""
+    password: ""
+    dial_timeout: "5s"
+    key_prefix: "/oreo/services"

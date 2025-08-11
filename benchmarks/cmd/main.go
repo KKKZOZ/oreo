@@ -17,6 +17,7 @@ import (
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigyaml"
 	cfg "github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/discovery"
 	"github.com/kkkzoz/oreo/pkg/network"
 )
 
@@ -495,7 +496,13 @@ func loadConfig() *workload.WorkloadParameter {
 		return nil
 	}
 	benconfig.MaxLoadBatchSize = wp.MaxLoadBatchSize
-	benconfig.GlobalClient, _ = network.NewClient(":9000")
+	discoveryConfig := &discovery.ServiceDiscoveryConfig{
+		Type: discovery.HTTPDiscovery,
+		HTTP: &discovery.HTTPDiscoveryConfig{
+			RegistryPort: ":9000",
+		},
+	}
+	benconfig.GlobalClient, _ = network.NewClient(discoveryConfig)
 	// WorkloadParameter's config takes precedence over BenchmarkConfig
 	if wp.ZipfianConstant != 0 {
 		benconfig.ZipfianConstant = wp.ZipfianConstant

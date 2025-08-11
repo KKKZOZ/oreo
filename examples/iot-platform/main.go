@@ -14,6 +14,7 @@ import (
 	"github.com/kkkzoz/oreo/pkg/datastore/cassandra"
 	"github.com/kkkzoz/oreo/pkg/datastore/mongo"
 	"github.com/kkkzoz/oreo/pkg/datastore/redis"
+	"github.com/kkkzoz/oreo/pkg/discovery"
 	"github.com/kkkzoz/oreo/pkg/network"
 	"github.com/kkkzoz/oreo/pkg/timesource"
 	"github.com/kkkzoz/oreo/pkg/txn"
@@ -128,7 +129,13 @@ func initConnections() error {
 	}
 
 	// Initialize network client
-	client, err = network.NewClient(registryPort)
+	networkConfig := &discovery.ServiceDiscoveryConfig{
+		Type: discovery.HTTPDiscovery,
+		HTTP: &discovery.HTTPDiscoveryConfig{
+			RegistryPort: registryPort,
+		},
+	}
+	client, err = network.NewClient(networkConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create network client: %v", err)
 	}
