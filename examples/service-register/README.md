@@ -1,204 +1,138 @@
 # Service Register Example
 
-This is a sample project demonstrating how to use the Oreo distributed transaction framework for service registration and discovery.
+This example demonstrates how to build a client application that uses Oreo's service discovery feature to connect with and use a distributed transactional system.
 
-## Startup Instructions
+The application starts an API server that can perform transactional reads and writes to a Redis database. It discovers the necessary transaction-coordinating nodes (`executor`) via a service discovery mechanism (either `etcd` or HTTP).
 
-### 1. Start the Executor
+## Architecture
 
-When starting the executor, use the `-register` flag to specify the service discovery type:
+1. **API Server (`main.go`)**: A web server built with Fiber that exposes endpoints to read/write data.
+2. **Oreo Client (`network.NewClient`)**: The client component responsible for communicating with the Oreo transaction executors.
+3. **Service Discovery**: The client is configured to find executor nodes using a discovery service. This example supports:
+    * **etcd**: Executors register themselves with an `etcd` cluster. The client queries `etcd` to find them.
+    * **HTTP**: Executors register with a central HTTP registry. The client queries this registry.
+4. **Oreo Executor Nodes**: Separate processes (e.g., `ft-executor`) that handle the actual transaction logic. This example application acts as a *client* to these nodes.
+5. **Time Oracle**: A central service (`ft-timeoracle`) that provides timestamps for transactions.
 
-```bash
-# Use HTTP-based service discovery
-./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register http
+## Prerequisites
 
-# Use etcd-based service discovery
-./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register etcd
+* Go 1.18+
+* A running **Time Oracle** instance.
+* Running **Executor** instances that have registered themselves using a service discovery method.
+* A running **Redis** instance.
+* (Optional) A running **etcd** cluster if you are using `etcd` for service discovery.
+
+## Deploying Dependencies (Redis & etcd)
+
+You can easily deploy the required services using Docker.
+
+### Redis
+
+Run the following command to start a Redis container:
+
+```sh
+docker run --name oreo-redis -p 6379:6379 -d redis:7.2-alpine
 ```
 
-### 2. Configuration File
+### etcd
 
-The project requires a `config.yaml` configuration file, which must include the `service_discovery` section:
+If you are using `etcd` for service discovery, run this command to start an etcd container:
 
-```yaml
-service_discovery:
-  type: "etcd"  # "http" or "etcd"
-  
-  # HTTP service discovery configuration
-  http:
-    registry_port: ":9000"
-  
-  # etcd service discovery configuration
-  etcd:
-    endpoints:
-      - "localhost:2379"
-    username: ""
-    password: ""
-    dial_timeout: "5s"
-    key_prefix: "/oreo/services"
+```sh
+docker run -d \
+    --name oreo-etcd \
+    -p 2379:2379 \
+    -p 2380:2380 \
+    --env ALLOW_NONE_AUTHENTICATION=yes \
+    --env ETCD_ADVERTISE_CLIENT_URLS=http://localhost:2379 \
+    --env ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379 \
+    gcr.io/etcd-development/etcd:v3.5.13
 ```
 
-### 3. Full Configuration Example
+This starts a single-node etcd cluster that is accessible at `localhost:2379` without authentication.
 
-```yaml
-# Time oracle configuration
-time_oracle_url: "http://localhost:8012/timestamp/common"
-server_port: ":3001"
+## Configuration (`config.yaml`)
 
-# Redis configuration
-redis_addr: "localhost:6379"
-redis_password: "kkkzoz"
+The application is configured using `config.yaml`. Key sections are:
 
-# MongoDB configuration
-mongodb_addr: "mongodb://localhost:27017"
-mongodb_username: "admin"
-mongodb_password: "password"
-mongodb_db_name: "test_db"
-mongodb_collection_name: "test_data"
+* `time_oracle_url`: The URL of the running time oracle.
+* `server_port`: The port on which this example's API server will run.
+* `redis_addr`: The address of the Redis instance.
+* `service_discovery`: Configures the discovery method.
+  * `http`: Configuration for the HTTP discovery.
+  * `etcd`: Configuration for the `etcd` discovery.
 
-# Service discovery configuration
-service_discovery:
-  type: "etcd"  # "http" or "etcd"
-  
-  http:
-    registry_port: ":9000"
-  
-  etcd:
-    endpoints:
-      - "localhost:2379"
-    username: ""
-    password: ""
-    dial_timeout: "5s"
-    key_prefix: "/oreo/services"
-```
+## How to Run
+
+1. **Build Binaries**: First, compile the `ft-timeoracle` and `ft-executor` services using the provided script. The script will place the compiled binaries in the current directory.
+
+    ```sh
+    ./build_services.sh
+    ```
+
+2. **Start Oreo Services**: Before running this example, ensure the prerequisite Oreo services are running.
+
+    * **Start Time Oracle**:
+
+        ```sh
+        ./ft-timeoracle -role primary -p 8012 -type hybrid -max-skew 50ms
+        ```
+
+    * **Start at least one Executor**
+
+        ```sh
+        # Using etcd for service discovery
+        ./ft-executor -p 8001 --advertise-addr "localhost:8001" -bc "./executor-etcd-config.yaml" -w ycsb -db "Redis" -registry etcd
+
+        # OR
+
+        # Using HTTP for service discovery
+        ./ft-executor -p 8001 --advertise-addr "localhost:8001" -bc "./executor-http-config.yaml" -w ycsb -db "Redis" -registry http
+        ```
+
+3. **Configure the Example**: Edit `config.yaml` in this directory (`examples/service-register`) to match your environment (e.g., `etcd` endpoints, Redis address).
+
+4. **Run the Example Application**:
+    Navigate to this directory and run the main program.
+
+    ```sh
+    go run main.go --discovery etcd
+
+    # OR
+    go run main.go --discovery http
+    ```
+
+    The API server will start on the port specified in `config.yaml` (e.g., `:3001`).
 
 ## API Endpoints
 
-### Health Check
+You can now interact with the running API server.
 
-- **GET** `/health` – Service health check
+* **`GET /health`**: Health check for the API server.
+* **`GET /api/v1/service-discovery/status`**: Shows the configured service discovery method.
+* **`GET /api/v1/services/redis`**: Attempts to discover the address of a registered "Redis" service via the discovery mechanism.
 
-### Redis Test Endpoints
+### Redis Transactions
 
-#### Write Data to Redis
+* **`POST /api/v1/redis-test`**: Writes data to Redis within an Oreo transaction.
 
-- **POST** `/api/v1/redis-test` – Write test data to Redis
+  **Request Body**:
 
-**Request body:**
-```json
-{
-  "id": "test-id",
-  "message": "test message",
-  "timestamp": "2024-01-01T00:00:00Z"
-}
-```
-
-**Response:**
-```json
-{
-  "message": "Data written to Redis successfully",
-  "data": {
-    "id": "test-id",
-    "message": "test message",
+  ```json
+  {
+    "id": "my-key-1",
+    "message": "Hello, distributed world!",
     "timestamp": "2024-01-01T00:00:00Z"
   }
-}
+  ```
+
+* **`GET /api/v1/redis-test/:id`**: Reads data from Redis within an Oreo transaction.
+  * Example: `GET http://localhost:3001/api/v1/redis-test/my-key-1`
+
+### Testing the API
+
+A helper script, `test_api.sh`, is provided to test all endpoints. Make sure `httpie` is installed, then run the script:
+
+```sh
+./test_api.sh
 ```
-
-#### Read Data from Redis
-
-- **GET** `/api/v1/redis-test/:id` – Read test data from Redis
-
-**Response:**
-```json
-{
-  "id": "test-id",
-  "message": "test message",
-  "timestamp": "2024-01-01T00:00:00Z"
-}
-```
-
-### MongoDB Test Endpoints
-
-#### Write Data to MongoDB
-
-- **POST** `/api/v1/mongo-test` – Write test data to MongoDB
-
-**Request body:**
-```json
-{
-  "id": "test-id",
-  "message": "test message"
-}
-```
-
-**Response:**
-```json
-{
-  "message": "Data written to MongoDB successfully",
-  "data": {
-    "id": "test-id",
-    "message": "test message",
-    "timestamp": "2024-01-01T00:00:00Z"
-  }
-}
-```
-
-### Service Discovery Status Endpoints
-
-#### Get Service Discovery Status
-
-- **GET** `/api/v1/service-discovery/status` – View current service discovery status
-
-**Response:**
-```json
-{
-  "type": "etcd",
-  "status": "active",
-  "config": {
-    "type": "etcd",
-    "etcd_endpoints": ["localhost:2379"],
-    "http_registry": ""
-  }
-}
-```
-
-#### Get Redis Service Address
-
-- **GET** `/api/v1/services/redis` – View Redis service address
-
-**Response:**
-```json
-{
-  "service": "Redis",
-  "address": "localhost:6379",
-  "discovery_type": "etcd"
-}
-```
-
-## Startup Steps
-
-1. Start the time oracle service
-
-```powershell
-./ft-timeoracle -role primary -p 8012 -type hybrid -max-skew 50ms
-```
-2. Start the executor
-
-```bash
-# Use HTTP-based service discovery
-./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register http
-
-# Use etcd-based service discovery
-./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -register etcd
-```
-
-3. Start the service-register service: `go run main.go`
-4. Use the API endpoints to test
-
-## Notes
-
-- The service discovery type must match the `-register` parameter used when starting the executor
-- etcd-based service discovery requires a running etcd cluster
-- HTTP-based service discovery will start an internal HTTP registry
-- If service discovery fails, the system will fall back to static configuration

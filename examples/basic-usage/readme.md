@@ -96,9 +96,9 @@ docker run \
     haproxy:latest
 
 # 3. Start executor instances (in separate terminals)
-./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1"
+./ft-executor -p 8001 -w ycsb --advertise-addr "localhost:8001" -bc "./config.yaml" -db "Redis,MongoDB1" -registry http
 
-./ft-executor -p 8002 -w ycsb --advertise-addr "localhost:8002" -bc "./config.yaml" -db "Redis,MongoDB1"
+./ft-executor -p 8002 -w ycsb --advertise-addr "localhost:8002" -bc "./config.yaml" -db "Redis,MongoDB1" -registry http
 ```
 
 ### 4. Run the Example Application

@@ -2,9 +2,9 @@
 
 An IoT platform example based on the Oreo distributed transaction framework, demonstrating how to handle IoT device data in a multi-database environment.
 
-# Deployment Options
+## Deployment Options
 
-## Docker Compose Deployment
+### Docker Compose Deployment
 
 For quick and easy deployment, use Docker Compose:
 
@@ -15,45 +15,33 @@ cd examples/iot-platform
 docker compose up -d
 ```
 
-## Manual Deployment
+### Manual Deployment
 
-## 1. Start Database Services
+#### 1. Start Database Services
 
 ```powershell
 docker compose -f './docker-compose.yml' up -d cassandra redis mongodb
 ```
 
-## 2. Configure Cassandra
-
-Connect to the Cassandra container and create keyspace:
-
-```powershell
-# Connect to Cassandra container
-docker exec -it cassandra cqlsh
-
-# Create keyspace
-CREATE KEYSPACE oreo WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
-```
-
-## 3. Start Time Oracle Service
+#### 2. Start Time Oracle Service
 
 ```powershell
 ./ft-timeoracle -role primary -p 8012 -type hybrid -max-skew 50ms
 ```
 
-## 4. Start Executor Instances
+#### 3. Start Executor Instances
 
 Start in different terminals:
 
 ```powershell
 # Redis and MongoDB executor
-./ft-executor -p 8002 -w ycsb --advertise-addr "localhost:8002" -bc "./executor-config.yaml" -db "Redis,MongoDB1"
+./ft-executor -p 8002 -w ycsb --advertise-addr "localhost:8002" -bc "./executor-config.yaml" -db "Redis,MongoDB1" -registry http
 
 # Cassandra executor
-./ft-executor -p 8003 -w ycsb --advertise-addr "localhost:8003" -bc "./executor-config.yaml" -db "Cassandra"
+./ft-executor -p 8003 -w ycsb --advertise-addr "localhost:8003" -bc "./executor-config.yaml" -db "Cassandra" -registry http
 ```
 
-## 5. Start IoT Platform Service
+#### 4. Start IoT Platform Service
 
 ```powershell
 go run main.go
@@ -61,9 +49,9 @@ go run main.go
 
 The service will start at `http://localhost:8081`.
 
-# API Documentation
+## API Documentation
 
-## 1. Device Registration API
+### 1. Device Registration API
 
 **Endpoint**: `POST /api/v1/devices`
 
@@ -98,7 +86,7 @@ The service will start at `http://localhost:8081`.
 
 ---
 
-## 2. Sensor Data Reporting API
+### 2. Sensor Data Reporting API
 
 **Endpoint**: `POST /api/v1/data`
 
@@ -134,7 +122,7 @@ The service will start at `http://localhost:8081`.
 
 ---
 
-## 3. Get Device Information API
+### 3. Get Device Information API
 
 **Endpoint**: `GET /api/v1/devices/{deviceId}`
 
@@ -177,7 +165,7 @@ The service will start at `http://localhost:8081`.
 
 ---
 
-## 4. Get Latest Device Data API
+### 4. Get Latest Device Data API
 
 **Endpoint**: `GET /api/v1/devices/{deviceId}/latest?sensor_type={sensorType}`
 
@@ -206,7 +194,7 @@ The service will start at `http://localhost:8081`.
 
 ---
 
-## 5. Batch Data Processing API
+### 5. Batch Data Processing API
 
 **Endpoint**: `POST /api/v1/data/batch`
 
@@ -250,7 +238,7 @@ The service will start at `http://localhost:8081`.
 
 ---
 
-## 6. Health Check API
+### 6. Health Check API
 
 **Endpoint**: `GET /health`
 
