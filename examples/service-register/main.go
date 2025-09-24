@@ -55,10 +55,11 @@ var (
 		"HTTP",
 		"discover type (http or etcd)",
 	)
+	configPath = flag.String("config", "./client-config-9000.yaml", "path to config file")
 )
 
 func loadConfig() error {
-	data, err := os.ReadFile("./client-config.yaml")
+	data, err := os.ReadFile(*configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -129,6 +130,11 @@ func initConnections() error {
 		"Network client created successfully with %s service discovery",
 		discoveryConfig.Type,
 	)
+
+	time.Sleep(2 * time.Second) // Wait for service discovery to stabilize
+
+	redisAddr, redisErr := client.GetServerAddr("Redis")
+	log.Printf("Redis server address: %v, error: %v", redisAddr, redisErr) // Test service discovery
 
 	// Initialize time source
 	oracle = timesource.NewGlobalTimeSource(config.TimeOracleURL)

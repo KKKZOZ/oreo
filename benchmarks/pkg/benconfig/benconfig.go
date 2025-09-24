@@ -1,6 +1,7 @@
 package benconfig
 
 import (
+	"strings"
 	"time"
 
 	"github.com/kkkzoz/oreo/pkg/network"
@@ -21,6 +22,7 @@ var GlobalClient *network.Client
 
 type BenchmarkConfig struct {
 	RegistryAddr       string              `yaml:"registry_addr"`
+	RegistryAddrs      []string            `yaml:"registry_addrs"`
 	ExecutorAddressMap map[string][]string `yaml:"executor_address_map"`
 	TimeOracleUrl      string              `yaml:"time_oracle_url"`
 	ZipfianConstant    float64             `yaml:"zipfian_constant"`
@@ -54,4 +56,35 @@ type BenchmarkConfig struct {
 	TiKVAddr          []string `yaml:"tikv_addr"`
 
 	// DBCombination []string `yaml:"db_combination"`
+}
+
+// ResolveHTTPRegistryAddrs returns the list of configured HTTP registry
+// addresses, normalizing legacy single-address fields and trimming blanks.
+// It prefers the explicit slice when present to keep backwards compatibility
+// with existing configs using registry_addr.
+func (cfg *BenchmarkConfig) ResolveHTTPRegistryAddrs() []string {
+	var out []string
+
+	appendIfNotEmpty := func(addr string) {
+		addr = strings.TrimSpace(addr)
+		if addr != "" {
+			out = append(out, addr)
+		}
+	}
+
+	for _, addr := range cfg.RegistryAddrs {
+		appendIfNotEmpty(addr)
+	}
+
+	if len(out) > 0 {
+		return out
+	}
+
+	if cfg.RegistryAddr != "" {
+		for _, addr := range strings.Split(cfg.RegistryAddr, ",") {
+			appendIfNotEmpty(addr)
+		}
+	}
+
+	return out
 }

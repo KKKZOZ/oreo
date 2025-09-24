@@ -1,5 +1,7 @@
-# Using HTTP registry
-registry_addr: "http://localhost:9000"
+# Using HTTP registry (supports multiple comma-separated or list entries)
+registry_addrs:
+  - "http://localhost:9000"
+# registry_addr: "http://localhost:9000" # Legacy single-address field still supported
 
 # Using Etcd registry
 # registry_addr: "http://localhost:2379"

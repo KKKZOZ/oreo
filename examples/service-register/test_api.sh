@@ -2,12 +2,15 @@
 
 # A simple script to test the API endpoints of the service-register example.
 #
+# Usage: ./test_api.sh [port]
+#
 # Prerequisites:
 # 1. The service-register example must be running.
 # 2. httpie must be installed (e.g., `brew install httpie` or `pip install httpie`).
 
 # --- Configuration ---
-BASE_URL="http://localhost:3001"
+PORT="${1:-3001}"
+BASE_URL="http://localhost:${PORT}"
 TEST_ID="test-$(date +%s)" # Unique ID for the test data
 
 # --- Helper Functions ---

@@ -1,4 +1,8 @@
-registry_addr: "http://localhost:9000"
+# registry_addr: "http://localhost:9000"
+registry_addrs:
+  - "http://localhost:9000"
+  - "http://localhost:9001"
+
 time_oracle_url: "http://localhost:8012/timestamp/common"
 
 # Redis configuration

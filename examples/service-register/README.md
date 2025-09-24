@@ -111,7 +111,8 @@ The application is configured using `config.yaml`. Key sections are:
     go run main.go --discovery etcd
 
     # OR
-    go run main.go --discovery http
+    go run main.go --discovery http --config ./client-config-9000.yaml
+    go run main.go --discovery http --config ./client-config-9001.yaml
     ```
 
     The API server will start on the port specified in `config.yaml` (e.g., `:3001`).

@@ -42,8 +42,8 @@ var Banner = `
 
 type Server struct {
 	port           int
-	advertiseAddr  string // Address to advertise to the registry
-	registryAddr   string // Address of the registry service
+	advertiseAddr  string   // Address to advertise to the registry
+	registryAddrs  []string // Addresses of the registry service
 	handledDsNames []string
 	reader         network.Reader
 	committer      network.Committer
@@ -56,7 +56,8 @@ type Server struct {
 // NewServer modified to accept registry type
 func NewServer(
 	port int,
-	advertiseAddr, registryAddr string,
+	advertiseAddr string,
+	registryAddrs []string,
 	handledDsNames []string,
 	connMap map[string]txn.Connector,
 	factory txn.DataItemFactory,
@@ -81,9 +82,17 @@ func NewServer(
 	var registry discovery.ServiceRegistry
 	switch registryType {
 	case "etcd":
-		endpoints := []string{registryAddr}
-		if strings.Contains(registryAddr, ",") {
-			endpoints = strings.Split(registryAddr, ",")
+		endpoints := make([]string, 0, len(registryAddrs))
+		for _, addr := range registryAddrs {
+			for _, endpoint := range strings.Split(addr, ",") {
+				endpoint = strings.TrimSpace(endpoint)
+				if endpoint != "" {
+					endpoints = append(endpoints, endpoint)
+				}
+			}
+		}
+		if len(endpoints) == 0 {
+			logger.Fatal("No etcd registry endpoints provided")
 		}
 		config := discovery.DefaultRegistryConfig()
 		etcdReg, err := discovery.NewEtcdServiceRegistry(endpoints, "/oreo/services", config)
@@ -92,7 +101,7 @@ func NewServer(
 		}
 		registry = etcdReg
 	case "http":
-		registry = discovery.NewHTTPServiceRegistry(registryAddr, advertiseAddr, handledDsNames)
+		registry = discovery.NewHTTPServiceRegistry(registryAddrs, advertiseAddr, handledDsNames)
 	default:
 		panic("unknown registry type")
 	}
@@ -100,7 +109,7 @@ func NewServer(
 	return &Server{
 		port:           port,
 		advertiseAddr:  advertiseAddr,
-		registryAddr:   registryAddr,
+		registryAddrs:  registryAddrs,
 		handledDsNames: handledDsNames,
 		reader:         reader,
 		committer:      *network.NewCommitter(connMap, reader, serializer.NewJSON2Serializer(), factory, timeSource),
@@ -564,7 +573,7 @@ var (
 	registryAddrFlag = flag.String(
 		"registry-addr",
 		"",
-		"HTTP address of the registry service (e.g., http://localhost:9000)",
+		"Address(es) of the registry service. Use a single address or comma-separated list (e.g., http://localhost:9000,https://backup:9000)",
 	)
 	// New flag for registry type
 	registryType = flag.String(
@@ -591,19 +600,6 @@ func main() {
 		)
 	}
 
-	if *registryAddrFlag == "" {
-		logger.Info(
-			"Registry address (--registry-addr) not specified, will load from benchmark config",
-		)
-
-		if benConfig.RegistryAddr == "" {
-			logger.Fatal(
-				"Registry address not specified in benchmark config, please provide --registry-addr or set it in the config",
-			)
-		}
-		*registryAddrFlag = benConfig.RegistryAddr
-	}
-
 	// Setup profiling and tracing if enabled
 	if *pprofFlag {
 		startCPUProfile()
@@ -619,6 +615,17 @@ func main() {
 		config.Debug.CherryGarciaMode = true
 	}
 	config.Debug.DebugMode = false // Ensure standard debug mode is off unless explicitly enabled
+
+	registryAddrs, err := determineRegistryAddrs(*registryType, *registryAddrFlag, &benConfig)
+	if err != nil {
+		logger.Fatalw("Failed to resolve registry addresses", "error", err)
+	}
+
+	if *registryType == "http" {
+		registryAddrs = normalizeHTTPRegistryAddrs(registryAddrs)
+	}
+
+	logger.Infow("Resolved registry addresses", "type", *registryType, "addrs", registryAddrs)
 
 	// Establish database connections based on workload
 	connMap := getConnMap(*workloadType, *db_combination)
@@ -640,18 +647,6 @@ func main() {
 	}
 	logger.Infow("Executor configured to handle datastores", "dsNames", handledDsNames)
 
-	// Validate registry address format - only for HTTP registry
-	if *registryType == "http" && *registryAddrFlag != "" &&
-		!strings.HasPrefix(*registryAddrFlag, "http://") &&
-		!strings.HasPrefix(*registryAddrFlag, "https://") {
-		logger.Warnw(
-			"HTTP registry address missing scheme, assuming http://",
-			"registry-addr",
-			*registryAddrFlag,
-		)
-		*registryAddrFlag = "http://" + *registryAddrFlag
-	}
-
 	// Create the time source (Oracle)
 	oracle := timesource.NewGlobalTimeSource(benConfig.TimeOracleUrl)
 
@@ -659,7 +654,7 @@ func main() {
 	server := NewServer(
 		*port,
 		*advertiseAddrFlag,
-		*registryAddrFlag,
+		registryAddrs,
 		handledDsNames,
 		connMap,
 		&redis.RedisItemFactory{},
@@ -730,6 +725,93 @@ func loadConfig(configPath string) error {
 	// Add more validation as needed (e.g., check required DB addresses based on workload)
 
 	return nil
+}
+
+func determineRegistryAddrs(registryType, cliValue string, cfg *benconfig.BenchmarkConfig) ([]string, error) {
+	cliValue = strings.TrimSpace(cliValue)
+
+	switch registryType {
+	case "http":
+		if cliValue != "" {
+			addresses := parseAddressList([]string{cliValue})
+			if len(addresses) == 0 {
+				return nil, fmt.Errorf("no http registry addresses found in --registry-addr")
+			}
+			return addresses, nil
+		}
+		addrs := cfg.ResolveHTTPRegistryAddrs()
+		if len(addrs) == 0 {
+			return nil, fmt.Errorf("no http registry addresses provided via --registry-addr or config")
+		}
+		addresses := parseAddressList(addrs)
+		if len(addresses) == 0 {
+			return nil, fmt.Errorf("no http registry addresses remained after parsing config")
+		}
+		return addresses, nil
+	case "etcd":
+		if cliValue != "" {
+			addresses := parseAddressList([]string{cliValue})
+			if len(addresses) == 0 {
+				return nil, fmt.Errorf("no etcd registry addresses found in --registry-addr")
+			}
+			return addresses, nil
+		}
+		sources := make([]string, 0, 1+len(cfg.RegistryAddrs))
+		if cfg.RegistryAddr != "" {
+			sources = append(sources, cfg.RegistryAddr)
+		}
+		if len(cfg.RegistryAddrs) > 0 {
+			sources = append(sources, cfg.RegistryAddrs...)
+		}
+		if len(sources) == 0 {
+			return nil, fmt.Errorf("no etcd registry addresses provided via --registry-addr or config")
+		}
+		addresses := parseAddressList(sources)
+		if len(addresses) == 0 {
+			return nil, fmt.Errorf("no etcd registry addresses remained after parsing config")
+		}
+		return addresses, nil
+	default:
+		return nil, fmt.Errorf("unsupported registry type '%s'", registryType)
+	}
+}
+
+func parseAddressList(inputs []string) []string {
+	var out []string
+	for _, input := range inputs {
+		for _, part := range strings.Split(input, ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				out = append(out, part)
+			}
+		}
+	}
+	return out
+}
+
+func normalizeHTTPRegistryAddrs(addrs []string) []string {
+	normalized := make([]string, 0, len(addrs))
+	seen := make(map[string]struct{}, len(addrs))
+	for _, addr := range addrs {
+		trimmed := strings.TrimSpace(addr)
+		if trimmed == "" {
+			continue
+		}
+		if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+			logger.Warnw(
+				"HTTP registry address missing scheme, defaulting to http://",
+				"address",
+				trimmed,
+			)
+			trimmed = "http://" + trimmed
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
 }
 
 // --- Profiling and Tracing Setup ---
