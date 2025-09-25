@@ -15,7 +15,7 @@ func String(b []byte) (s string) {
 	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
 	pstring.Data = pbytes.Data
 	pstring.Len = pbytes.Len
-	return
+	return s
 }
 
 // Slice converts string to slice without copy.
@@ -26,5 +26,5 @@ func Slice(s string) (b []byte) {
 	pbytes.Data = pstring.Data
 	pbytes.Len = pstring.Len
 	pbytes.Cap = pstring.Len
-	return
+	return b
 }

@@ -727,7 +727,10 @@ func loadConfig(configPath string) error {
 	return nil
 }
 
-func determineRegistryAddrs(registryType, cliValue string, cfg *benconfig.BenchmarkConfig) ([]string, error) {
+func determineRegistryAddrs(
+	registryType, cliValue string,
+	cfg *benconfig.BenchmarkConfig,
+) ([]string, error) {
 	cliValue = strings.TrimSpace(cliValue)
 
 	switch registryType {
@@ -741,7 +744,9 @@ func determineRegistryAddrs(registryType, cliValue string, cfg *benconfig.Benchm
 		}
 		addrs := cfg.ResolveHTTPRegistryAddrs()
 		if len(addrs) == 0 {
-			return nil, fmt.Errorf("no http registry addresses provided via --registry-addr or config")
+			return nil, fmt.Errorf(
+				"no http registry addresses provided via --registry-addr or config",
+			)
 		}
 		addresses := parseAddressList(addrs)
 		if len(addresses) == 0 {
@@ -764,7 +769,9 @@ func determineRegistryAddrs(registryType, cliValue string, cfg *benconfig.Benchm
 			sources = append(sources, cfg.RegistryAddrs...)
 		}
 		if len(sources) == 0 {
-			return nil, fmt.Errorf("no etcd registry addresses provided via --registry-addr or config")
+			return nil, fmt.Errorf(
+				"no etcd registry addresses provided via --registry-addr or config",
+			)
 		}
 		addresses := parseAddressList(sources)
 		if len(addresses) == 0 {

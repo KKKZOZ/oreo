@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# 根据第一个参数决定 servers
 if [ "$1" == "3" ]; then
     servers=(node2 node3)
 elif [ "$1" == "5" ]; then
@@ -10,9 +9,7 @@ else
     exit 1
 fi
 
-
 user="root"
-
 
 for server in "${servers[@]}"; do
     echo "========================================"

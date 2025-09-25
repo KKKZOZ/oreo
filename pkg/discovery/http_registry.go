@@ -403,7 +403,11 @@ func (h *HTTPServiceRegistry) performRegistration(ctx context.Context) error {
 		)
 		joined := errors.Join(errs...)
 		if joined == nil {
-			joined = fmt.Errorf("registered successfully with %d of %d registries", len(successes), attempted)
+			joined = fmt.Errorf(
+				"registered successfully with %d of %d registries",
+				len(successes),
+				attempted,
+			)
 		}
 		return fmt.Errorf("failed to register with all HTTP registries: %w", joined)
 	}
