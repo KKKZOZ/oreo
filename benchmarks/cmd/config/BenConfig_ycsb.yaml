@@ -1,20 +1,20 @@
 # Benchmark system configuration
 registry_addrs:
-  - "http://node1:9000"
+  - "http://10.206.206.2:9000"
 
 fault_tolerance_request_interval_value: 1
 # deploy time oracle on node2
-time_oracle_url: "http://node2:8010"
+time_oracle_url: "http://10.206.206.3:8010"
 zipfian_constant: 0.99
 latency_value: 0
 
 # Redis configuration
-redis_addr: "node2:6379"
+redis_addr: "10.206.206.3:6379"
 redis_password: "kkkzoz"
 
 # MongoDB configuration
-mongodb_addr1: "mongodb://node2:27017"
-mongodb_addr2: "mongodb://node3:27018"
+mongodb_addr1: "mongodb://10.206.206.3:27017"
+mongodb_addr2: "mongodb://10.206.206.4:27018"
 mongodb_username: "admin"
 mongodb_password: "password"
 

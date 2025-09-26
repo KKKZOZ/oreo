@@ -224,9 +224,12 @@ func (hsd *HTTPServiceDiscovery) handleHeartbeat(w http.ResponseWriter, r *http.
 	if instance, exists := hsd.instances[req.Address]; exists {
 		instance.LastHeartbeat = time.Now()
 		hsd.instances[req.Address] = instance
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	// If instance doesn't exist, force re-registration
+	w.WriteHeader(http.StatusNotFound)
 }
 
 func (hsd *HTTPServiceDiscovery) handleGetServices(w http.ResponseWriter, r *http.Request) {

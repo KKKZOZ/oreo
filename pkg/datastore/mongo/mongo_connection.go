@@ -88,7 +88,7 @@ func (m *MongoConnection) Connect() error {
 		return nil
 	}
 
-	clientOptions := options.Client().ApplyURI(m.Address)
+	clientOptions := options.Client().ApplyURI(m.Address).SetMaxPoolSize(1000)
 
 	// clientOptions.SetConnectTimeout(1 * time.Second)
 

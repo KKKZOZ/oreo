@@ -49,8 +49,13 @@ cd ~/oreo-ben || handle_error "oreo-ben directory not found"
 ls ./config
 
 if [ "$remove_all" = true ]; then
-    docker rm -f ft-executor-8001
-    docker rm -f ft-executor-8002
+    # 获取所有以 ft-executor- 为前缀的容器并删除
+    mapfile -t containers < <(docker ps -a --format '{{.Names}}' | grep '^ft-executor-' || true)
+    if [ "${#containers[@]}" -gt 0 ]; then
+        docker rm -f "${containers[@]}"
+    else
+        echo "No ft-executor-* containers found."
+    fi
 fi
 
 ip=$(./getip)

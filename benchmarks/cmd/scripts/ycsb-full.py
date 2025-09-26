@@ -129,6 +129,9 @@ def get_metrics(config, profile, thread):
         f"{config['db_combinations']}-{profile}-{thread}.txt"
     )
 
+
+    if not os.path.exists(file_path):
+        return 0.0, 0, 0.0
     with open(file_path, "r") as f:
         content = f.read()
 
@@ -358,10 +361,10 @@ def main():
             log("Ready to load data", YELLOW, config["verbose"])
 
     # Prompt to continue
-    choice = input("Do you want to continue? (y/n): ").strip().lower()
-    if choice not in ["y", "yes"]:
-        print("Exiting the script.")
-        sys.exit(0)
+    # choice = input("Do you want to continue? (y/n): ").strip().lower()
+    # if choice not in ["y", "yes"]:
+    #     print("Exiting the script.")
+    #     sys.exit(0)
 
     # Load data if needed
     if not load_flag_file.exists():

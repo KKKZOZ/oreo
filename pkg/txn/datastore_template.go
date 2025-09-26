@@ -182,7 +182,9 @@ func (r *Datastore) readFromConn(key string, value any) error {
 				// If it is not put into the cache, the record is invisible for prepare phase
 				// so the code will regard it as a new record
 				// and create a new record in the prepare phase (set `doCreate` to true)
+				r.mu.Lock()
 				r.readCache[curItem.Key()] = curItem
+				r.mu.Unlock()
 				errMsg := "key not found because item is already deleted in " + r.Name
 				return errors.New(errMsg)
 			}
@@ -194,7 +196,9 @@ func (r *Datastore) readFromConn(key string, value any) error {
 				return err
 			}
 		}
+		r.mu.Lock()
 		r.readCache[curItem.Key()] = curItem
+		r.mu.Unlock()
 		return nil
 	}
 
@@ -479,7 +483,9 @@ func (r *Datastore) conditionalUpdate(cacheItem DataItem) error {
 			return err
 		}
 	}
+	r.mu.Lock()
 	dbItem := r.readCache[cacheItem.Key()]
+	r.mu.Unlock()
 	// if the record is dropped by the repeatable read rule
 	if res, ok := r.invisibleSet[cacheItem.Key()]; ok && res {
 		dbItem = nil
