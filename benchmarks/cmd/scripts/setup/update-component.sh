@@ -17,7 +17,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")" && cd ../../../.. && pwd)"
 
 mkdir -p "${PROJECT_ROOT}/benchmarks/cmd/bin"
 
-components=("executor" "timeoracle" "ft-executor" "ft-timeoracle" "bin-util/getip" "bin-util/cassandra_util")
+components=("executor" "timeoracle" "ft-executor" "ft-timeoracle" "benchmarks/bin-util/getip" "benchmarks/bin-util/cassandra_util")
 
 for component in "${components[@]}"; do
     echo "Updating ${component}..."

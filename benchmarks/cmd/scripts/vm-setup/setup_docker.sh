@@ -1,9 +1,16 @@
 #!/bin/bash
 
-servers=("10.206.206.3" "10.206.206.4" "10.206.206.5" "10.206.206.6")
-# servers=("10.206.206.3" "10.206.206.4" "10.206.206.5")
+# 根据第一个参数决定 servers
+if [ "$1" == "3" ]; then
+    servers=(node2 node3)
+elif [ "$1" == "5" ]; then
+    servers=(node2 node3 node4 node5)
+else
+    echo "Usage: $0 [3|5]"
+    exit 1
+fi
 
-# 用户名
+
 user="root"
 
 

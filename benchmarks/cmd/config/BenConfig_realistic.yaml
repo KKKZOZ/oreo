@@ -1,17 +1,18 @@
 # Benchmark system configuration
-registry_addr: "http://10.206.206.2:9000"
-executor_address_map:
-  "MongoDB":
-    - "http://10.206.206.3:8001"
-  "Redis":
-    - "http://10.206.206.4:8001"
-  "Cassandra":
-    - "http://10.206.206.5:8001"
-  "KVRocks":
-    - "http://10.206.206.6:8001"
+registry_addrs:
+  - "http://node1:9000"
+# executor_address_map:
+#   "MongoDB":
+#     - "http://10.206.206.3:8001"
+#   "Redis":
+#     - "http://10.206.206.4:8001"
+#   "Cassandra":
+#     - "http://10.206.206.5:8001"
+#   "KVRocks":
+#     - "http://10.206.206.6:8001"
 
 # deploy time oracle on node2
-time_oracle_url: "http://10.206.206.3:8010"
+time_oracle_url: "http://10.206.206.2:8010"
 zipfian_constant: 0.9
 latency_value: 0
 
@@ -20,7 +21,7 @@ redis_addr: "10.206.206.4:6379"
 redis_password: "kkkzoz"
 
 # MongoDB configuration
-mongodb_addr1: "mongodb://10.206.206.3:27017"
+mongodb_addr1: "mongodb://node2:27017"
 mongodb_addr2: "mongodb://172.24.58.115:27018"
 mongodb_username: "admin"
 mongodb_password: "password"

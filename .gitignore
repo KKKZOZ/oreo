@@ -54,3 +54,9 @@ ft-timeoracle
 
 tc-test
 !tc-test/
+
+cassandra_util
+!cassandra_util/
+
+getip
+!getip/

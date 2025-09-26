@@ -164,6 +164,8 @@ source .bashrc && go env -w GOPROXY=https://goproxy.cn,direct
 ```shell
 cd oreo/benchmarks/cmd/scripts/vm-setup
 ./setup.sh
+
+../setup/update-essentials.sh 3
 ```
 
 1. 同步数据
