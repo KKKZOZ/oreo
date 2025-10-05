@@ -3,6 +3,7 @@ recordcount: 1000000
 max_load_batch_size: 1000
 
 # Total number of operations to be performed
+# 3 clients, each with 3000 operations
 operationcount: 3000
 
 # Number of operations in each transaction group
@@ -11,14 +12,11 @@ postcheckinterval: 1000
 
 # Proportions of different operations
 readproportion: 0.5 # Proportion of read operations
-updateproportion: 0 # Proportion of update operations
+updateproportion: 0.5 # Proportion of update operations
 insertproportion: 0 # Proportion of insert operations
 scanproportion: 0 # Proportion of scan operations
-readmodifywriteproportion: 0.5 # Proportion of read-modify-write operations
+readmodifywriteproportion: 0 # Proportion of read-modify-write operations
 
 # Proportions of operations on different databases
-redis1proportion: 0.5 # Proportion of operations on Redis instance 1
-mongo1proportion: 0 # Proportion of operations on MongoDB instance 1
-mongo2proportion: 0 # Proportion of operations on MongoDB instance 2
-couchdbproportion: 0 # Proportion of operations on CouchDB
-cassandraproportion: 0.5 # Proportion of operations on Cassandra
+redis1proportion: 0.5
+couchdbproportion: 0.5

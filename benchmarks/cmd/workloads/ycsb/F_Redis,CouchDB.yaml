@@ -17,8 +17,5 @@ scanproportion: 0 # Proportion of scan operations
 readmodifywriteproportion: 0.5 # Proportion of read-modify-write operations
 
 # Proportions of operations on different databases
-redis1proportion: 0.5 # Proportion of operations on Redis instance 1
-mongo1proportion: 0 # Proportion of operations on MongoDB instance 1
-mongo2proportion: 0 # Proportion of operations on MongoDB instance 2
-couchdbproportion: 0 # Proportion of operations on CouchDB
-cassandraproportion: 0.5 # Proportion of operations on Cassandra
+redis1proportion: 0.5
+couchdbproportion: 0.5

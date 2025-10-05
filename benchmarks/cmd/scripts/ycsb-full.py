@@ -276,13 +276,12 @@ def load_data(config):
     load_flag = Path(config["load_flag_dir"]) / f"{config['wl_type']}-load"
     load_flag.touch()
 
-
 def get_metrics(config, profile, thread):
     """
     Get metrics from output file(s).
     For multiple clients, aggregate results from all nodes.
-    - Duration: print all nodes' values, then take minimum
-    - Latency: print all nodes' values, then take minimum
+    - Duration: print all nodes' values, then take average
+    - Latency: print all nodes' values, then take maximum
     - Error ratio: aggregate all success/error counts
     """
     base_path = (
@@ -341,18 +340,18 @@ def get_metrics(config, profile, thread):
             if node_name in node_latencies:
                 print(f"    {node_name}: {node_latencies[node_name]}")
         
-        # Take minimum values
-        min_duration = min(node_durations.values()) if node_durations else 0.0
-        min_latency = min(node_latencies.values()) if node_latencies else 0
+        # Take average duration and maximum latency
+        avg_duration = sum(node_durations.values()) / len(node_durations) if node_durations else 0.0
+        max_latency = max(node_latencies.values()) if node_latencies else 0
         
-        print(f"  Selected minimum duration: {min_duration:.4f}")
-        print(f"  Selected minimum latency: {min_latency}\n")
+        print(f"  Selected average duration: {avg_duration:.4f}")
+        print(f"  Selected maximum latency: {max_latency}\n")
         
         # Calculate ratio from aggregated counts
         total = total_success + total_error
         ratio = total_error / total if total > 0 else 0.0
         
-        return min_duration, min_latency, ratio
+        return avg_duration, max_latency, ratio
     
     else:
         # Single client mode (original behavior)
@@ -385,7 +384,6 @@ def get_metrics(config, profile, thread):
         ratio = error_cnt / total if total > 0 else 0.0
 
         return duration, latency, ratio
-
 
 def print_summary(
     thread,

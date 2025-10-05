@@ -202,11 +202,11 @@ rsync -avP root@FILL:~/oreo ~/Projects/oreo2
 - Run
 
 ```shell
-./ycsb-full.sh -wl A -db MongoDB1,MongoDB2 -v -r
-./ycsb-full.sh -wl F -db MongoDB1,MongoDB2 -v -r
+./ycsb-full.sh -wl A -db MongoDB1,MongoDB2 -v -r --multiple-clients
+./ycsb-full.sh -wl F -db MongoDB1,MongoDB2 -v -r --multiple-clients
 
-./ycsb-full.sh -wl A -db Redis,Cassandra -v -r
-./ycsb-full.sh -wl F -db Redis,Cassandra -v -r
+./ycsb-full.sh -wl A -db Redis,Cassandra -v -r --multiple-clients
+./ycsb-full.sh -wl F -db Redis,Cassandra -v -r --multiple-clients
 ```
 
 #### Epoxy

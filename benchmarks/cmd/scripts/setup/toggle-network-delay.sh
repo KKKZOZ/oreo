@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # Script to manage bidirectional network delay using tc and IFB
-# Usage: sudo ./toggle-netwoek-delay.sh [on|off]
+# Usage: sudo ./toggle-network-delay.sh [on|off] [delay]
+#   delay: optional, default is 1.5ms (e.g., 1.5ms, 10ms, 100ms)
 
 # --- Configuration ---
 IFACE="eth0"         # Primary network interface (CHANGE IF NEEDED)
 IFB_IFACE="ifb0"     # IFB interface to use
-DELAY="1.5ms"        # One-way delay to add (results in 2x DELAY RTT increase)
+DEFAULT_DELAY="1.5ms"  # Default one-way delay (results in 2x DELAY RTT increase)
 # --- End Configuration ---
 
 # Check for root privileges
@@ -16,12 +17,14 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Check for correct number of arguments
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 [on|off]"
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    echo "Usage: $0 [on|off] [delay]"
+    echo "  delay: optional, default is ${DEFAULT_DELAY} (e.g., 1.5ms, 10ms, 100ms)"
     exit 1
 fi
 
 ACTION="$1"
+DELAY="${2:-$DEFAULT_DELAY}"  # Use second argument if provided, otherwise use default
 
 # Function to apply the delay rules
 apply_delay() {
@@ -113,7 +116,8 @@ case "$ACTION" in
         ;;
     *)
         echo "Invalid argument: $ACTION"
-        echo "Usage: $0 [on|off]"
+        echo "Usage: $0 [on|off] [delay]"
+        echo "  delay: optional, default is ${DEFAULT_DELAY}"
         exit 1
         ;;
 esac

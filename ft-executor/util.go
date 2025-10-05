@@ -155,7 +155,7 @@ func getKVRocksConn() *redis.RedisConnection {
 	logger.Infow("Connecting to KVRocks", "address", benConfig.KVRocksAddr)
 	kvConn := redis.NewRedisConnection(&redis.ConnectionOptions{
 		Address:  benConfig.KVRocksAddr,
-		Password: benConfig.RedisPassword, // Assuming same password config as Redis
+		Password: benConfig.KVRocksPassword,
 		PoolSize: *poolSize,
 	})
 	err := kvConn.Connect()

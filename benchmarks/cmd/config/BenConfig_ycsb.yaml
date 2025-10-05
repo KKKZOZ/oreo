@@ -21,11 +21,11 @@ mongodb_username: "admin"
 mongodb_password: "password"
 
 # KVRocks configuration
-kvrocks_addr: "172.24.58.116:6666"
-kvrocks_password: "kkkzoz"
+kvrocks_addr: "10.206.206.3:6666"
+kvrocks_password: "password"
 
 # CouchDB configuration
-couchdb_addr: "http://localhost:5984"
+couchdb_addr: "http://10.206.206.4:5984"
 couchdb_username: "admin"
 couchdb_password: "password"
 

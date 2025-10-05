@@ -3,7 +3,6 @@ package workload
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -75,8 +74,6 @@ func (wl *YCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 			if i%wl.wp.TxnOperationGroup == 0 {
 				if i != 0 {
 					txnDB.Commit()
-					restTime := rand.Intn(5) + 200 // 15-20ms
-					time.Sleep(time.Duration(restTime) * time.Millisecond)
 				}
 				if i != opCount {
 					txnDB.Start()
