@@ -4,8 +4,10 @@ if [ "$1" == "3" ]; then
     servers=(node2 node3)
 elif [ "$1" == "5" ]; then
     servers=(node2 node3 node4 node5)
+elif [ "$1" == "6" ]; then
+    servers=(node2 node3 node4 node5 node6)
 else
-    echo "Usage: $0 [3|5]"
+    echo "Usage: $0 [3|5|6]"
     exit 1
 fi
 

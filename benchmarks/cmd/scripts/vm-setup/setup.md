@@ -132,6 +132,9 @@ Host node4
 Host node5
     HostName 10.206.206.6
     User root
+Host node6
+    HostName 10.206.206.7
+    User root
 
 ```
 

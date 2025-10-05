@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
+	"strings"
 	"time"
 
 	"benchmark/pkg/benconfig"
@@ -72,6 +73,19 @@ func main() {
 	// Wait for executor connections
 	log.Println("Waiting 10s for executor connections...")
 	time.Sleep(10 * time.Second)
+
+	dbs := strings.Split(workloadType, ",")
+
+	httpClient := benconfig.GlobalClient
+	for _, db := range dbs {
+		addr, err := httpClient.GetServerAddr(db)
+		if err != nil {
+			log.Fatalf("Cannot find executor address for db %s: %v", db, err)
+		}
+
+		fmt.Printf("%s\n", addr)
+	}
+
 	log.Println("RUN!!!!")
 
 	switch preset {
@@ -127,7 +141,7 @@ func main() {
 
 	switch mode {
 	case "load":
-		cfg.Config.ConcurrentOptimizationLevel = 2
+		// cfg.Config.ConcurrentOptimizationLevel = 2
 		if benconfig.MaxLoadBatchSize == 0 {
 			log.Fatalf("MaxLoadBatchSize should be specified")
 		}
