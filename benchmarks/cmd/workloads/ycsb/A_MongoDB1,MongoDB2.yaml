@@ -3,7 +3,8 @@ recordcount: 100000
 max_load_batch_size: 1000
 
 # Total number of operations to be performed
-operationcount: 10000
+# 3 clients, each with 3000 operations
+operationcount: 3000
 
 # Number of operations in each transaction group
 txnoperationgroup: 6

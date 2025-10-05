@@ -20,7 +20,7 @@ for server in "${servers[@]}"; do
 
     ssh "$user"@"$server" <<EOF
     echo "执行命令: sudo yum install -y docker-ce"
-    sudo yum install -y docker-ce
+    sudo yum install -y docker-ce iproute-tc
     if [ $? -ne 0 ]; then
         echo "命令执行失败: sudo yum install -y docker-ce"
         exit 1

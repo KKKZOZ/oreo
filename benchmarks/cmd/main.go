@@ -71,8 +71,8 @@ func main() {
 	wp := loadConfig()
 
 	// Wait for executor connections
-	log.Println("Waiting 10s for executor connections...")
-	time.Sleep(10 * time.Second)
+	log.Println("Waiting 5s for executor connections...")
+	time.Sleep(5 * time.Second)
 
 	dbs := strings.Split(workloadType, ",")
 
