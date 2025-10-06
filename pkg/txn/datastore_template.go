@@ -658,7 +658,7 @@ func (r *Datastore) Prepare() (int64, error) {
 	}
 
 	if len(items) == 0 {
-		return 0, nil
+		return -1, nil
 	}
 
 	if config.Debug.NativeMode {

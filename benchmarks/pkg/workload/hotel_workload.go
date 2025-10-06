@@ -1,4 +1,3 @@
-// TODO: memcached => CouchDB or Redis
 package workload
 
 import (
@@ -431,7 +430,7 @@ func (wl *HotelWorkload) GeoSearch(ctx context.Context, db ycsb.TransactionDB) {
 		time.Now().Unix(),
 	)
 	sessionData, _ := json.Marshal(session)
-	db.Update(ctx, "Memcached", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID), string(sessionData))
+	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID), string(sessionData))
 
 	db.Commit()
 }
@@ -514,7 +513,7 @@ func (wl *HotelWorkload) MakeReservation(ctx context.Context, db ycsb.Transactio
 	sessionData, _ := json.Marshal(session)
 	db.Update(
 		ctx,
-		"Memcached",
+		"Redis",
 		fmt.Sprintf("%v:session:%v", wl.UserServiceNS, userID),
 		string(sessionData),
 	)
@@ -582,7 +581,7 @@ func (wl *HotelWorkload) GetRecommendation(ctx context.Context, db ycsb.Transact
 	sessionData, _ := json.Marshal(session)
 	db.Update(
 		ctx,
-		"Memcached",
+		"Redis",
 		fmt.Sprintf("%v:session:%v", wl.UserServiceNS, userID),
 		string(sessionData),
 	)
@@ -621,7 +620,7 @@ func (wl *HotelWorkload) ViewReservation(ctx context.Context, db ycsb.Transactio
 	sessionData, _ := json.Marshal(session)
 	db.Update(
 		ctx,
-		"Memcached",
+		"Redis",
 		fmt.Sprintf("%v:session:%v", wl.UserServiceNS, userID),
 		string(sessionData),
 	)
@@ -690,7 +689,7 @@ func (wl *HotelWorkload) SubmitReview(ctx context.Context, db ycsb.TransactionDB
 	sessionData, _ := json.Marshal(session)
 	db.Update(
 		ctx,
-		"Memcached",
+		"Redis",
 		fmt.Sprintf("%v:session:%v", wl.UserServiceNS, userID),
 		string(sessionData),
 	)

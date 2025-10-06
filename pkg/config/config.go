@@ -57,6 +57,8 @@ type debug struct {
 
 	NativeMode bool
 
+	RuntimeAnalysisMode bool
+
 	HTTPAdditionalLatency time.Duration
 
 	ConnAdditionalLatency time.Duration
@@ -116,6 +118,7 @@ var Debug = debug{
 	DebugMode:             false,
 	CherryGarciaMode:      false,
 	NativeMode:            false,
+	RuntimeAnalysisMode:   false,
 	HTTPAdditionalLatency: 0,
 	ConnAdditionalLatency: 0,
 	AssumptionCount:       0,

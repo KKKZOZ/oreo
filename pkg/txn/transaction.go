@@ -426,7 +426,8 @@ func (t *Transaction) commitInCherryGarcia() error {
 }
 
 func (t *Transaction) commitInOreo() error {
-	tCommit := int64(0)
+	tCommitMax := int64(0)
+	tCommitMin := int64(1 << 62)
 	success := true
 	var cause error
 	mu := sync.Mutex{}
@@ -437,7 +438,11 @@ func (t *Transaction) commitInOreo() error {
 		}()
 		ts, err := ds.Prepare()
 		mu.Lock()
-		tCommit = max(tCommit, ts)
+		tCommitMax = max(tCommitMax, ts)
+		if ts != -1 {
+			tCommitMin = min(tCommitMin, ts)
+		}
+
 		if err != nil {
 			success, cause = false, err
 			if stackError, ok := err.(*errors.Error); ok {
@@ -495,8 +500,12 @@ func (t *Transaction) commitInOreo() error {
 		"CheckPoint",
 	)
 
+	if config.Debug.RuntimeAnalysisMode {
+		dur := tCommitMax - tCommitMin
+		fmt.Printf("MAX: %d MIN: %d DSR: %d\n", tCommitMax, tCommitMin, dur)
+	}
 	if config.Config.AblationLevel >= 3 {
-		t.TxnCommitTime = tCommit
+		t.TxnCommitTime = tCommitMax
 	} else {
 		var err error
 		t.TxnCommitTime, err = t.getTime("commit")

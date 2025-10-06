@@ -135,7 +135,7 @@ require (
 	github.com/cristalhq/aconfig v0.19.0
 	github.com/cristalhq/aconfig/aconfigyaml v0.17.1
 	github.com/go-errors/errors v1.5.1
-	github.com/go-kivik/kivik/v4 v4.2.0
+	github.com/go-kivik/kivik/v4 v4.5.0
 	github.com/gocql/gocql v1.7.0
 	github.com/gorilla/mux v1.8.1
 	github.com/json-iterator/go v1.1.12

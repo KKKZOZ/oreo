@@ -70,7 +70,14 @@ func NewCouchDBConnection(config *ConnectionOptions) *CouchDBConnection {
 		}
 	}
 
-	client, _ := kivik.New("couch", finalConfig.Address, couchdb.OptionHTTPClient(
+	dsn := fmt.Sprintf(
+		"http://%s:%s@%s/",
+		finalConfig.Username,
+		finalConfig.Password,
+		finalConfig.Address,
+	)
+
+	client, _ := kivik.New("couch", dsn, couchdb.OptionHTTPClient(
 		httpClient,
 	))
 

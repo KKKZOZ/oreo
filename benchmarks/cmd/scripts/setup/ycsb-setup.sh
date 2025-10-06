@@ -47,7 +47,9 @@ elif [ "$db" == "CouchDB" ]; then
     echo "Remove couchDB container"
     docker rm -f couch
     echo "Create new couchDB container"
-    docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 -v /data/couchdb_data:/opt/couchdb/data \ -d couchdb
+    docker run -d --name couch --restart=always -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=password -p 5984:5984 \
+    -v /data/couchdb_data:/opt/couchdb/data \
+    couchdb
 elif [ "$db" == "Cassandra" ]; then
     echo "Remove cassandra container"
     docker rm -f cassandra

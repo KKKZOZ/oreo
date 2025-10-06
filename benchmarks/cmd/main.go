@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
-	"runtime/trace"
 	"strings"
 	"time"
 
@@ -39,6 +38,7 @@ var (
 	readStrategy       = ""
 	ablationLevel      = 4
 	isFaultTolerance   = false
+	zipfianConstant    = 0.0
 )
 
 func main() {
@@ -57,15 +57,16 @@ func main() {
 	}
 
 	if traceFlag {
-		f, err := os.Create("ben_trace.out")
-		if err != nil {
-			panic(err)
-		}
-		err = trace.Start(f)
-		if err != nil {
-			panic(err)
-		}
-		defer trace.Stop()
+		// f, err := os.Create("ben_trace.out")
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// err = trace.Start(f)
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// defer trace.Stop()
+		cfg.Debug.RuntimeAnalysisMode = true
 	}
 
 	wp := loadConfig()
@@ -426,6 +427,7 @@ func parseAndValidateFlag() {
 	flag.StringVar(&readStrategy, "read", "p", "Read Strategy")
 	flag.IntVar(&ablationLevel, "ab", 4, "Ablation level")
 	flag.BoolVar(&isFaultTolerance, "ft", false, "Enable fault tolerance benchmark mode")
+	flag.Float64Var(&zipfianConstant, "zipf", 0, "Zipfian constant")
 	flag.Parse()
 
 	if *help {
@@ -520,6 +522,11 @@ func loadConfig() *workload.WorkloadParameter {
 	// WorkloadParameter's config takes precedence over BenchmarkConfig
 	if wp.ZipfianConstant != 0 {
 		benconfig.ZipfianConstant = wp.ZipfianConstant
+	}
+
+	// commandline flag has the highest precedence
+	if zipfianConstant != 0 {
+		benconfig.ZipfianConstant = zipfianConstant
 	}
 
 	return wp

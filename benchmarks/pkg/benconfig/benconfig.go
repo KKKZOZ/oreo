@@ -10,7 +10,7 @@ import (
 var (
 	ExecutorAddressMap                  = map[string][]string{"ALL": {"localhost:8000"}}
 	TimeOracleUrl                       = "http://localhost:8010"
-	ZipfianConstant                     = 0.9
+	ZipfianConstant                     = 0.99
 	GlobalLatency                       = 3 * time.Millisecond
 	MaxLoadBatchSize                    = 100
 	RegistryAddr                        = "localhost:9000"
