@@ -254,7 +254,7 @@ func (h *HTTPServiceRegistry) manageConnectionLoop() {
 			h.mu.Unlock()
 
 			if !allRegistered {
-				logger.Infow("Service is not fully registered. Attempting to register...")
+				logger.Debugw("Service is not fully registered. Attempting to register...")
 				ctx, cancel := context.WithTimeout(h.heartbeatCtx, h.config.RequestTimeout)
 				err := h.performRegistration(ctx)
 				cancel() // Release context resources
@@ -265,7 +265,7 @@ func (h *HTTPServiceRegistry) manageConnectionLoop() {
 					h.isRegistered = true
 					h.mu.Unlock()
 				} else {
-					logger.Warnw("Background registration attempt failed, will retry.", "error", err)
+					// logger.Warnw("Background registration attempt failed, will retry.", "error", err)
 				}
 			} else {
 				logger.Debugw("Service is registered. Sending heartbeat...")
@@ -335,13 +335,13 @@ func (h *HTTPServiceRegistry) performRegistration(ctx context.Context) error {
 
 		resp, err := h.client.Do(req)
 		if err != nil {
-			logger.Warnw(
-				"HTTP registry register request failed",
-				"registry",
-				trimmedAddr,
-				"error",
-				err,
-			)
+			// logger.Warnw(
+			// 	"HTTP registry register request failed",
+			// 	"registry",
+			// 	trimmedAddr,
+			// 	"error",
+			// 	err,
+			// )
 			errs = append(errs, fmt.Errorf("%s: %w", trimmedAddr, err))
 			continue
 		}

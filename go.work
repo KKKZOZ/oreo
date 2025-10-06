@@ -6,5 +6,6 @@ use (
 	.
 	./benchmarks
 	./examples/basic-usage
-	./examples/iot-platform 
+	./examples/iot-platform
+	./examples/storage-overhead
 )

@@ -121,6 +121,8 @@ func (c *Committer) Prepare(dsName string, itemList []txn.DataItem,
 ) (map[string]string, int64, error) {
 	debugStart := time.Now()
 
+	// fmt.Printf("committer.Prepare() is called, itemList: %v\n", itemList)
+
 	err := c.validate(dsName, cfg, validateMap)
 	logger.Log.Debugw(
 		"After validation",

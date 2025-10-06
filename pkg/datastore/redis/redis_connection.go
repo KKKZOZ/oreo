@@ -224,26 +224,12 @@ func (r *RedisConnection) ConditionalUpdate(
 	value txn.DataItem,
 	doCreate bool,
 ) (string, error) {
-	debugStart := time.Now()
-
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
 
-	// logger.Log.Debugw("Start  ConditionalUpdate", "DataItem", value, "doCreate", doCreate, "LatencyInFunc", time.Since(debugStart), "Topic", "CheckPoint")
-	defer func() {
-		logger.Log.Debugw(
-			"End    ConditionalUpdate",
-			"key",
-			key,
-			"LatencyInFunc",
-			time.Since(debugStart),
-			"Topic",
-			"CheckPoint",
-		)
-	}()
-
 	if doCreate {
+
 		ctx := context.Background()
 		newVer := util.AddToString(value.Version(), 1)
 
@@ -253,10 +239,9 @@ func (r *RedisConnection) ConditionalUpdate(
 			Result()
 		if err != nil {
 			if err.Error() == "version mismatch" {
-				logger.Log.Debugw(
-					"Version mismatch",
-					"expected version",
-					value.Version(),
+				logger.Log.Warnw(
+					"Version mismatch in atomic create",
+					"key", value.Key(),
 					"current version",
 					value.Version(),
 				)
@@ -264,6 +249,9 @@ func (r *RedisConnection) ConditionalUpdate(
 			}
 			return "", err
 		}
+
+		// fmt.Printf("Created new item with key %s and version %s\n", value.Key(), newVer)
+
 		return newVer, nil
 	}
 
@@ -276,6 +264,12 @@ func (r *RedisConnection) ConditionalUpdate(
 		Result()
 	if err != nil {
 		if err.Error() == "version mismatch" {
+			logger.Log.Warnw(
+				"Version mismatch in conditional update",
+				"key", value.Key(),
+				"current version",
+				value.Version(),
+			)
 			return "", errors.New(txn.VersionMismatch)
 		}
 		return "", err
@@ -293,9 +287,6 @@ func (r *RedisConnection) ConditionalCommit(
 	if config.Debug.DebugMode {
 		time.Sleep(config.Debug.ConnAdditionalLatency)
 	}
-
-	logger.Log.Debugw("Start  ConditionalCommit", "key", key)
-	defer logger.Log.Debugw("End    ConditionalCommit", "key", key)
 
 	ctx := context.Background()
 	newVer := util.AddToString(version, 1)

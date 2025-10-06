@@ -8,6 +8,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/kkkzoz/oreo/internal/util"
 	"github.com/kkkzoz/oreo/pkg/config"
+	"github.com/kkkzoz/oreo/pkg/logger"
 	"github.com/kkkzoz/oreo/pkg/txn"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -228,6 +229,14 @@ func (m *MongoConnection) ConditionalUpdate(
 	}
 
 	if updatedItem.Version() != newVer {
+
+		logger.Log.Warnw(
+			"Version mismatch in conditional update",
+			"key", value.Key(),
+			"current version",
+			value.Version(),
+		)
+
 		return "", errors.New(txn.VersionMismatch)
 	}
 
@@ -345,6 +354,13 @@ func (m *MongoConnection) atomicCreateMongoItem(key string, value txn.DataItem) 
 		}
 		return "", err
 	}
+
+	logger.Log.Warnw(
+		"Version mismatch in atomic create",
+		"key", value.Key(),
+		"current version",
+		value.Version(),
+	)
 
 	return "", errors.New(txn.VersionMismatch)
 }

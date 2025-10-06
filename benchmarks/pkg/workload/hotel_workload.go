@@ -454,6 +454,7 @@ func (wl *HotelWorkload) GeoSearch(ctx context.Context, db ycsb.TransactionDB) {
 		fmt.Sprintf("%v:result:%v", wl.SearchServiceNS, userID),
 		string(resIDs),
 	)
+	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID), string(sessionData))
 
 	db.Commit()
 }
