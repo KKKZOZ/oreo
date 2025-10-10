@@ -6,8 +6,9 @@ max_load_batch_size: 1000
 operationcount: 3000
 
 # Number of operations in each transaction group
-txnoperationgroup: 12
+txnoperationgroup: 6
 postcheckinterval: 1000
+max_record_length: 5
 
 # Proportions of different operations
 readproportion: 0.5 # Proportion of read operations

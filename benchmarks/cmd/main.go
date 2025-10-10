@@ -79,6 +79,9 @@ func main() {
 
 	httpClient := benconfig.GlobalClient
 	for _, db := range dbs {
+		if db == "iot" || db == "hotel" || db == "social" {
+			db = "Redis"
+		}
 		addr, err := httpClient.GetServerAddr(db)
 		if err != nil {
 			log.Fatalf("Cannot find executor address for db %s: %v", db, err)
@@ -114,7 +117,6 @@ func main() {
 		cfg.Config.AsyncLevel = 2
 	}
 	cfg.Config.LeaseTime = 1000 * time.Millisecond
-	cfg.Config.MaxRecordLength = 2
 
 	switch readStrategy {
 	case "p":
@@ -247,6 +249,9 @@ func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
 		case "iot":
 			fmt.Println("This is a IoT workload")
 			return workload.NewIotWorkload(wp)
+		case "hotel":
+			fmt.Println("This is a hotel reservation workload")
+			return workload.NewHotelWorkload(wp)
 		case "social":
 			fmt.Println("This is a social network workload")
 			return workload.NewSocialWorkload(wp)
@@ -453,13 +458,7 @@ func displayBenchmarkInfo() {
 	fmt.Printf("ThreadNum: %d\n", threadNum)
 	fmt.Printf("Remote Mode: %v\n", isRemote)
 	fmt.Printf("Read Strategy: %v\n", readStrategy)
-	fmt.Printf(
-		"ConcurrentOptimizationLevel: %d\nAsyncLevel: %d\nMaxOutstandingRequest: %d\nMaxRecordLength: %d\n",
-		cfg.Config.ConcurrentOptimizationLevel,
-		cfg.Config.AsyncLevel,
-		cfg.Config.MaxOutstandingRequest,
-		cfg.Config.MaxRecordLength,
-	)
+	fmt.Printf("MaxRecordLength: %d\n", cfg.Config.MaxRecordLength)
 	fmt.Printf("HTTPAdditionalLatency: %v ConnAdditionalLatency: %v\n",
 		cfg.Debug.HTTPAdditionalLatency, cfg.Debug.ConnAdditionalLatency)
 	fmt.Printf("LeaseTime: %v\n", cfg.Config.LeaseTime)
@@ -522,6 +521,10 @@ func loadConfig() *workload.WorkloadParameter {
 	// WorkloadParameter's config takes precedence over BenchmarkConfig
 	if wp.ZipfianConstant != 0 {
 		benconfig.ZipfianConstant = wp.ZipfianConstant
+	}
+
+	if wp.MaxRecordLength != 0 {
+		cfg.Config.MaxRecordLength = wp.MaxRecordLength
 	}
 
 	// commandline flag has the highest precedence

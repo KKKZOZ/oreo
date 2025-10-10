@@ -82,10 +82,10 @@ func (r *Reader) Read(dsName string, key string, ts int64, cfg txn.RecordConfig,
 			}
 			return nil, errors.New("key not found prev is empty")
 		}
-		if isRemoteCall && cfg.MaxRecordLen > 2 {
-			curItem.SetPrev("")
-			curItem.SetVersion("")
-		}
+		// if isRemoteCall && cfg.MaxRecordLen > 2 {
+		// 	curItem.SetPrev("")
+		// 	curItem.SetVersion("")
+		// }
 		return curItem, nil
 	}
 

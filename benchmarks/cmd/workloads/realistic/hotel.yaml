@@ -1,0 +1,16 @@
+# Total number of records to be generated
+recordcount: 100000
+max_load_batch_size: 1000
+
+# Total number of operations to be performed
+operationcount: 100
+
+# Number of operations in each transaction group
+txnoperationgroup: 6
+postcheckinterval: 10
+
+task1proportion: 0.5
+task2proportion: 0.2
+task3proportion: 0.08
+task4proportion: 0.17
+task5proportion: 0.05

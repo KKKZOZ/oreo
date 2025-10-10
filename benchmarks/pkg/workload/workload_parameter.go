@@ -14,6 +14,7 @@ type WorkloadParameter struct {
 	TxnOperationGroup int     `yaml:"txnoperationgroup"`
 	MaxLoadBatchSize  int     `yaml:"max_load_batch_size"`
 	ZipfianConstant   float64 `yaml:"zipfian_constant"`
+	MaxRecordLength   int     `yaml:"max_record_length"`
 
 	ReadProportion            float64 `yaml:"readproportion"`
 	UpdateProportion          float64 `yaml:"updateproportion"`

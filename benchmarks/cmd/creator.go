@@ -166,8 +166,8 @@ func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb
 		mongoConn := NewMongoDBConn(1)
 
 		connMap := map[string]txn.Connector{
-			"Redis":   redisConn,
-			"MongoDB": mongoConn,
+			"Redis":    redisConn,
+			"MongoDB2": mongoConn,
 		}
 		return &oreo.OreoRealisticCreator{
 			IsRemote:            isRemote,
@@ -175,6 +175,24 @@ func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb
 			GlobalDatastoreName: "Redis",
 			Mode:                mode,
 		}, nil
+	}
+	if workloadType == "hotel" {
+		redisConn := NewRedisConn()
+		mongoConn := NewMongoDBConn(2)
+		cassandraConn := NewCassandraConn()
+
+		connMap := map[string]txn.Connector{
+			"Redis":     redisConn,
+			"MongoDB2":  mongoConn,
+			"Cassandra": cassandraConn,
+		}
+		return &oreo.OreoRealisticCreator{
+			IsRemote:            isRemote,
+			ConnMap:             connMap,
+			GlobalDatastoreName: "Redis",
+			Mode:                mode,
+		}, nil
+
 	}
 	if workloadType == "social" {
 		redisConn := NewRedisConn()

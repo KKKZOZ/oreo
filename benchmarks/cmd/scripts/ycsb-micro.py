@@ -23,8 +23,10 @@ executor_port = 8001
 timeoracle_port = 8010
 thread_load = 100
 default_threads = [12, 24, 36, 48, 60, 84, 96]
-default_operation_groups = [3, 5, 8, 10]
+default_operation_groups = [4,6,8,10,12]
+default_record_lengths = [2, 3, 4, 5]
 fixed_thread_for_group = 84
+fixed_thread_for_len = 84
 round_interval = 5
 node_list = ["node2", "node3"]
 client_nodes = ["node5", "node6"]
@@ -83,12 +85,16 @@ def calculate_dsr_statistics(dsr_values):
     if not dsr_values:
         return None
     
+    sorted_values = sorted(dsr_values)
+    p90_index = int(len(sorted_values) * 0.9)
+    
     return {
         "count": len(dsr_values),
         "max": max(dsr_values),
         "min": min(dsr_values),
         "avg": statistics.mean(dsr_values),
         "median": statistics.median(dsr_values),
+        "p90": sorted_values[p90_index] if sorted_values else 0.0,
         "stdev": statistics.stdev(dsr_values) if len(dsr_values) > 1 else 0.0
     }
 
@@ -102,9 +108,10 @@ def print_dsr_statistics(stats, prefix=""):
     log(f"{prefix}DSR Statistics:", GREEN, True)
     log(f"{prefix}  Count  : {stats['count']}", NC, True)
     log(f"{prefix}  Max    : {stats['max']:.6f}", NC, True)
-    log(f"{prefix}  Min    : {stats['min']:.6f}", NC, True)
-    log(f"{prefix}  Average: {stats['avg']:.6f}", NC, True)
+    log(f"{prefix}  P90    : {stats['p90']:.6f}", NC, True)
     log(f"{prefix}  Median : {stats['median']:.6f}", NC, True)
+    log(f"{prefix}  Average: {stats['avg']:.6f}", NC, True)
+    log(f"{prefix}  Min    : {stats['min']:.6f}", NC, True)
     log(f"{prefix}  StdDev : {stats['stdev']:.6f}", NC, True)
 
 
@@ -120,9 +127,10 @@ def save_dsr_statistics(stats, output_file, profile, thread, op_group=None):
         f.write(f"{'='*60}\n")
         f.write(f"Count  : {stats['count']}\n")
         f.write(f"Max    : {stats['max']:.6f}\n")
-        f.write(f"Min    : {stats['min']:.6f}\n")
-        f.write(f"Average: {stats['avg']:.6f}\n")
+        f.write(f"P90    : {stats['p90']:.6f}\n")
         f.write(f"Median : {stats['median']:.6f}\n")
+        f.write(f"Average: {stats['avg']:.6f}\n")
+        f.write(f"Min    : {stats['min']:.6f}\n")
         f.write(f"StdDev : {stats['stdev']:.6f}\n")
 
 
@@ -148,6 +156,47 @@ def modify_yaml_operation_group(config_file, value):
         log(f"Successfully modified txnoperationgroup to {value}", GREEN, True)
 
 
+def modify_yaml_record_length(config_file, value):
+    """Modify max_record_length value in yaml config file"""
+    log(f"Modifying {config_file}: max_record_length = {value}", CYAN, True)
+    
+    with open(config_file, "r") as f:
+        lines = f.readlines()
+    
+    modified = False
+    with open(config_file, "w") as f:
+        for line in lines:
+            if line.strip().startswith("max_record_length:"):
+                f.write(f"max_record_length: {value}\n")
+                modified = True
+            else:
+                f.write(line)
+    
+    if not modified:
+        log(f"Warning: max_record_length not found in {config_file}", YELLOW, True)
+    else:
+        log(f"Successfully modified max_record_length to {value}", GREEN, True)
+
+
+def parse_specific_errors(output_text):
+    """
+    Parse and count specific errors:
+    - key not found in given RecordLen
+    - key not found prev is empty
+    """
+    error_keywords = [
+        "key not found in given RecordLen",
+        "key not found prev is empty"
+    ]
+    
+    total_specific_errors = 0
+    for keyword in error_keywords:
+        count = output_text.count(keyword)
+        total_specific_errors += count
+    
+    return total_specific_errors
+
+
 def sync_files_to_remote(config, node):
     """Sync necessary files to remote node for multi-client execution"""
     log(f"Syncing files to {node}", CYAN, config["verbose"])
@@ -155,7 +204,6 @@ def sync_files_to_remote(config, node):
     remote_base = "/tmp/oreo-benchmark"
     
     try:
-        # Create remote directories
         result = subprocess.run(
             ["ssh", node, f"mkdir -p {remote_base}/bin {remote_base}/workloads/ycsb {remote_base}/config"],
             capture_output=True,
@@ -163,7 +211,6 @@ def sync_files_to_remote(config, node):
             check=True
         )
         
-        # Sync binary file
         log(f"  Syncing binary to {node}...", CYAN, config["verbose"])
         subprocess.run(
             ["rsync", "-az", "./bin/cmd", f"{node}:{remote_base}/bin/"],
@@ -171,7 +218,6 @@ def sync_files_to_remote(config, node):
             capture_output=True
         )
         
-        # Sync config files
         log(f"  Syncing config files to {node}...", CYAN, config["verbose"])
         subprocess.run(
             ["rsync", "-az", config["config_file"], f"{node}:{remote_base}/workloads/ycsb/"],
@@ -185,7 +231,6 @@ def sync_files_to_remote(config, node):
             capture_output=True
         )
         
-        # Verify files exist on remote
         verify_cmd = f"ls -lh {remote_base}/bin/cmd {remote_base}/workloads/ycsb/ {remote_base}/config/"
         result = subprocess.run(
             ["ssh", node, verify_cmd],
@@ -234,7 +279,6 @@ def run_workload_remote(node, config, mode, profile, thread, output, is_trace=Fa
     
     log(f"Running workload on {node}: {profile} thread={thread}", BLUE, config["verbose"])
     
-    # Execute command on remote node and redirect output
     proc = subprocess.Popen(
         ["ssh", node, cmd],
         stdout=subprocess.PIPE,
@@ -249,7 +293,6 @@ def run_workload(config, mode, profile, thread, output):
     is_trace = (config["wl_mode"] == "trace")
     
     if config.get("multiple_clients", False):
-        # Divide threads equally among 3 nodes
         thread_per_node = thread // 3
         log(
             f"Running {config['wl_type']}-{config['wl_mode']} {profile} "
@@ -283,19 +326,15 @@ def run_workload(config, mode, profile, thread, output):
         str(thread_per_node),
     ]
     
-    # Add --trace flag if in trace mode
     if is_trace:
         cmd.append("--trace")
 
     if config.get("multiple_clients", False):
-        # Run on multiple nodes in parallel
         processes = []
         
-        # Run on local node
         local_output = output.replace(".txt", "_local.txt")
         log(f"Starting local workload with {thread_per_node} threads", BLUE, config["verbose"])
         
-        # For trace mode, capture stdout; otherwise redirect to file
         if is_trace:
             local_proc = subprocess.Popen(
                 cmd,
@@ -311,30 +350,26 @@ def run_workload(config, mode, profile, thread, output):
             )
         processes.append(("local", local_proc, local_output))
         
-        # Run on remote client nodes
         for i, node in enumerate(client_nodes):
             node_output = output.replace(".txt", f"_{node}.txt")
             remote_proc = run_workload_remote(node, config, mode, profile, thread_per_node, node_output, is_trace)
             processes.append((node, remote_proc, node_output))
         
-        # Wait for all processes to complete and collect DSR values
         log("Waiting for all client workloads to complete...", YELLOW, config["verbose"])
         all_dsr_values = []
         
         for node_name, proc, node_output in processes:
             stdout, stderr = proc.communicate()
             
-            # Write output to file
-            with open(node_output, "w") as f:
-                f.write(stdout)
-            
-            # Save stderr to error log if exists
-            if stderr:
+            if node_name != "local":
+                with open(node_output, "w") as f:
+                    f.write(stdout)
+                
                 error_output = node_output.replace(".txt", "_error.log")
-                with open(error_output, "w") as f:
-                    f.write(stderr)
+                if stderr:
+                    with open(error_output, "w") as f:
+                        f.write(stderr)
             
-            # Extract DSR values if in trace mode
             if is_trace:
                 dsr_values = parse_dsr_values(stdout)
                 if dsr_values:
@@ -349,12 +384,10 @@ def run_workload(config, mode, profile, thread, output):
         
         log("All client workloads completed", GREEN, config["verbose"])
         
-        # Process DSR statistics for trace mode
         if is_trace and all_dsr_values:
             stats = calculate_dsr_statistics(all_dsr_values)
             print_dsr_statistics(stats, prefix="  ")
             
-            # Save to DSR statistics file
             dsr_stats_file = output.replace(".txt", "_dsr_stats.txt")
             op_group = config.get("current_op_group")
             save_dsr_statistics(stats, dsr_stats_file, profile, thread, op_group)
@@ -362,9 +395,7 @@ def run_workload(config, mode, profile, thread, output):
             return stats
         
     else:
-        # Single client mode
         if is_trace:
-            # Capture stdout to parse DSR values
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -372,25 +403,21 @@ def run_workload(config, mode, profile, thread, output):
                 text=True
             )
             
-            # Save output to file
             with open(output, "w") as f:
                 f.write(result.stdout)
             
-            # Parse and display DSR statistics
             dsr_values = parse_dsr_values(result.stdout)
             if dsr_values:
                 log(f"Collected {len(dsr_values)} DSR values", CYAN, config["verbose"])
                 stats = calculate_dsr_statistics(dsr_values)
                 print_dsr_statistics(stats, prefix="  ")
                 
-                # Save to DSR statistics file
                 dsr_stats_file = output.replace(".txt", "_dsr_stats.txt")
                 op_group = config.get("current_op_group")
                 save_dsr_statistics(stats, dsr_stats_file, profile, thread, op_group)
                 
                 return stats
         else:
-            # Normal mode - redirect to file
             run_command(cmd, output, config["log_file"])
     
     return None
@@ -424,27 +451,26 @@ def load_data(config):
     load_flag.touch()
 
 
-def get_metrics(config, profile, thread, op_group=None):
+def get_metrics(config, profile, thread, op_group=None, rec_len=None):
     """
     Get metrics from output file(s).
     For multiple clients, aggregate results from all nodes.
-    - Duration: print all nodes' values, then take average
-    - Latency: print all nodes' values, then take maximum
-    - Error ratio: aggregate all success/error counts
+    Returns: (duration, latency, error_ratio, specific_error_count)
     """
-    # Construct filename with optional op_group
     base_name = f"{config['wl_type']}-{config['wl_mode']}-{config['db_combinations']}-{profile}-{thread}"
     if op_group is not None:
         base_name += f"-op{op_group}"
+    if rec_len is not None:
+        base_name += f"-len{rec_len}"
     
     base_path = f"{config['tar_dir']}/{base_name}"
     
     if config.get("multiple_clients", False):
-        # Collect metrics from all nodes
         node_durations = {}
         node_latencies = {}
         total_success = 0
         total_error = 0
+        total_specific_errors = 0
         
         node_names = ["local"] + client_nodes
         for node_name in node_names:
@@ -458,17 +484,14 @@ def get_metrics(config, profile, thread, op_group=None):
             with open(file_path, "r") as f:
                 content = f.read()
             
-            # Extract duration
             duration_match = re.search(r"^Run finished.*?([0-9.]+)", content, re.MULTILINE)
             if duration_match:
                 node_durations[node_name] = float(duration_match.group(1))
             
-            # Extract latency
             latency_match = re.search(r"99th\(us\): ([0-9]+)", content)
             if latency_match:
                 node_latencies[node_name] = int(latency_match.group(1))
             
-            # Extract counts
             success_match = re.search(r"COMMIT .*?Count: ([0-9]+)", content)
             if success_match:
                 total_success += int(success_match.group(1))
@@ -477,8 +500,10 @@ def get_metrics(config, profile, thread, op_group=None):
                 error_match = re.search(r"COMMIT_ERROR .*?Count: ([0-9]+)", content)
                 if error_match:
                     total_error += int(error_match.group(1))
+            
+            specific_errors = parse_specific_errors(content)
+            total_specific_errors += specific_errors
         
-        # Print individual node metrics
         print(f"\n[{profile} thread={thread}] Node metrics:")
         print("  Duration (seconds):")
         for node_name in node_names:
@@ -490,38 +515,32 @@ def get_metrics(config, profile, thread, op_group=None):
             if node_name in node_latencies:
                 print(f"    {node_name}: {node_latencies[node_name]}")
         
-        # Take average duration and maximum latency
         avg_duration = sum(node_durations.values()) / len(node_durations) if node_durations else 0.0
         max_latency = max(node_latencies.values()) if node_latencies else 0
         
         print(f"  Selected average duration: {avg_duration:.4f}")
         print(f"  Selected maximum latency: {max_latency}\n")
         
-        # Calculate ratio from aggregated counts
         total = total_success + total_error
         ratio = total_error / total if total > 0 else 0.0
         
-        return avg_duration, max_latency, ratio
-    
+        return avg_duration, max_latency, ratio, total_specific_errors
+        
     else:
-        # Single client mode (original behavior)
         file_path = f"{base_path}.txt"
         
         if not os.path.exists(file_path):
-            return 0.0, 0, 0.0
+            return 0.0, 0, 0.0, 0
         
         with open(file_path, "r") as f:
             content = f.read()
 
-        # Extract duration
         duration_match = re.search(r"^Run finished.*?([0-9.]+)", content, re.MULTILINE)
         duration = float(duration_match.group(1)) if duration_match else 0.0
 
-        # Extract latency
         latency_match = re.search(r"99th\(us\): ([0-9]+)", content)
         latency = int(latency_match.group(1)) if latency_match else 0
 
-        # Extract counts
         success_match = re.search(r"COMMIT .*?Count: ([0-9]+)", content)
         success_cnt = int(success_match.group(1)) if success_match else 0
 
@@ -532,8 +551,10 @@ def get_metrics(config, profile, thread, op_group=None):
 
         total = success_cnt + error_cnt
         ratio = error_cnt / total if total > 0 else 0.0
+        
+        specific_errors = parse_specific_errors(content)
 
-        return duration, latency, ratio
+        return duration, latency, ratio, specific_errors
 
 
 def print_summary(
@@ -548,12 +569,18 @@ def print_summary(
     cg_ratio,
     oreo_ratio,
     op_group=None,
+    rec_len=None,
     native_dsr=None,
     cg_dsr=None,
     oreo_dsr=None,
+    native_spec_err=0,
+    cg_spec_err=0,
+    oreo_spec_err=0,
 ):
     if op_group is not None:
         print(f"Operation Group: {op_group}, Thread: {thread}")
+    elif rec_len is not None:
+        print(f"Record Length: {rec_len}, Thread: {thread}")
     else:
         print(f"Thread: {thread}")
     
@@ -574,15 +601,20 @@ def print_summary(
     print(f"cg = {cg_ratio:.4f}")
     print(f"oreo = {oreo_ratio:.4f}")
     
-    # Print DSR statistics if available
+    if rec_len is not None:
+        print(f"Specific errors (RecordLen related):")
+        print(f"native = {native_spec_err}")
+        print(f"cg = {cg_spec_err}")
+        print(f"oreo = {oreo_spec_err}")
+    
     if any([native_dsr, cg_dsr, oreo_dsr]):
         print(f"DSR Statistics:")
         if native_dsr:
-            print(f"native - avg: {native_dsr['avg']:.6f}, min: {native_dsr['min']:.6f}, max: {native_dsr['max']:.6f}")
+            print(f"native - median: {native_dsr['median']:.6f}, p90: {native_dsr['p90']:.6f}, min: {native_dsr['min']:.6f}, max: {native_dsr['max']:.6f}")
         if cg_dsr:
-            print(f"cg     - avg: {cg_dsr['avg']:.6f}, min: {cg_dsr['min']:.6f}, max: {cg_dsr['max']:.6f}")
+            print(f"cg     - median: {cg_dsr['median']:.6f}, p90: {cg_dsr['p90']:.6f}, min: {cg_dsr['min']:.6f}, max: {cg_dsr['max']:.6f}")
         if oreo_dsr:
-            print(f"oreo   - avg: {oreo_dsr['avg']:.6f}, min: {oreo_dsr['min']:.6f}, max: {oreo_dsr['max']:.6f}")
+            print(f"oreo   - median: {oreo_dsr['median']:.6f}, p90: {oreo_dsr['p90']:.6f}, min: {oreo_dsr['min']:.6f}, max: {oreo_dsr['max']:.6f}")
     
     print("---------------------------------")
 
@@ -624,12 +656,11 @@ def deploy_local(config):
 def deploy_remote(config):
     log("Setup timeoracle on node 2", GREEN, config["verbose"])
     
-    # Use 'simple' type for trace mode, otherwise use default (hybrid)
     if config["wl_mode"] == "trace":
         timeoracle_type = "simple"
         log("Using 'simple' timeoracle type for trace mode", YELLOW, config["verbose"])
     else:
-        timeoracle_type = ""  # Will use default 'hybrid' in the script
+        timeoracle_type = ""
     
     cmd = f"echo '{password}' | sudo -S bash /root/oreo-ben/start-timeoracle.sh {timeoracle_type}".strip()
     subprocess.run(["ssh", "-t", node_list[0], cmd])
@@ -670,7 +701,11 @@ def parse_args():
     parser.add_argument("-t", "--threads", help="Thread counts (comma-separated)")
     parser.add_argument(
         "-og", "--operation-groups", 
-        help="Operation group counts for 'group' workload mode (comma-separated, default: 3,5,8,10)"
+        help="Operation group counts for 'group' workload mode (comma-separated, default: 4,6,8,10,12)"
+    )
+    parser.add_argument(
+        "-rl", "--record-lengths",
+        help="Record lengths for 'len' workload mode (comma-separated, default: 2,3,4,5)"
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
     parser.add_argument("-r", "--remote", action="store_true", help="Remote execution")
@@ -689,37 +724,44 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # Change to script directory and go up one level
     os.chdir(Path(__file__).parent.parent)
 
-    # Determine if this is group mode or trace mode
     is_group_mode = (args.workload == "group")
     is_trace_mode = (args.workload == "trace")
+    is_len_mode = (args.workload == "len")
     
-    # Parse threads and operation groups
     if is_group_mode:
-        # For group mode, use fixed thread count
         threads = [fixed_thread_for_group]
         operation_groups = (
             [int(og.strip()) for og in args.operation_groups.split(",")]
             if args.operation_groups
             else default_operation_groups
         )
+        record_lengths = None
         log(f"Group mode detected: using fixed thread count {fixed_thread_for_group}", YELLOW, True)
         log(f"Operation groups to test: {operation_groups}", YELLOW, True)
+    elif is_len_mode:
+        threads = [fixed_thread_for_len]
+        operation_groups = None
+        record_lengths = (
+            [int(rl.strip()) for rl in args.record_lengths.split(",")]
+            if args.record_lengths
+            else default_record_lengths
+        )
+        log(f"Len mode detected: using fixed thread count {fixed_thread_for_len}", YELLOW, True)
+        log(f"Record lengths to test: {record_lengths}", YELLOW, True)
     else:
-        # For non-group mode, use thread list
         threads = (
             [int(t.strip()) for t in args.threads.split(",")]
             if args.threads
             else default_threads
         )
         operation_groups = None
+        record_lengths = None
     
     if is_trace_mode:
         log("Trace mode detected: will collect DSR statistics", YELLOW, True)
     
-    # Validate threads for multiple-clients mode
     if args.multiple_clients:
         invalid_threads = [t for t in threads if t % 3 != 0]
         if invalid_threads:
@@ -728,7 +770,6 @@ def main():
                 f"Invalid values: {invalid_threads}"
             )
 
-    # Setup config
     wl_type = "ycsb"
     load_flag_dir = "./data/ycsb-micro"
     tar_dir = "./data/ycsb-micro"
@@ -750,40 +791,42 @@ def main():
         "log_file": None,
     }
 
-    # Check config files
     if not Path(config["config_file"]).exists():
         handle_error(f"Config file {config['config_file']} does not exist")
     if not Path(config["bc_file"]).exists():
         handle_error(f"Config file {config['bc_file']} does not exist")
 
-    # Build executable
     print("Building the benchmark executable")
     subprocess.run(["go", "build", "."])
     Path("cmd").rename("./bin/cmd")
 
-    # Create directories
     Path(config["tar_dir"]).mkdir(parents=True, exist_ok=True)
     config["log_file"] = f"{config['tar_dir']}/benchmark.log"
 
-    # Initialize results file
     mode_suffix = "_multi" if config["multiple_clients"] else ""
     group_suffix = "_group" if is_group_mode else ""
+    len_suffix = "_len" if is_len_mode else ""
     trace_suffix = "_trace" if is_trace_mode else ""
     results_file = (
-        f"{config['tar_dir']}/{args.workload}_{args.db}_benchmark_results{mode_suffix}{group_suffix}{trace_suffix}.csv"
+        f"{config['tar_dir']}/{args.workload}_{args.db}_benchmark_results"
+        f"{mode_suffix}{group_suffix}{len_suffix}{trace_suffix}.csv"
     )
     
-    # Write header based on mode
     with open(results_file, "w") as f:
         if is_group_mode:
             header = "operation_group,thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99,native_err,cg_err,oreo_err"
             if is_trace_mode:
-                header += ",native_dsr_avg,native_dsr_min,native_dsr_max,cg_dsr_avg,cg_dsr_min,cg_dsr_max,oreo_dsr_avg,oreo_dsr_min,oreo_dsr_max"
+                header += ",native_dsr_median,native_dsr_p90,native_dsr_min,native_dsr_max,cg_dsr_median,cg_dsr_p90,cg_dsr_min,cg_dsr_max,oreo_dsr_median,oreo_dsr_p90,oreo_dsr_min,oreo_dsr_max"
+            f.write(header + "\n")
+        elif is_len_mode:
+            header = "record_length,thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99,native_err,cg_err,oreo_err,native_spec_err,cg_spec_err,oreo_spec_err"
+            if is_trace_mode:
+                header += ",native_dsr_median,native_dsr_p90,native_dsr_min,native_dsr_max,cg_dsr_median,cg_dsr_p90,cg_dsr_min,cg_dsr_max,oreo_dsr_median,oreo_dsr_p90,oreo_dsr_min,oreo_dsr_max"
             f.write(header + "\n")
         else:
             header = "thread,operation,native,cg,oreo,native_p99,cg_p99,oreo_p99,native_err,cg_err,oreo_err"
             if is_trace_mode:
-                header += ",native_dsr_avg,native_dsr_min,native_dsr_max,cg_dsr_avg,cg_dsr_min,cg_dsr_max,oreo_dsr_avg,oreo_dsr_min,oreo_dsr_max"
+                header += ",native_dsr_median,native_dsr_p90,native_dsr_min,native_dsr_max,cg_dsr_median,cg_dsr_p90,cg_dsr_min,cg_dsr_max,oreo_dsr_median,oreo_dsr_p90,oreo_dsr_min,oreo_dsr_max"
             f.write(header + "\n")
 
     operation = extract_operation_count(config["config_file"])
@@ -798,7 +841,6 @@ def main():
         log("Multiple client mode enabled - will run on local, node5, and node6", YELLOW, True)
         log(f"Thread counts will be divided by 3 across nodes: {threads}", YELLOW, True)
 
-    # Deployment
     if config["skip"]:
         log("Skipping deployment", YELLOW, config["verbose"])
     else:
@@ -809,11 +851,9 @@ def main():
             print("Running locally")
             deploy_local(config)
 
-    # Sync files to remote clients if multiple-clients mode is enabled
     if config["multiple_clients"]:
         log("Syncing files to client nodes...", YELLOW, True)
         
-        # Test SSH connection first
         for node in client_nodes:
             log(f"Testing SSH connection to {node}...", CYAN, True)
             try:
@@ -830,11 +870,9 @@ def main():
             except subprocess.CalledProcessError as e:
                 handle_error(f"Cannot connect to {node}: {e.stderr}")
         
-        # Sync files
         for node in client_nodes:
             sync_files_to_remote(config, node)
 
-    # Data loading check
     load_flag_file = Path(load_flag_dir) / f"{wl_type}-load"
     if config["loaded"]:
         log("Skipping data loading", YELLOW, config["verbose"])
@@ -844,39 +882,29 @@ def main():
         else:
             log("Ready to load data", YELLOW, config["verbose"])
 
-    # Load data if needed
     if not load_flag_file.exists():
         load_data(config)
 
-    # Determine which profiles to run
-    profiles = ["oreo"] if is_trace_mode else ["native", "cg", "oreo"]
+    profiles = ["native", "cg", "oreo"]
     if is_trace_mode:
+        profiles = ["oreo"]
         log("Trace mode: only running 'oreo' profile", YELLOW, True)
-    
-    # Run benchmarks
+
     if is_group_mode:
-        # Group mode: iterate over operation groups
         for op_group in operation_groups:
             log(f"\n{'='*60}", PURPLE, True)
             log(f"Testing with operation group: {op_group}", PURPLE, True)
             log(f"{'='*60}\n", PURPLE, True)
             
-            # Modify yaml config file
             modify_yaml_operation_group(config["config_file"], op_group)
-            
-            # Store current op_group in config for DSR statistics
             config["current_op_group"] = op_group
             
-            # Sync updated config to remote nodes if in multiple-clients mode
             if config["multiple_clients"]:
                 for node in client_nodes:
                     log(f"Syncing updated config to {node}...", CYAN, config["verbose"])
                     sync_files_to_remote(config, node)
             
-            # Use fixed thread count
             thread = fixed_thread_for_group
-            
-            # Store DSR statistics if in trace mode
             dsr_stats = {"native": None, "cg": None, "oreo": None}
             
             for profile in profiles:
@@ -888,11 +916,10 @@ def main():
                 if dsr_stat:
                     dsr_stats[profile] = dsr_stat
 
-            native_dur, native_p99, native_ratio = get_metrics(config, "native", thread, op_group)
-            cg_dur, cg_p99, cg_ratio = get_metrics(config, "cg", thread, op_group)
-            oreo_dur, oreo_p99, oreo_ratio = get_metrics(config, "oreo", thread, op_group)
+            native_dur, native_p99, native_ratio, _ = get_metrics(config, "native", thread, op_group)
+            cg_dur, cg_p99, cg_ratio, _ = get_metrics(config, "cg", thread, op_group)
+            oreo_dur, oreo_p99, oreo_ratio, _ = get_metrics(config, "oreo", thread, op_group)
 
-            # Append results
             with open(results_file, "a") as f:
                 line = (
                     f"{op_group},{thread},{operation},{native_dur:.4f},{cg_dur:.4f},{oreo_dur:.4f},"
@@ -900,12 +927,11 @@ def main():
                     f"{native_ratio:.4f},{cg_ratio:.4f},{oreo_ratio:.4f}"
                 )
                 
-                # Add DSR statistics if in trace mode
                 if is_trace_mode:
                     for profile in ["native", "cg", "oreo"]:
                         if dsr_stats[profile]:
                             s = dsr_stats[profile]
-                            line += f",{s['avg']:.6f},{s['min']:.6f},{s['max']:.6f}"
+                            line += f",{s['median']:.6f},{s['p90']:.6f},{s['min']:.6f},{s['max']:.6f}"
                         else:
                             line += ",,,,"
                 
@@ -929,10 +955,84 @@ def main():
             )
 
             time.sleep(round_interval)
+            
+    elif is_len_mode:
+        for rec_len in record_lengths:
+            log(f"\n{'='*60}", PURPLE, True)
+            log(f"Testing with record length: {rec_len}", PURPLE, True)
+            log(f"{'='*60}\n", PURPLE, True)
+            
+            modify_yaml_record_length(config["config_file"], rec_len)
+            config["current_rec_len"] = rec_len
+            
+            if config["multiple_clients"]:
+                for node in client_nodes:
+                    log(f"Syncing updated config to {node}...", CYAN, config["verbose"])
+                    sync_files_to_remote(config, node)
+            
+            thread = fixed_thread_for_len
+            dsr_stats = {"native": None, "cg": None, "oreo": None}
+            
+            for profile in profiles:
+                output = (
+                    f"{config['tar_dir']}/{wl_type}-{args.workload}-"
+                    f"{args.db}-{profile}-{thread}-len{rec_len}.txt"
+                )
+                dsr_stat = run_workload(config, "run", profile, thread, output)
+                if dsr_stat:
+                    dsr_stats[profile] = dsr_stat
+
+            native_dur, native_p99, native_ratio, native_spec_err = get_metrics(
+                config, "native", thread, rec_len=rec_len
+            )
+            cg_dur, cg_p99, cg_ratio, cg_spec_err = get_metrics(
+                config, "cg", thread, rec_len=rec_len
+            )
+            oreo_dur, oreo_p99, oreo_ratio, oreo_spec_err = get_metrics(
+                config, "oreo", thread, rec_len=rec_len
+            )
+
+            with open(results_file, "a") as f:
+                line = (
+                    f"{rec_len},{thread},{operation},{native_dur:.4f},{cg_dur:.4f},{oreo_dur:.4f},"
+                    f"{native_p99},{cg_p99},{oreo_p99},"
+                    f"{native_ratio:.4f},{cg_ratio:.4f},{oreo_ratio:.4f},"
+                    f"{native_spec_err},{cg_spec_err},{oreo_spec_err}"
+                )
+                
+                if is_trace_mode:
+                    for profile in ["native", "cg", "oreo"]:
+                        if dsr_stats[profile]:
+                            s = dsr_stats[profile]
+                            line += f",{s['median']:.6f},{s['p90']:.6f},{s['min']:.6f},{s['max']:.6f}"
+                        else:
+                            line += ",,,,"
+                
+                f.write(line + "\n")
+
+            print_summary(
+                thread,
+                native_dur,
+                cg_dur,
+                oreo_dur,
+                native_p99,
+                cg_p99,
+                oreo_p99,
+                native_ratio,
+                cg_ratio,
+                oreo_ratio,
+                rec_len=rec_len,
+                native_dsr=dsr_stats["native"],
+                cg_dsr=dsr_stats["cg"],
+                oreo_dsr=dsr_stats["oreo"],
+                native_spec_err=native_spec_err,
+                cg_spec_err=cg_spec_err,
+                oreo_spec_err=oreo_spec_err,
+            )
+
+            time.sleep(round_interval)
     else:
-        # Normal mode: iterate over threads
         for thread in threads:
-            # Store DSR statistics if in trace mode
             dsr_stats = {"native": None, "cg": None, "oreo": None}
             
             for profile in profiles:
@@ -944,11 +1044,10 @@ def main():
                 if dsr_stat:
                     dsr_stats[profile] = dsr_stat
 
-            native_dur, native_p99, native_ratio = get_metrics(config, "native", thread)
-            cg_dur, cg_p99, cg_ratio = get_metrics(config, "cg", thread)
-            oreo_dur, oreo_p99, oreo_ratio = get_metrics(config, "oreo", thread)
+            native_dur, native_p99, native_ratio, _ = get_metrics(config, "native", thread)
+            cg_dur, cg_p99, cg_ratio, _ = get_metrics(config, "cg", thread)
+            oreo_dur, oreo_p99, oreo_ratio, _ = get_metrics(config, "oreo", thread)
 
-            # Append results
             with open(results_file, "a") as f:
                 line = (
                     f"{thread},{operation},{native_dur:.4f},{cg_dur:.4f},{oreo_dur:.4f},"
@@ -956,12 +1055,11 @@ def main():
                     f"{native_ratio:.4f},{cg_ratio:.4f},{oreo_ratio:.4f}"
                 )
                 
-                # Add DSR statistics if in trace mode
                 if is_trace_mode:
                     for profile in ["native", "cg", "oreo"]:
                         if dsr_stats[profile]:
                             s = dsr_stats[profile]
-                            line += f",{s['avg']:.6f},{s['min']:.6f},{s['max']:.6f}"
+                            line += f",{s['median']:.6f},{s['p90']:.6f},{s['min']:.6f},{s['max']:.6f}"
                         else:
                             line += ",,,,"
                 

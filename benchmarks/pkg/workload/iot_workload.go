@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"sync"
+	"time"
 
 	"benchmark/pkg/benconfig"
 	"benchmark/pkg/generator"
@@ -75,7 +76,7 @@ func (wl *IotWorkload) DataProcessing(ctx context.Context, db ycsb.TransactionDB
 	}
 	db.Update(
 		ctx,
-		"MongoDB",
+		"MongoDB2",
 		fmt.Sprintf("%v:%v", wl.MongoDBNamespace, sensor_id),
 		util.ToString(sum),
 	)
@@ -86,7 +87,7 @@ func (wl *IotWorkload) DataQuery(ctx context.Context, db ycsb.TransactionDB) {
 	db.Start()
 	for i := 1; i <= wl.seriesCnt; i++ {
 		sensor_id := wl.NextKeyName()
-		db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, sensor_id))
+		db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.MongoDBNamespace, sensor_id))
 	}
 	db.Commit()
 }
@@ -151,6 +152,8 @@ func (wl *IotWorkload) Run(ctx context.Context, opCount int,
 		default:
 			panic("Invalid task")
 		}
+		restTime := rand.Intn(5) + 5
+		time.Sleep(time.Duration(restTime) * time.Millisecond)
 	}
 }
 

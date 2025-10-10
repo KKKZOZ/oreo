@@ -502,7 +502,10 @@ func (t *Transaction) commitInOreo() error {
 
 	if config.Debug.RuntimeAnalysisMode {
 		dur := tCommitMax - tCommitMin
-		fmt.Printf("MAX: %d MIN: %d DSR: %d\n", tCommitMax, tCommitMin, dur)
+		// Only print when there are multiple datastores
+		if dur != 0 {
+			fmt.Printf("MAX: %d MIN: %d DSR: %d\n", tCommitMax, tCommitMin, dur)
+		}
 	}
 	if config.Config.AblationLevel >= 3 {
 		t.TxnCommitTime = tCommitMax
