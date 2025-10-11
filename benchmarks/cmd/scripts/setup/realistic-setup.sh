@@ -95,9 +95,8 @@ elif [ "$wl" == "hotel" ]; then
         deploy_cassandra
     fi
 elif [ "$wl" == "social" ]; then
-    if [ "$nodeId" == "2-1" ]; then
+    if [ "$nodeId" == "2" ]; then
         deploy_redis
-    elif [ "$nodeId" == "2-2" ]; then
         deploy_kvrocks
     elif [ "$nodeId" == "3" ]; then
         deploy_mongodb

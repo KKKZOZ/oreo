@@ -249,8 +249,8 @@ func (wl *OreoYCSBWorkload) Run(ctx context.Context, opCount int, db ycsb.DB) {
 			time.Sleep(time.Duration(interval) * time.Millisecond)
 		}
 		wl.doTxn(ctx, txnDB)
-		restTime := rand.Intn(5) + 5
-		time.Sleep(time.Duration(restTime) * time.Millisecond)
+		thinkingTime := rand.Intn(5) + 5
+		time.Sleep(time.Duration(thinkingTime) * time.Millisecond)
 	}
 }
 

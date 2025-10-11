@@ -41,11 +41,16 @@ type WorkloadParameter struct {
 	DynamoDBProportion  float64 `yaml:"dynamodbproportion"  oreo:"DynamoDB"`
 	TiKVProportion      float64 `yaml:"tikvproportion"      oreo:"TiKV"`
 
-	Task1Proportion float64 `yaml:"task1proportion"`
-	Task2Proportion float64 `yaml:"task2proportion"`
-	Task3Proportion float64 `yaml:"task3proportion"`
-	Task4Proportion float64 `yaml:"task4proportion"`
-	Task5Proportion float64 `yaml:"task5proportion"`
+	Task1Proportion  float64 `yaml:"task1proportion"`
+	Task2Proportion  float64 `yaml:"task2proportion"`
+	Task3Proportion  float64 `yaml:"task3proportion"`
+	Task4Proportion  float64 `yaml:"task4proportion"`
+	Task5Proportion  float64 `yaml:"task5proportion"`
+	Task6Proportion  float64 `yaml:"task6proportion"`
+	Task7Proportion  float64 `yaml:"task7proportion"`
+	Task8Proportion  float64 `yaml:"task8proportion"`
+	Task9Proportion  float64 `yaml:"task9proportion"`
+	Task10Proportion float64 `yaml:"task10proportion"`
 }
 
 // ----------------------------------------------------------------------------

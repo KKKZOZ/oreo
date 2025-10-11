@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -271,7 +272,7 @@ func (wl *SocialNetworkWorkload) ComposePost(ctx context.Context, db ycsb.Transa
 	postID := wl.NextKeyName()
 
 	// 1. Verify user authentication (User Service)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
 	// 2. Generate unique post ID (Unique ID Service) - stored in KVRocks
 	db.Update(
@@ -315,7 +316,7 @@ func (wl *SocialNetworkWorkload) ComposePost(ctx context.Context, db ycsb.Transa
 	postData, _ := json.Marshal(post)
 	db.Update(
 		ctx,
-		"MongoDB",
+		"MongoDB2",
 		fmt.Sprintf("%v:%v", wl.PostServiceNS, postID),
 		string(postData),
 	)
@@ -377,8 +378,8 @@ func (wl *SocialNetworkWorkload) ReadHomeTimeline(ctx context.Context, db ycsb.T
 		fmt.Sprintf("%v:%v:cache", wl.HomeTimelineServiceNS, userID),
 	)
 
-	// 3. If cache miss, read timeline entries (simulate reading 10 posts)
-	for i := 0; i < 10; i++ {
+	// 3. If cache miss, read timeline entries (simulate reading 3 posts)
+	for i := 0; i < 3; i++ {
 		postID := wl.NextKeyName()
 
 		// Read from Redis hot cache
@@ -389,11 +390,11 @@ func (wl *SocialNetworkWorkload) ReadHomeTimeline(ctx context.Context, db ycsb.T
 		)
 
 		// Read post content (Post Service)
-		_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
+		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
 
 		// Read post author info (User Service)
 		authorID := wl.NextKeyName()
-		_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, authorID))
+		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, authorID))
 	}
 
 	// 4. Cache the assembled timeline in Redis
@@ -421,7 +422,7 @@ func (wl *SocialNetworkWorkload) ReadUserTimeline(ctx context.Context, db ycsb.T
 	viewerID := wl.NextKeyName()
 
 	// 1. Get user profile (User Service)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
 	// 2. Get user's post count from social graph (KVRocks)
 	_, _ = db.Read(
@@ -431,7 +432,7 @@ func (wl *SocialNetworkWorkload) ReadUserTimeline(ctx context.Context, db ycsb.T
 	)
 
 	// 3. Read user timeline from Cassandra (time-ordered)
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 3; i++ {
 		postID := wl.NextKeyName()
 		_, _ = db.Read(
 			ctx,
@@ -440,7 +441,7 @@ func (wl *SocialNetworkWorkload) ReadUserTimeline(ctx context.Context, db ycsb.T
 		)
 
 		// Get post details
-		_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
+		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
 
 		// Get like count from Redis
 		_, _ = db.Read(
@@ -476,8 +477,8 @@ func (wl *SocialNetworkWorkload) FollowUser(ctx context.Context, db ycsb.Transac
 	followeeID := wl.NextKeyName()
 
 	// 1. Verify both users exist (User Service)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, followerID))
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, followeeID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, followerID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, followeeID))
 
 	// 2. Update follower's following list (Social Graph Service) - in KVRocks
 	followData := map[string]interface{}{
@@ -601,10 +602,10 @@ func (wl *SocialNetworkWorkload) LikePost(ctx context.Context, db ycsb.Transacti
 	postID := wl.NextKeyName()
 
 	// 1. Verify user exists (User Service)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
 	// 2. Verify post exists (Post Service)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
 
 	// 3. Add like record (KVRocks for fast writes)
 	likeData := map[string]interface{}{
@@ -631,7 +632,7 @@ func (wl *SocialNetworkWorkload) LikePost(ctx context.Context, db ycsb.Transacti
 	// 5. Update post like count in MongoDB (eventual consistency)
 	db.Update(
 		ctx,
-		"MongoDB",
+		"MongoDB2",
 		fmt.Sprintf("%v:%v:like_count", wl.PostServiceNS, postID),
 		"1",
 	)
@@ -656,17 +657,17 @@ func (wl *SocialNetworkWorkload) CommentOnPost(ctx context.Context, db ycsb.Tran
 	commentID := wl.NextKeyName()
 
 	// 1. Verify user exists (User Service)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
 	// 2. Verify post exists (Post Service)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.PostServiceNS, postID))
 
 	// 3. Create comment (MongoDB)
 	comment := wl.generateComment(commentID, postID, userID)
 	commentData, _ := json.Marshal(comment)
 	db.Update(
 		ctx,
-		"MongoDB",
+		"MongoDB2",
 		fmt.Sprintf("%v:comments:%v", wl.PostServiceNS, commentID),
 		string(commentData),
 	)
@@ -696,7 +697,7 @@ func (wl *SocialNetworkWorkload) CommentOnPost(ctx context.Context, db ycsb.Tran
 	// 6. Update post comment count (MongoDB)
 	db.Update(
 		ctx,
-		"MongoDB",
+		"MongoDB2",
 		fmt.Sprintf("%v:%v:comment_count", wl.PostServiceNS, postID),
 		"1",
 	)
@@ -736,7 +737,7 @@ func (wl *SocialNetworkWorkload) GetUserProfile(ctx context.Context, db ycsb.Tra
 	)
 
 	// 2. Get user basic info (MongoDB)
-	_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
+	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
 	// 3. Get follower count (KVRocks)
 	_, _ = db.Read(
@@ -760,7 +761,7 @@ func (wl *SocialNetworkWorkload) GetUserProfile(ctx context.Context, db ycsb.Tra
 	)
 
 	// 6. Get recent posts (Cassandra)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		postID := wl.NextKeyName()
 		_, _ = db.Read(
 			ctx,
@@ -808,9 +809,9 @@ func (wl *SocialNetworkWorkload) SearchUsers(ctx context.Context, db ycsb.Transa
 	)
 
 	// 2. Search user index (MongoDB text search simulation)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		userID := wl.NextKeyName()
-		_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
+		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
 		// Get user stats (KVRocks)
 		_, _ = db.Read(
@@ -823,7 +824,7 @@ func (wl *SocialNetworkWorkload) SearchUsers(ctx context.Context, db ycsb.Transa
 	// 3. Cache search results (Redis)
 	searchResults := map[string]interface{}{
 		"query":        searchQuery,
-		"result_count": 5,
+		"result_count": 3,
 		"cached_at":    time.Now(),
 	}
 	resultsData, _ := json.Marshal(searchResults)
@@ -865,7 +866,7 @@ func (wl *SocialNetworkWorkload) GetRecommendedUsers(ctx context.Context, db ycs
 	)
 
 	// 2. Get user's following list (KVRocks)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		followingID := wl.NextKeyName()
 		_, _ = db.Read(
 			ctx,
@@ -890,7 +891,7 @@ func (wl *SocialNetworkWorkload) GetRecommendedUsers(ctx context.Context, db ycs
 	}
 
 	// 3. Get trending users (Redis sorted set simulation)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		trendingUserID := wl.NextKeyName()
 		_, _ = db.Read(
 			ctx,
@@ -899,7 +900,7 @@ func (wl *SocialNetworkWorkload) GetRecommendedUsers(ctx context.Context, db ycs
 		)
 
 		// Get user profile
-		_, _ = db.Read(ctx, "MongoDB", fmt.Sprintf("%v:%v", wl.UserServiceNS, trendingUserID))
+		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, trendingUserID))
 	}
 
 	// 4. Build and cache recommendations (Redis)
@@ -946,7 +947,7 @@ func (wl *SocialNetworkWorkload) Load(ctx context.Context, opCount int, db ycsb.
 			userData, _ := json.Marshal(user)
 			txnDB.Insert(
 				ctx,
-				"MongoDB",
+				"MongoDB2",
 				fmt.Sprintf("%v:%v", wl.UserServiceNS, key),
 				string(userData),
 			)
@@ -978,7 +979,7 @@ func (wl *SocialNetworkWorkload) Load(ctx context.Context, opCount int, db ycsb.
 				postData, _ := json.Marshal(post)
 				txnDB.Insert(
 					ctx,
-					"MongoDB",
+					"MongoDB2",
 					fmt.Sprintf("%v:%v", wl.PostServiceNS, postID),
 					string(postData),
 				)
@@ -1048,6 +1049,8 @@ func (wl *SocialNetworkWorkload) Run(ctx context.Context, opCount int, db ycsb.D
 		default:
 			panic("Invalid task")
 		}
+		thinkingTime := rand.Intn(5) + 5
+		time.Sleep(time.Duration(thinkingTime) * time.Millisecond)
 	}
 }
 

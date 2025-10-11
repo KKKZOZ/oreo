@@ -1,6 +1,7 @@
 package txn
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -673,6 +674,26 @@ func (t *Transaction) getTime(mode string) (int64, error) {
 	return 0, errors.New(ErrMsg)
 }
 
+// func (t *Transaction) RemoteRead(
+// 	dsName string,
+// 	key string,
+// ) (DataItem, RemoteDataStrategy, string, error) {
+// 	if !t.isRemote {
+// 		return nil, Normal, "", errors.New("not a remote transaction")
+// 	}
+
+// 	return t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
+// 		// GlobalName:                  globalName,
+// 		MaxRecordLen:                config.Config.MaxRecordLength,
+// 		ReadStrategy:                config.Config.ReadStrategy,
+// 		ConcurrentOptimizationLevel: config.Config.ConcurrentOptimizationLevel,
+// 	})
+// }
+
+// func (t *Transaction) RemoteValidate(dsName string, key string, item DataItem) error {
+// 	panic("not implemented")
+// }
+
 func (t *Transaction) RemoteRead(
 	dsName string,
 	key string,
@@ -681,22 +702,36 @@ func (t *Transaction) RemoteRead(
 		return nil, Normal, "", errors.New("not a remote transaction")
 	}
 
-	// globalName := t.groupKeyMaintainer.(Datastorer).GetName()
+	// Create context with 100ms timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 
-	// if t.TxnStartTime == 0 {
-	// 	panic("WTF?")
-	// }
+	// Channel to receive result
+	type result struct {
+		data     DataItem
+		strategy RemoteDataStrategy
+		groupKey string
+		err      error
+	}
+	resultChan := make(chan result, 1)
 
-	return t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
-		// GlobalName:                  globalName,
-		MaxRecordLen:                config.Config.MaxRecordLength,
-		ReadStrategy:                config.Config.ReadStrategy,
-		ConcurrentOptimizationLevel: config.Config.ConcurrentOptimizationLevel,
-	})
-}
+	// Execute read in goroutine
+	go func() {
+		data, strategy, groupKey, err := t.client.Read(dsName, key, t.TxnStartTime, RecordConfig{
+			MaxRecordLen:                config.Config.MaxRecordLength,
+			ReadStrategy:                config.Config.ReadStrategy,
+			ConcurrentOptimizationLevel: config.Config.ConcurrentOptimizationLevel,
+		})
+		resultChan <- result{data, strategy, groupKey, err}
+	}()
 
-func (t *Transaction) RemoteValidate(dsName string, key string, item DataItem) error {
-	panic("not implemented")
+	// Wait for result or timeout
+	select {
+	case res := <-resultChan:
+		return res.data, res.strategy, res.groupKey, res.err
+	case <-ctx.Done():
+		return nil, Normal, "", fmt.Errorf("remote read timed out after 100ms: %w", ctx.Err())
+	}
 }
 
 func (t *Transaction) RemotePrepare(

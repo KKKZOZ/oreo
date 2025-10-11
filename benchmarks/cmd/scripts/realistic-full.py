@@ -27,7 +27,7 @@ round_interval = 5
 
 # Default nodes (will be trimmed/expanded for remote depending on wl)
 node_list_default = ["node2", "node3", "node4", "node5"]
-client_nodes = ["node5", "node6"]  # for --multiple-clients mode (local + 2 clients)
+client_nodes = ["node6", "node5"]  # for --multiple-clients mode (local + 2 clients)
 
 password = "kkkzoz"  # used for remote sudo scripts
 

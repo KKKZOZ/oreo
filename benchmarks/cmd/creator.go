@@ -196,13 +196,15 @@ func OreoRealisticCreator(workloadType string, isRemote bool, mode string) (ycsb
 	}
 	if workloadType == "social" {
 		redisConn := NewRedisConn()
-		mongoConn := NewMongoDBConn(1)
+		mongoConn := NewMongoDBConn(2)
 		cassandraConn := NewCassandraConn()
+		kvrocksConn := NewKVRocksConn()
 
 		connMap := map[string]txn.Connector{
 			"Redis":     redisConn,
-			"MongoDB":   mongoConn,
+			"MongoDB2":  mongoConn,
 			"Cassandra": cassandraConn,
+			"KVRocks":   kvrocksConn,
 		}
 		return &oreo.OreoRealisticCreator{
 			IsRemote:            isRemote,

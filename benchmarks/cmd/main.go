@@ -254,7 +254,7 @@ func createWorkload(wp *workload.WorkloadParameter) workload.Workload {
 			return workload.NewHotelWorkload(wp)
 		case "social":
 			fmt.Println("This is a social network workload")
-			return workload.NewSocialWorkload(wp)
+			return workload.NewSocialNetworkWorkload(wp)
 		case "order":
 			fmt.Println("This is a order workload")
 			return workload.NewOrderWorkload(wp)

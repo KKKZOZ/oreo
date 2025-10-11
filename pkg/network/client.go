@@ -29,7 +29,7 @@ type Client struct {
 const (
 	ALL = "ALL" // Special DsName indicating an instance handles all datastores
 	// Default timeout for requests to executors if not configured otherwise
-	defaultRequestTimeout = 30000 * time.Millisecond
+	defaultRequestTimeout = 10000 * time.Millisecond
 )
 
 // Add a unified client creation function
