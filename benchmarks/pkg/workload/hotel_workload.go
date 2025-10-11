@@ -388,20 +388,22 @@ func (wl *HotelWorkload) GeoSearch(ctx context.Context, db ycsb.TransactionDB) {
 	}
 	geoQueryData, _ := json.Marshal(geoQuery)
 
-	// 1. Query Geo Service - find nearby hotels
+	// 1) Geo lookup (Geo Service)
 	_, _ = db.Read(
 		ctx,
 		"MongoDB2",
 		fmt.Sprintf("%v:nearby:%v_%v", wl.GeoServiceNS, geoQuery.Lat, geoQuery.Lon),
 	)
 
-	// 2. Query Profile Service - get hotel details for found hotels
-	for i := 0; i < 3; i++ { // simulate getting 3 hotels
+	// 2) Fetch 3 hotel profiles (Profile Service)
+	var profHotelIDs [3]string
+	for i := 0; i < 3; i++ {
 		hotelID := wl.NextKeyName()
+		profHotelIDs[i] = hotelID
 		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.ProfileServiceNS, hotelID))
 	}
 
-	// 3. Query Rate Service - get pricing for date range
+	// 3) Fetch 3 hotel rates (Rate Service)
 	inDate := time.Now().AddDate(0, 0, wl.r.Intn(30)+1).Format("2006-01-02")
 	outDate := time.Now().AddDate(0, 0, wl.r.Intn(35)+5).Format("2006-01-02")
 	for i := 0; i < 3; i++ {
@@ -414,7 +416,7 @@ func (wl *HotelWorkload) GeoSearch(ctx context.Context, db ycsb.TransactionDB) {
 		)
 	}
 
-	// 4. Cache search results in Search Service
+	// 4) Cache search parameters (Search Service)
 	db.Update(
 		ctx,
 		"Redis",
@@ -422,7 +424,7 @@ func (wl *HotelWorkload) GeoSearch(ctx context.Context, db ycsb.TransactionDB) {
 		string(geoQueryData),
 	)
 
-	// 5. Update user session
+	// 5) Update user session
 	session := wl.generateUserSession(userID)
 	session.SearchPrefs = fmt.Sprintf(
 		"geo_search:%s_%v_%v",
@@ -432,6 +434,26 @@ func (wl *HotelWorkload) GeoSearch(ctx context.Context, db ycsb.TransactionDB) {
 	)
 	sessionData, _ := json.Marshal(session)
 	db.Update(ctx, "Redis", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID), string(sessionData))
+
+	// 6) Persist geo-search audit trail (User Service)
+	db.Update(
+		ctx,
+		"Cassandra",
+		fmt.Sprintf("%v:%v:searches:%v", wl.UserServiceNS, userID, time.Now().UnixNano()),
+		string(geoQueryData),
+	)
+
+	// 7) Store top result ids (Search Service)
+	resIDs, _ := json.Marshal(map[string]interface{}{
+		"candidates": []string{profHotelIDs[0], profHotelIDs[1], profHotelIDs[2]},
+		"ts":         time.Now().Unix(),
+	})
+	db.Update(
+		ctx,
+		"Redis",
+		fmt.Sprintf("%v:result:%v", wl.SearchServiceNS, userID),
+		string(resIDs),
+	)
 
 	db.Commit()
 }
@@ -528,16 +550,16 @@ func (wl *HotelWorkload) GetRecommendation(ctx context.Context, db ycsb.Transact
 
 	userID := wl.NextKeyName()
 
-	// 1. Get user profile and preferences (User Service)
+	// 1) Load user profile and preferences (User Service)
 	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
-	// 2. Get user's booking history for recommendations (User Service)
+	// 2) Load user's booking history (User Service)
 	_, _ = db.Read(ctx, "Cassandra", fmt.Sprintf("%v:%v:bookings", wl.UserServiceNS, userID))
 
-	// 3. Query recommendation service - this would use ML algorithms in real system
+	// 3) Recommendation request parameters
 	reqParam := map[string]interface{}{
 		"user_id":   userID,
-		"max_count": wl.r.Intn(10) + 5, // 5-15 recommendations
+		"max_count": 2, // tune ratio: recommend 2 hotels
 		"location":  wl.cities[wl.r.Intn(len(wl.cities))],
 		"price_range": map[string]float64{
 			"min": float64(wl.r.Intn(100) + 50),
@@ -545,16 +567,20 @@ func (wl *HotelWorkload) GetRecommendation(ctx context.Context, db ycsb.Transact
 		},
 	}
 	reqData, _ := json.Marshal(reqParam)
+
+	// Simulated recall/features read
 	_, _ = db.Read(ctx, "Redis", fmt.Sprintf("%v:recommend:%v", wl.RecommendServiceNS, userID))
 
-	// 4. For each recommended hotel, get profile and rates
-	for i := 0; i < 5; i++ { // simulate 5 recommended hotels
+	// 4) For each recommended hotel: profile, rate, reviews
+	recHotels := make([]string, 0, 2)
+	for i := 0; i < 2; i++ {
 		hotelID := wl.NextKeyName()
+		recHotels = append(recHotels, hotelID)
 
-		// Get hotel profile
+		// Profile
 		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.ProfileServiceNS, hotelID))
 
-		// Get rates
+		// Rates
 		roomType := wl.roomTypes[wl.r.Intn(len(wl.roomTypes))]
 		inDate := time.Now().AddDate(0, 0, wl.r.Intn(30)+1).Format("2006-01-02")
 		outDate := time.Now().AddDate(0, 0, wl.r.Intn(35)+5).Format("2006-01-02")
@@ -564,19 +590,50 @@ func (wl *HotelWorkload) GetRecommendation(ctx context.Context, db ycsb.Transact
 			fmt.Sprintf("%v:%v:%v:%v:%v", wl.RateServiceNS, hotelID, roomType, inDate, outDate),
 		)
 
-		// Get reviews for social proof
+		// Reviews summary
 		_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v:summary", wl.ReviewServiceNS, hotelID))
 	}
 
-	// 5. Cache recommendation results
+	// 5) Cache recommendation list
+	recList, _ := json.Marshal(map[string]interface{}{
+		"list": recHotels,
+		"ts":   time.Now().Unix(),
+	})
 	db.Update(
 		ctx,
 		"Redis",
 		fmt.Sprintf("%v:cache:%v", wl.RecommendServiceNS, userID),
+		string(recList),
+	)
+
+	// Write recommendation request/response log
+	db.Update(
+		ctx,
+		"Cassandra",
+		fmt.Sprintf("%v:%v:rec_log:%v", wl.RecommendServiceNS, userID, time.Now().UnixNano()),
 		string(reqData),
 	)
 
-	// 6. Update user session
+	// Per-item impressions
+	for _, hid := range recHotels {
+		impr, _ := json.Marshal(
+			map[string]interface{}{"hotel_id": hid, "ts": time.Now().UnixNano()},
+		)
+		db.Update(
+			ctx,
+			"Redis",
+			fmt.Sprintf(
+				"%v:impr:%v:%v:%v",
+				wl.RecommendServiceNS,
+				userID,
+				hid,
+				time.Now().UnixNano(),
+			),
+			string(impr),
+		)
+	}
+
+	// 6) Update user session
 	session := wl.generateUserSession(userID)
 	session.SearchPrefs = fmt.Sprintf("recommendation_view:%v", time.Now().Unix())
 	sessionData, _ := json.Marshal(session)
@@ -597,24 +654,35 @@ func (wl *HotelWorkload) ViewReservation(ctx context.Context, db ycsb.Transactio
 	userID := wl.NextKeyName()
 	reservationID := wl.NextKeyName()
 
-	// 1. Verify user authentication (User Service)
+	// 1) Verify user authentication (User Service)
 	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.UserServiceNS, userID))
 
-	// 2. Get reservation details (Reservation Service)
+	// 2) Load reservation details (Reservation Service)
 	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.ReservationServiceNS, reservationID))
 
-	// 3. Verify reservation ownership (User Service)
+	// 3) Verify reservation ownership (User Service)
 	_, _ = db.Read(
 		ctx,
 		"Cassandra",
 		fmt.Sprintf("%v:%v:bookings:%v", wl.UserServiceNS, userID, reservationID),
 	)
 
-	// 4. Get hotel profile for reservation (Profile Service)
+	// 4) Load hotel profile associated with the reservation (Profile Service)
 	hotelID := wl.NextKeyName()
 	_, _ = db.Read(ctx, "MongoDB2", fmt.Sprintf("%v:%v", wl.ProfileServiceNS, hotelID))
 
-	// 5. Update user session to track recent activity (User Service)
+	// Write last access timestamp back to reservation (Reservation Service)
+	lastAccessPatch, _ := json.Marshal(map[string]interface{}{
+		"last_access": time.Now(),
+	})
+	db.Update(
+		ctx,
+		"MongoDB2",
+		fmt.Sprintf("%v:%v", wl.ReservationServiceNS, reservationID),
+		string(lastAccessPatch),
+	)
+
+	// 5) Update user session activity (User Service)
 	session := wl.generateUserSession(userID)
 	session.SearchPrefs = fmt.Sprintf("viewed_reservation:%s", reservationID)
 	session.LastAccess = time.Now()
@@ -624,6 +692,17 @@ func (wl *HotelWorkload) ViewReservation(ctx context.Context, db ycsb.Transactio
 		"Redis",
 		fmt.Sprintf("%v:session:%v", wl.UserServiceNS, userID),
 		string(sessionData),
+	)
+
+	// Recently viewed marker
+	recent, _ := json.Marshal(
+		map[string]interface{}{"reservation_id": reservationID, "ts": time.Now().Unix()},
+	)
+	db.Update(
+		ctx,
+		"Redis",
+		fmt.Sprintf("%v:recent:%v", wl.ReservationServiceNS, userID),
+		string(recent),
 	)
 
 	db.Commit()
@@ -814,8 +893,8 @@ func (wl *HotelWorkload) Run(ctx context.Context, opCount int,
 		default:
 			panic("Invalid task")
 		}
-		restTime := rand.Intn(5) + 5
-		time.Sleep(time.Duration(restTime) * time.Millisecond)
+		thinkingTime := rand.Intn(5) + 5
+		time.Sleep(time.Duration(thinkingTime) * time.Millisecond)
 	}
 }
 
